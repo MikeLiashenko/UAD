@@ -1,0 +1,58 @@
+; Engine configuration file.
+; Ukraine Air Defense (UAD) — Godot 4.7 project.
+; All content (meshes, textures, sounds, UI) is generated procedurally at runtime.
+
+config_version=5
+
+[application]
+
+config/name="Ukraine Air Defense (UAD)"
+config/description="Night air-defense duty over Kyiv. 3D, fully procedural."
+config/version="1.0.0"
+run/main_scene="res://scenes/main.tscn"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+config/icon="res://icon.png"
+config/windows_native_icon="res://icon.ico"
+boot_splash/bg_color=Color(0.01, 0.03, 0.03, 1)
+boot_splash/show_image=false
+
+[autoload]
+
+GS="*res://scripts/autoload/gs.gd"
+SFX="*res://scripts/autoload/sfx.gd"
+Net="*res://scripts/autoload/net.gd"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=0
+
+[shader_globals]
+
+night={
+"type": "float",
+"value": 1.0
+}
+gfx={
+"type": "float",
+"value": 2.0
+}
+
+[internationalization]
+
+locale/fallback="ru"
+
+[input_devices]
+
+pointing/emulate_mouse_from_touch=true
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true
+anti_aliasing/quality/msaa_3d=2
+environment/defaults/default_clear_color=Color(0.01, 0.02, 0.04, 1)

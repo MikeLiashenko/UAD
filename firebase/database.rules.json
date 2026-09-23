@@ -1,0 +1,45 @@
+{
+  "rules": {
+    "uad": {
+      "release": {
+        ".read": true,
+        ".write": false,
+        ".validate": "newData.child('build').isNumber() && newData.child('exe').isString() && newData.child('exe').val().beginsWith('https://github.com/MikeLiashenko/UAD/releases/') && newData.child('apk').isString() && newData.child('apk').val().beginsWith('https://github.com/MikeLiashenko/UAD/releases/')"
+      },
+      "v1": {
+        "users": {
+          "$code": {
+            ".read": true,
+            ".write": "$code.matches(/^[A-HJ-NP-Z2-9]{8}$/)",
+            ".validate": "!newData.exists() || (newData.child('n').isString() && newData.child('n').val().length <= 16 && newData.child('t').isNumber() && newData.child('t').val() <= now + 60000)"
+          }
+        },
+        "requests": {
+          "$host": {
+            ".read": true,
+            ".write": "!newData.exists()",
+            "$guest": {
+              ".write": "$host.matches(/^[A-HJ-NP-Z2-9]{8}$/) && $guest.matches(/^[A-HJ-NP-Z2-9]{8}$/)",
+              ".validate": "!newData.exists() || newData.child('st').isString()"
+            }
+          }
+        },
+        "sessions": {
+          "$host": {
+            ".read": true,
+            ".write": "$host.matches(/^[A-HJ-NP-Z2-9]{8}$/)",
+            "raid": {
+              ".validate": "!newData.exists() || (newData.child('n').isNumber() && newData.child('t').isNumber())"
+            },
+            "map": {
+              ".validate": "!newData.exists() || newData.hasChildren()"
+            },
+            "$code": {
+              ".validate": "$code.matches(/^[A-HJ-NP-Z2-9]{8}$/) && (!newData.child('n').exists() || (newData.child('n').isString() && newData.child('n').val().length <= 16))"
+            }
+          }
+        }
+      }
+    }
+  }
+}

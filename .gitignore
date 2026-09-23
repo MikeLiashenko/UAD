@@ -1,0 +1,6 @@
+.godot/
+build/
+tools/
+*.tmp
+android/
+override.cfg

@@ -1,0 +1,7 @@
+# Keep LF in the working copy too (the .sh scripts break with CRLF); cmd wants CRLF.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.png binary
+*.jpg binary
+*.ico binary
+*.mp3 binary
