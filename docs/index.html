@@ -295,8 +295,8 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 28px; align-items: cent
 		<p class="sec-sub reveal" data-i18n="shots_s"></p>
 		<div class="gallery" id="gallery">
 			<figure class="reveal"><img loading="lazy" src="img/shot-1.jpg" alt=""><figcaption data-i18n="s1"></figcaption></figure>
-			<figure class="reveal"><img loading="lazy" src="img/shot-2.jpg" alt=""><figcaption data-i18n="s2"></figcaption></figure>
-			<figure class="reveal"><img loading="lazy" src="img/shot-3.jpg" alt=""><figcaption data-i18n="s3"></figcaption></figure>
+			<figure class="reveal"><img loading="lazy" src="img/Rozved.jpg" alt=""><figcaption data-i18n="s2"></figcaption></figure>
+			<figure class="reveal"><img loading="lazy" src="img/Nalet.jpg" alt=""><figcaption data-i18n="s3"></figcaption></figure>
 			<figure class="reveal"><img loading="lazy" src="img/shot-4.jpg" alt=""><figcaption data-i18n="s4"></figcaption></figure>
 			<figure class="reveal"><img loading="lazy" src="img/shot-5.jpg" alt=""><figcaption data-i18n="s5"></figcaption></figure>
 		</div>
@@ -516,7 +516,8 @@ function renderBuilds() {
 	releases.forEach((r, i) => {
 		const row = document.createElement("div");
 		row.className = "build" + (i === 0 ? " latest" : "");
-		const n = document.createElement("div"); n.className = "n"; n.textContent = (r.name || r.tag_name).replace(/^UAD · /, "");
+		const num = String(r.tag_name || "").replace(/^build-/, "");
+		const n = document.createElement("div"); n.className = "n"; n.textContent = /^\d+$/.test(num) ? t("build") + " " + num : (r.name || r.tag_name);
 		const d = document.createElement("div"); d.className = "d"; d.textContent = fmtDate(r.published_at);
 		const tx = document.createElement("div"); tx.className = "t";
 		tx.textContent = (r.body || "").split("\n").filter((l) => l.trim() && !/^(\*\*Windows|Сайт:|Site:)/.test(l.trim())).slice(0, 4).join("\n");
