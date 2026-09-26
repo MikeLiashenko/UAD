@@ -7,6 +7,10 @@ extends Node
 ##          glide bombs and S-300s over Kharkiv, Kalibrs and Oniks from the sea over Odesa …
 ##  After the night is cleared the morning report + shop opens (handled by the HUD); the world
 ##  is autosaved at the start of every day.
+## Our counter-strikes (scripts/game/strikes.gd) land at dusk: a damaged launch site sends half
+## of its usual share, a destroyed one sends nothing until the enemy has rebuilt it.
+
+const Strikes = preload("res://scripts/game/strikes.gd")
 
 enum Phase { DAY, NIGHT, MORNING }
 
@@ -56,7 +60,8 @@ func start_day() -> void:
 	phase_len = 40.0 if GS.day == 1 else 55.0
 	SFX.play_music("day")
 	schedule.clear()
-	var scouts := 1 + GS.day / 3
+	# a destroyed recon post sends no scouts, a damaged one fewer
+	var scouts := int(round((1 + GS.day / 3) * Strikes.output(game.map.city, "scout")))
 	for i in scouts:
 		schedule.append({"t": 4.0 + i * 11.0, "type": "scout", "count": 1})
 	game.hud.alert(GS.t("ДЕНЬ %d — разведка противника в воздухе") % GS.day, Color(0.5, 0.9, 1.0))
@@ -71,16 +76,47 @@ func _weapon(slot: String, d: int) -> String:
 	var total := 0.0
 	for o in opts:
 		if d >= int(o[2]):
-			avail.append(o)
-			total += float(o[1])
+			# what our strikes knocked out is rarer (half) or gone (silent sites)
+			var wt := float(o[1]) * Strikes.output(game.map.city, String(o[0]))
+			if wt > 0.0:
+				avail.append([o[0], wt])
+				total += wt
 	if avail.is_empty():
-		return String(fallback.get(slot, slot))
+		var fb := String(fallback.get(slot, slot))
+		return fb if Strikes.output(game.map.city, fb) > 0.0 else ""
 	var roll := _rng.randf() * total
 	for o in avail:
 		roll -= float(o[1])
 		if roll <= 0.0:
 			return String(o[0])
 	return String(avail[avail.size() - 1][0])
+
+
+## How many of `w` the enemy still manages tonight: `count` scaled by its launch sites.
+func _left(w: String, count: int) -> int:
+	if w == "":
+		return 0
+	var k := Strikes.output(game.map.city, w)
+	# rounded by chance: on average exactly count × k, even for single launches
+	return count if k >= 1.0 else int(floor(count * k + _rng.randf()))
+
+
+## Dusk: our strikes land. Each result goes to the log, the big alert sums them up.
+func _strike_results() -> void:
+	var res := Strikes.resolve(game.map.city, _rng)
+	if res.is_empty():
+		return
+	var hits := 0
+	for r in res:
+		var wname := GS.t(String(Strikes.WEAPONS[r.w].short))
+		if bool(r.hit):
+			hits += 1
+			var what := GS.t("уничтожена, молчит %d ноч.") % int(r.n) if String(r.st) == "destroyed" else GS.t("повреждена, вполсилы %d ноч.") % int(r.n)
+			game.hud.log_event(GS.t("Удар %s по цели «%s»: поражение — %s") % [wname, GS.t(String(r.name)), what], Color(0.5, 1.0, 0.6))
+		else:
+			game.hud.log_event(GS.t("Удар %s по цели «%s»: сбит ПВО противника") % [wname, GS.t(String(r.name))], Color(1.0, 0.6, 0.35))
+	game.hud.alert(GS.t("УДАРЫ ПО ТОЧКАМ ПУСКА: %d из %d в цель") % [hits, res.size()], Color(0.5, 1.0, 0.6) if hits > 0 else Color(1.0, 0.6, 0.35))
+	GS.state_changed.emit()
 
 
 ## Altitude layer for a wave (world units; ×5 = metres on the HUD).
@@ -106,6 +142,7 @@ func start_night() -> void:
 	phase_len = minf(75.0 + 12.0 * d, 170.0) + (45.0 if final else 0.0)
 	night_start_stats = GS.stats.duplicate()
 	schedule.clear()
+	_strike_results()
 	var span := phase_len * 0.75
 	# The raid grows slowly and then plateaus: past a point more targets than the player can
 	# physically engage is not difficulty, it is a scripted loss. Shaheds come first, cruise
@@ -116,11 +153,16 @@ func start_night() -> void:
 	for i in waves:
 		var c := clampi(int(round(clampf(2.4 + d * 0.8, 3.0, 9.0) * m * boss)) + _rng.randi_range(-1, 1), 2, 13)
 		var w := _weapon("drone", d)
+		if w == "":
+			continue # every drone launch pad of the city is out
 		# decoys and the little Molniyas come in swarms, the jet Gerans in pairs
 		if GS.ENEMIES[w].get("decoy", false) or w == "molniya":
 			c = int(c * 1.5)
 		elif w == "geran3":
 			c = maxi(2, c / 2)
+		c = _left(w, c)
+		if c <= 0:
+			continue
 		schedule.append({"t": 5.0 + span * float(i) / waves + _rng.randf_range(0.0, 6.0), "type": w, "count": c, "alt": _layer("shahed") if GS.ENEMIES[w].alt_min < 100.0 and w != "molniya" else -1.0})
 	var cruise_from := int(city.raid_start.get("cruise", 3))
 	var ball_from := int(city.raid_start.get("ballistic", 5))
@@ -129,24 +171,37 @@ func start_night() -> void:
 		var salvos := 1 if total < 3 else 2
 		for i in salvos:
 			var w := _weapon("cruise", d)
+			if w == "":
+				continue
 			var glide: bool = GS.ENEMIES[w].get("glide", false)
-			schedule.append({"t": span * (0.3 + 0.4 * i) + _rng.randf_range(0.0, 8.0), "type": w, "count": maxi(1, total / salvos) + (1 if glide else 0), "alt": -1.0 if glide or GS.ENEMIES[w].alt_max < 30.0 else _layer("cruise")})
+			var cc := _left(w, maxi(1, total / salvos) + (1 if glide else 0))
+			if cc > 0:
+				schedule.append({"t": span * (0.3 + 0.4 * i) + _rng.randf_range(0.0, 8.0), "type": w, "count": cc, "alt": -1.0 if glide or GS.ENEMIES[w].alt_max < 30.0 else _layer("cruise")})
 	if d >= ball_from or (d >= ball_from - 1 and GS.difficulty == 2):
 		var n := clampi(int(round((d - ball_from + 1) * 0.7 * m * boss)), 1, 3)
 		for i in n:
-			schedule.append({"t": span * _rng.randf_range(0.35, 0.95), "type": _weapon("ballistic", d), "count": 1})
+			var bw := _weapon("ballistic", d)
+			if _left(bw, 1) > 0:
+				schedule.append({"t": span * _rng.randf_range(0.35, 0.95), "type": bw, "count": 1})
 	for x in city.raid_extra:
 		if d >= int(x.get("from", 1)):
 			var cr: Array = x.get("count", [1, 1])
-			schedule.append({"t": span * float(x.get("at", 0.5)) + _rng.randf_range(0.0, 8.0), "type": String(x.weapon), "count": _rng.randi_range(int(cr[0]), int(cr[1])), "base": bool(x.get("base", false)), "keep": true})
+			var xc := _left(String(x.weapon), _rng.randi_range(int(cr[0]), int(cr[1])))
+			if xc > 0:
+				schedule.append({"t": span * float(x.get("at", 0.5)) + _rng.randf_range(0.0, 8.0), "type": String(x.weapon), "count": xc, "base": bool(x.get("base", false)), "keep": true})
 	if city.raid_events.has(d):
 		var ev: Dictionary = city.raid_events[d]
 		schedule.append({"t": span * 0.42, "alert": String(ev.get("alert", ""))})
 		schedule.append({"t": span * 0.5, "type": String(ev.weapon), "count": int(ev.get("count", 1)), "aim": String(ev.get("aim", ""))})
 	if GS.base_found:
-		schedule.append({"t": span * 0.45, "type": _weapon("cruise", maxi(d, cruise_from)) if d >= cruise_from else "cruise", "count": 1 if d < 4 else 2, "base": true, "alt": 30.0})
+		var bw := _weapon("cruise", maxi(d, cruise_from)) if d >= cruise_from else "cruise"
+		var bc := _left(bw, 1 if d < 4 else 2)
+		if bc > 0:
+			schedule.append({"t": span * 0.45, "type": bw, "count": bc, "base": true, "alt": 30.0})
 		if d >= 5:
-			schedule.append({"t": span * 0.5, "type": _weapon("ballistic", maxi(d, ball_from)), "count": 1, "base": true})
+			var bb := _weapon("ballistic", maxi(d, ball_from))
+			if _left(bb, 1) > 0:
+				schedule.append({"t": span * 0.5, "type": bb, "count": 1, "base": true})
 	schedule.sort_custom(func(a, b) -> bool: return float(a.t) < float(b.t))
 	SFX.play_music("night")
 	SFX.play_siren()
@@ -222,6 +277,8 @@ func _morning() -> void:
 	SFX.play_music("day")
 	var s := GS.stats
 	var ns := night_start_stats
+	for name in Strikes.night_passed(game.map.city):
+		game.hud.log_event(GS.t("Противник восстановил: %s") % GS.t(String(name)), Color(1.0, 0.7, 0.4))
 	var report := {
 		"day": GS.day,
 		"kills": int(s.kills) - int(ns.get("kills", 0)),

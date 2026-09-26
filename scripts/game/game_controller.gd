@@ -2,6 +2,7 @@ extends Node3D
 ## Gameplay session: base, AA units, threats, projectiles, debris physics, economy hooks,
 ## the two views (overhead map / gunner at the base).
 
+const Strikes = preload("res://scripts/game/strikes.gd")
 const Fx = preload("res://scripts/core/fx.gd")
 const Meshes = preload("res://scripts/core/meshes.gd")
 const Enemy = preload("res://scripts/game/enemy.gd")
@@ -723,6 +724,10 @@ func launch(type: String, count: int, at_base: bool, alt := -1.0, aim := "") -> 
 	if not GS.ENEMIES.has(type):
 		type = "shahed"
 	launched[type] = int(launched.get(type, 0)) + count
+	# the radar tracks the launch back: the site it came from goes on the strike map
+	var found: Dictionary = Strikes.seen(map.city, type)
+	if not found.is_empty():
+		hud.log_event(GS.t("Разведка засекла район пуска: %s — %s, ~%d км") % [GS.t(String(found.name)), Strikes.compass(float(found.bearing)), int(found.km)], Color(1.0, 0.8, 0.4))
 	var def: Dictionary = GS.ENEMIES[type]
 	var kind := GS.kind_of(type)
 	var tgt_pos: Vector3
@@ -1199,6 +1204,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				toggle_auto()
 		"shop":
 			hud.open_shop()
+		"strikes":
+			hud.open_strikes()
 		"feed":
 			hud.open_feed()
 		"pause":

@@ -357,6 +357,7 @@ const KEY_ACTIONS := [
 	["players", "Список игроков (сетевая игра)", KEY_TAB],
 	["fpv_next", "FPV: следующий дрон", KEY_SPACE],
 	["fpv_home", "FPV: отправить дрон на базу", KEY_R],
+	["strikes", "Удары по точкам пуска", KEY_K],
 ]
 
 
@@ -444,6 +445,10 @@ var damaged: Array = []
 var crushed: Array = []
 ## Published compilations: [{day, clips, views, likes, title}], oldest first.
 var videos: Array = []
+## Launch sites the raids come from (scripts/game/strikes.gd): {kind: {known, st, n, def}},
+## and our strikes in flight [{site, w}] that land at dusk.
+var sites := {}
+var strikes: Array = []
 
 var font: Font
 
@@ -522,6 +527,8 @@ func new_world(wname: String, diff: int, pos: Vector3, loc: int, cid := "kyiv") 
 	damaged = []
 	crushed = []
 	videos = []
+	sites = {}
+	strikes = []
 	money_changed.emit(money)
 	state_changed.emit()
 
@@ -658,7 +665,7 @@ func save_world() -> void:
 		"city": city, "base_hp": base_hp, "day": day, "base_found": base_found,
 		"detection": detection, "camo": camo, "crews": crews, "base_pos": [base_pos.x, base_pos.z],
 		"base_loc": base_loc, "stats": stats, "damaged": damaged, "crushed": crushed, "won": won,
-		"videos": videos,
+		"videos": videos, "sites": sites, "strikes": strikes,
 	}
 	var f := FileAccess.open(_world_path(world_id), FileAccess.WRITE)
 	if f:
@@ -736,6 +743,17 @@ func load_world(id: String) -> bool:
 	for v in (d.get("crushed", []) if same_map else []):
 		if v is Array and (v as Array).size() == 2:
 			crushed.append([int(v[0]), int(v[1])])
+	sites = {}
+	var ss = d.get("sites", {})
+	if ss is Dictionary:
+		for k in ss:
+			var v = ss[k]
+			if v is Dictionary:
+				sites[String(k)] = {"known": bool(v.get("known", false)), "st": String(v.get("st", "ok")), "n": int(v.get("n", 0)), "def": float(v.get("def", 0.0))}
+	strikes = []
+	for x in d.get("strikes", []):
+		if x is Dictionary and x.has("site") and x.has("w"):
+			strikes.append({"site": String(x.site), "w": String(x.w)})
 	money_changed.emit(money)
 	state_changed.emit()
 	return true

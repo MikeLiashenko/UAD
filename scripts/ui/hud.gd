@@ -5,6 +5,7 @@ extends CanvasLayer
 const UiKit = preload("res://scripts/ui/ui_kit.gd")
 const Radar = preload("res://scripts/ui/radar.gd")
 const Shop = preload("res://scripts/ui/shop.gd")
+const StrikeMap = preload("res://scripts/ui/strike_map.gd")
 const SettingsMenu = preload("res://scripts/ui/settings_menu.gd")
 const Reticle = preload("res://scripts/ui/reticle.gd")
 const FpvOsd = preload("res://scripts/ui/fpv_osd.gd")
@@ -340,6 +341,7 @@ func _build_weapons() -> void:
 	h.add_child(side)
 	auto_btn = _small_btn(side, GS.t("АВТО [%s]") % GS.key_label("auto"), func() -> void: game.toggle_auto())
 	_small_btn(side, GS.t("МАГАЗИН [%s]") % GS.key_label("shop"), open_shop)
+	_small_btn(side, GS.t("🎯 УДАРЫ [%s]") % GS.key_label("strikes"), open_strikes)
 	var side2 := UiKit.vbox(6)
 	h.add_child(side2)
 	_small_btn(side2, GS.t("❚❚ ПАУЗА"), toggle_pause)
@@ -1093,6 +1095,27 @@ func open_shop(on_close := Callable()) -> void:
 	s.closed.connect(after)
 	root.add_child(s)
 	_overlay = s
+
+
+## The operational map of the launch sites (K): toggles. The raid is the host's, so are the strikes.
+func open_strikes() -> void:
+	if game.game_over:
+		return
+	if _overlay != null and _overlay is StrikeMap:
+		(_overlay as StrikeMap).close()
+		return
+	if Net.role == "guest":
+		alert(GS.t("Удары по точкам пуска наносит хозяин мира"), Color(1.0, 0.75, 0.35))
+		return
+	_close_overlay()
+	_set_paused(true)
+	var m := StrikeMap.new()
+	m.game = game
+	m.closed.connect(func() -> void:
+		_overlay = null
+		_set_paused(false))
+	root.add_child(m)
+	_overlay = m
 
 
 func show_morning(r: Dictionary) -> void:

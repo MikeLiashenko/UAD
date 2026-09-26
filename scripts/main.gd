@@ -18,6 +18,10 @@ extends Node
 ##   --mptest                   multiplayer self-test, offline: codes, the Firebase event mirror and
 ##                              (with --autotest) friends in the city, watching, player list, requests
 ##   --mpid=CODE                play as another friend code (a second copy on the same computer)
+##   --striketest               counter-strikes on launch sites: every city has its sites, discovery,
+##                              reach and ships, a strike landing, the raid shrinking, repairs, saving
+##   --sitesdown                every launch site destroyed before the night (the raid must shrink)
+##   --open=strikes [--strikedemo]   the strike map (the demo shows every state of a site)
 ##   --acctest                  accounts self-test, offline (in-memory database, stand-in sign-in):
 ##                              register, nick rules, friends by nick, sign in / out, rename,
 ##                              saved session, deletion, a session revoked elsewhere
@@ -103,6 +107,8 @@ func _ready() -> void:
 		_mp_unit_selftest()
 	if _args.has("acctest"):
 		_acct_selftest()
+	if _args.has("striketest"):
+		_strike_selftest()
 	if _args.has("mphost") or _args.has("mpjoin"):
 		_mp_live_setup()
 	if not _args.has("quit-at"):
@@ -406,6 +412,11 @@ func _process(delta: float) -> void:
 		_fpv_pilot(delta)
 	elif _args.has("aimbot") and String(_args.get("view", "")) == "fpv" and game and is_instance_valid(game) and not game.drones.is_empty() and not game.enemies.is_empty():
 		game.enter_fpv() # the test pilot takes the next drone as soon as one is up
+	if _args.has("sitesdown") and game and is_instance_valid(game):
+		# test hook: every launch site of the city struck out before the night
+		_args.erase("sitesdown")
+		for st in preload("res://scripts/game/strikes.gd").sites(map.city):
+			GS.sites[String(st.id)] = {"known": true, "st": "destroyed", "n": 5, "def": 0.0}
 	if _args.has("fpv-at") and game and is_instance_valid(game) and _clock >= float(_args["fpv-at"]):
 		# test hook: sit down at the FPV console mid-raid (a drone is launched if none is up)
 		_args.erase("fpv-at")
@@ -504,6 +515,10 @@ func _open_screen(what: String) -> void:
 	match what:
 		"shop":
 			game.hud.open_shop()
+		"strikes":
+			if _args.has("strikedemo"):
+				_strike_demo()
+			game.hud.open_strikes()
 		"pause":
 			game.hud.toggle_pause()
 		"morning":
@@ -823,6 +838,93 @@ func _mp_unit_selftest() -> void:
 func _fit_near() -> void:
 	var high: bool = game == null or not is_instance_valid(game) or String(game.view) == "top"
 	cam.near = clampf(cam.global_position.y * 0.03, 0.5, 12.0) if high else 0.5
+
+
+## --strikedemo: every site known, one damaged, one destroyed, strikes in flight, money to spend.
+func _strike_demo() -> void:
+	const Strikes = preload("res://scripts/game/strikes.gd")
+	var ss: Array = Strikes.sites(map.city)
+	for i in ss.size():
+		var st := {"known": true, "st": "ok", "n": 0, "def": 0.0}
+		if i == 1:
+			st = {"known": true, "st": "damaged", "n": 2, "def": 0.08}
+		elif i == 2:
+			st = {"known": true, "st": "destroyed", "n": 3, "def": 0.16}
+		elif i == ss.size() - 1:
+			st.known = false
+		GS.sites[String(ss[i].id)] = st
+	GS.strikes = [{"site": String(ss[0].id), "w": "lyutyi"}, {"site": String(ss[min(3, ss.size() - 1)].id), "w": "neptune"}]
+	GS.money = maxi(GS.money, 60000)
+	GS.day = maxi(GS.day, 3)
+
+
+## --striketest: the counter-strike rules, without a game running.
+func _strike_selftest() -> void:
+	const Strikes = preload("res://scripts/game/strikes.gd")
+	var fails := []
+	var check := func(ok: bool, what: String) -> void:
+		if not ok:
+			fails.append(what)
+	for cid in Cities.IDS:
+		var c = Cities.get_def(cid)
+		var ss: Array = Strikes.sites(c)
+		check.call(ss.size() >= 4, "%s has sites" % cid)
+		for w in Strikes.city_weapons(c):
+			if w != "oreshnik":
+				check.call(ss.any(func(s) -> bool: return (s.weapons as Array).has(w)), "%s: a site launches %s" % [cid, w])
+		for s in ss:
+			check.call(float(s.bearing) >= 0.0 and float(s.bearing) < 360.0 and float(s.km) > 0.0, "%s/%s placed" % [cid, s.id])
+	var kyiv = Cities.get_def("kyiv")
+	var odesa = Cities.get_def("odesa")
+	GS.sites = {}
+	GS.strikes = []
+	GS.day = 3
+	GS.money = 100000
+	var drones := Strikes.site(kyiv, "drones")
+	check.call(Strikes.blocker(drones, "lyutyi", true) != "", "unknown site cannot be struck")
+	check.call(String(Strikes.seen(kyiv, "gerbera").get("id", "")) == "drones" and Strikes.seen(kyiv, "shahed").is_empty(), "a launch reveals its site once")
+	check.call(Strikes.blocker(drones, "lyutyi", true) == "" and Strikes.blocker(drones, "lyutyi", false) != "", "strikes by day only")
+	var strat := Strikes.site(kyiv, "strategic")
+	Strikes.seen(kyiv, "cruise")
+	check.call(Strikes.blocker(strat, "neptune", true) != "" and Strikes.blocker(strat, "lyutyi", true) == "", "reach: only the long-range drone gets to the bombers")
+	var fleet := Strikes.site(odesa, "fleet")
+	Strikes.seen(odesa, "kalibr")
+	check.call(Strikes.blocker(fleet, "lyutyi", true) != "" and Strikes.blocker(fleet, "neptune", true) == "", "ships: Neptune yes, drone no")
+	var m0 := GS.money
+	Strikes.launch(drones, "storm")
+	check.call(GS.money == m0 - 21000 and Strikes.in_flight("drones") == 1, "a strike is paid and in flight")
+	var rng := RandomNumberGenerator.new()
+	var hit := false
+	for seed in 50:
+		rng.seed = seed
+		if rng.randf() < Strikes.chance(drones, "storm"):
+			rng.seed = seed
+			hit = true
+			break
+	var res := Strikes.resolve(kyiv, rng)
+	check.call(hit and res.size() == 1 and bool(res[0].hit) and GS.strikes.is_empty(), "the strike lands at dusk")
+	check.call(absf(Strikes.output(kyiv, "shahed") - 0.3) < 0.001 and Strikes.output(kyiv, "cruise") == 1.0, "a destroyed pad leaves only the spare pads, the missiles fly on")
+	GS.sites["strategic"] = {"known": true, "st": "destroyed", "n": 1, "def": 0.0}
+	check.call(Strikes.output(kyiv, "cruise") == 0.0, "a destroyed airfield is silent")
+	GS.sites.erase("strategic")
+	check.call(float(Strikes.state("drones").def) > 0.0, "the enemy reinforces a struck site")
+	for i in 3:
+		Strikes.night_passed(kyiv)
+	check.call(Strikes.output(kyiv, "shahed") == 1.0 and String(Strikes.state("drones").st) == "ok", "repaired after its nights")
+	GS.sites["iskander"] = {"known": true, "st": "damaged", "n": 2, "def": 0.0}
+	check.call(absf(Strikes.output(kyiv, "ballistic") - 0.5) < 0.001, "a damaged site launches half")
+	# the world keeps it all
+	var keep_id := GS.world_id
+	GS.world_id = "striketest_tmp"
+	GS.strikes = [{"site": "fleet", "w": "neptune"}]
+	GS.save_world()
+	GS.sites = {}
+	GS.strikes = []
+	var loaded := GS.load_world("striketest_tmp")
+	GS.delete_world("striketest_tmp")
+	GS.world_id = keep_id
+	check.call(loaded and String(Strikes.state("iskander").st) == "damaged" and GS.strikes.size() == 1, "saved with the world")
+	print("UAD STRIKETEST: %s" % ("OK" if fails.is_empty() else "FAIL " + ", ".join(fails)))
 
 
 ## Waits for an account call that answers through cb(ok: bool, text: String); returns [ok, text].
