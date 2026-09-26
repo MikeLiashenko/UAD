@@ -18,6 +18,9 @@ extends Node
 ##   --mptest                   multiplayer self-test, offline: codes, the Firebase event mirror and
 ##                              (with --autotest) friends in the city, watching, player list, requests
 ##   --mpid=CODE                play as another friend code (a second copy on the same computer)
+##   --acctest                  accounts self-test, offline (in-memory database, stand-in sign-in):
+##                              register, nick rules, friends by nick, sign in / out, rename,
+##                              saved session, deletion, a session revoked elsewhere
 ##   --mphost / --mpjoin=CODE   a live two-copy session through the database (see _mp_live_setup)
 ##   --offscreen --shotlist=f.json [--shot-ui]   pictures without a window (tools_scripts/shots.sh)
 ##   --fakerelease=N            pretend build N was published (the update offer in the menu)
@@ -33,6 +36,7 @@ const UiKit = preload("res://scripts/ui/ui_kit.gd")
 const MainMenu = preload("res://scripts/ui/main_menu.gd")
 const SettingsMenu = preload("res://scripts/ui/settings_menu.gd")
 const WorldsMenu = preload("res://scripts/ui/worlds_menu.gd")
+const AccountUi = preload("res://scripts/ui/account_ui.gd")
 const CreateWorld = preload("res://scripts/ui/create_world.gd")
 const MapSelect = preload("res://scripts/ui/map_select.gd")
 const Game = preload("res://scripts/game/game_controller.gd")
@@ -97,6 +101,8 @@ func _ready() -> void:
 		map.dump_plan(String(_args.plan), float(pa[0]), float(pa[1]), float(pa[2]))
 	if _args.has("mptest"):
 		_mp_unit_selftest()
+	if _args.has("acctest"):
+		_acct_selftest()
 	if _args.has("mphost") or _args.has("mpjoin"):
 		_mp_live_setup()
 	if not _args.has("quit-at"):
@@ -784,6 +790,145 @@ func _mp_unit_selftest() -> void:
 			"DESA7777": {"online": true, "nick": "Оля", "s": "game", "ping": 320, "w": {}},
 			"ZHRAXXX3": {"online": false, "nick": "Жора", "s": "", "ping": 0, "w": {}},
 		}
+
+
+## Waits for an account call that answers through cb(ok: bool, text: String); returns [ok, text].
+func _acct_call(f: Callable) -> Array:
+	var box := []
+	f.call(func(ok: bool, text: String) -> void: box.append_array([ok, text]))
+	var frames := 0
+	while box.is_empty() and frames < 600:
+		frames += 1
+		await get_tree().process_frame
+	return box if not box.is_empty() else [false, "timeout"]
+
+
+## --acctest: the optional accounts, offline. The database is an in-memory stand-in (FbDb.mock) and
+## so is Firebase Authentication (api_key "mock"): nothing reaches the network or the settings file.
+func _acct_selftest() -> void:
+	const Account = preload("res://scripts/core/account.gd")
+	# a saved session survives a restart only if the settings file keeps the key
+	var kept := GS.settings.has("account")
+	Net.dry = true
+	Net.set_offline()
+	Net.db.mock = {}
+	Net.account.auth.api_key = "mock"
+	GS.settings["account"] = {}
+	GS.settings["nick"] = "Тарас"
+	GS.settings["friends"] = [{"code": "FRNDAAAA", "name": "Мыкола"}]
+	var m: Dictionary = Net.db.mock
+	var fails := []
+	var check := func(ok: bool, what: String) -> void:
+		if not ok:
+			fails.append(what)
+	check.call(kept, "account is a saved setting")
+	var dev := Net.device_code()
+	check.call(Net.accounts_enabled() and not Net.account.active() and Net.code() == dev, "starts on the device code")
+	check.call(Account.check_nick("ab") != "" and Account.check_nick("a.b.c") != "" and Account.check_nick("x/y_z") != "", "bad nicks refused")
+	check.call(Account.check_nick("Тарас_1") == "" and Account.check_nick("Їжак-2") == "" and Account.check_nick("Olha") == "", "good nicks pass")
+	# registering moves the device's code, nick and friends into the account
+	var r: Array = await _acct_call(func(cb: Callable) -> void: Net.register("Тарас", "taras@test.ua", "secret1", cb))
+	check.call(r[0], "register: %s" % r[1])
+	var uid := Net.account.auth.uid
+	check.call(Net.account.active() and Net.code() == dev and Net.nick() == "Тарас", "account keeps the device code and nick")
+	check.call(Net.friends().size() == 1 and String(Net.friends()[0].code) == "FRNDAAAA", "device friends moved in")
+	check.call(m.get("names", {}).get("тарас", {}).get("c") == dev and m.get("codes", {}).get(dev) == uid, "nick and code claimed")
+	check.call(m.get("accounts", {}).get(uid, {}).get("f", {}).has("FRNDAAAA"), "friend list in the cloud")
+	check.call(Net.db.auth != "" and Net.conn.auth == Net.db.auth, "the token rides with requests")
+	check.call(not var_to_str(GS.settings).contains("secret1"), "the password is never stored")
+	Net.logout()
+	check.call(not Net.account.active() and Net.code() == dev and Net.db.auth == "", "sign out: device code back, no token")
+	# nicks are unique whatever the letter case; a refused nick creates no login
+	r = await _acct_call(func(cb: Callable) -> void: Net.register("ТАРАС", "other@test.ua", "secret2", cb))
+	check.call(not r[0] and not Net.account.auth._mock_users.has("other@test.ua"), "nick taken in any letter case")
+	r = await _acct_call(func(cb: Callable) -> void: Net.register("Olha", "bad-mail", "secret2", cb))
+	check.call(not r[0] and not Net.account.active(), "bad email refused")
+	# a second account made on this device: the device's code already has an owner
+	r = await _acct_call(func(cb: Callable) -> void: Net.register("Olha", "olha@test.ua", "secret3", cb))
+	var olha_code := Net.code()
+	check.call(r[0] and olha_code != dev and Net.parse_code(olha_code) == olha_code, "second account gets its own code")
+	r = await _acct_call(func(cb: Callable) -> void: Net.add_friend("тАрАс", cb))
+	check.call(r[0] and Net.last_added == dev and String(r[1]) == "Тарас", "friend found by nick")
+	r = await _acct_call(func(cb: Callable) -> void: Net.add_friend("nobody_here", cb))
+	check.call(not r[0], "unknown nick")
+	r = await _acct_call(func(cb: Callable) -> void: Net.add_friend("olha", cb))
+	check.call(not r[0], "own nick refused")
+	r = await _acct_call(func(cb: Callable) -> void: Net.add_friend("a", cb))
+	check.call(not r[0], "neither a code nor a nick")
+	Net.logout()
+	r = await _acct_call(func(cb: Callable) -> void: Net.login("taras@test.ua", "wrong-pass", cb))
+	check.call(not r[0] and not Net.account.active(), "wrong password refused")
+	# a friend added on the device while signed out joins the account at sign-in
+	GS.settings["friends"] = [{"code": "FRNDBBBB", "name": "Оля"}]
+	r = await _acct_call(func(cb: Callable) -> void: Net.login(" TARAS@test.ua ", "secret1", cb))
+	check.call(r[0] and Net.code() == dev and Net.nick() == "Тарас", "sign in brings the account back")
+	var codes := Net.friends().map(func(f) -> String: return String(f.code))
+	check.call(codes.has("FRNDAAAA") and codes.has("FRNDBBBB") and m.accounts[uid].f.has("FRNDBBBB"), "device friends merged at sign-in")
+	Net.remove_friend("FRNDAAAA")
+	await get_tree().process_frame
+	check.call(not m.accounts[uid].f.has("FRNDAAAA"), "removed from the cloud list")
+	r = await _acct_call(func(cb: Callable) -> void: Net.rename("OLHA", cb))
+	check.call(not r[0] and Net.nick() == "Тарас", "rename to a taken nick refused")
+	r = await _acct_call(func(cb: Callable) -> void: Net.rename("Taras_UA", cb))
+	check.call(r[0] and Net.nick() == "Taras_UA" and m.names.has("taras_ua") and not m.names.has("тарас") and m.accounts[uid].n == "Taras_UA", "rename moves the nick")
+	# the saved session is picked up after a restart
+	var again := Account.new()
+	add_child(again)
+	again.setup("mock", Net.db, Callable())
+	again.auth._mock_users = Net.account.auth._mock_users
+	for i in 5:
+		await get_tree().process_frame
+	check.call(again.active() and again.auth.has_token() and again.code == dev and again.nick == "Taras_UA", "session restored after a restart")
+	again.queue_free()
+	r = await _acct_call(func(cb: Callable) -> void: Net.delete_account("nope", cb))
+	check.call(not r[0] and Net.account.active(), "deletion asks for the password")
+	r = await _acct_call(func(cb: Callable) -> void: Net.delete_account("secret1", cb))
+	check.call(r[0] and not Net.account.active() and Net.code() == dev, "account deleted, device code back")
+	check.call(not m.names.has("taras_ua") and not m.get("codes", {}).has(dev) and not m.get("accounts", {}).has(uid), "nick, code and profile gone")
+	check.call(not Net.account.auth._mock_users.has("taras@test.ua"), "the login itself is gone")
+	# the password was changed elsewhere: the saved session stops working and the device takes over
+	r = await _acct_call(func(cb: Callable) -> void: Net.login("olha@test.ua", "secret3", cb))
+	check.call(r[0] and Net.code() == olha_code, "second account signs in")
+	Net.account.auth._mock_users.erase("olha@test.ua")
+	Net.account.auth.refresh()
+	for i in 5:
+		await get_tree().process_frame
+	check.call(not Net.account.active() and Net.account.lost and Net.code() == dev, "revoked session falls back to the device")
+	print("UAD ACCTEST: %s" % ("OK" if fails.is_empty() else "FAIL " + ", ".join(fails)))
+	if _args.has("accshow"):
+		_acct_show(String(_args.accshow))
+
+
+## --acctest --accshow=out|in|login|register|manage|delete: the multiplayer tab in that state (or
+## with that dialog open), for pictures of the account screens.
+func _acct_show(what: String) -> void:
+	Net.account.lost = false
+	GS.settings["nick"] = "Тарас"
+	GS.settings["friends"] = [{"code": "KYVHAST2", "name": "Мыкола"}, {"code": "DESA7777", "name": "Оля"}, {"code": "ZHRAXXX3", "name": "Жора"}]
+	if what in ["in", "manage", "delete"]:
+		await _acct_call(func(cb: Callable) -> void: Net.register("Тарас", "taras@ukr.net", "secret1", cb))
+	Net.friend_info = {
+		"KYVHAST2": {"online": true, "nick": "Мыкола", "s": "host", "ping": 140, "w": {"n": "Мыкола", "world": GS.ctext("defense", "kyiv"), "city": "kyiv", "day": 7, "night": true, "players": 2, "max": 4}},
+		"DESA7777": {"online": true, "nick": "Оля", "s": "game", "ping": 320, "w": {}},
+		"ZHRAXXX3": {"online": false, "nick": "Жора", "s": "", "ping": 0, "w": {}},
+	}
+	# friends' state stays as set above: polls fail quietly without the stand-in database
+	Net.db.mock = null
+	WorldsMenu.last_tab = "mp"
+	show_worlds()
+	var w = screen
+	await get_tree().process_frame
+	match what:
+		"login":
+			w._open_login()
+		"register":
+			w._open_register()
+		"manage":
+			w._open_account()
+		"delete":
+			w._open_account()
+			await get_tree().process_frame
+			AccountUi.confirm_delete(w, Callable())
 
 
 var _mp_stage := 0

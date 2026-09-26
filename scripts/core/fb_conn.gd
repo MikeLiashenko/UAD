@@ -21,6 +21,8 @@ var answered := 0
 ## Server clock minus local clock (ms), learnt from server timestamps coming back resolved.
 var server_offset := 0
 var has_offset := false
+## ID token of a signed-in account, sent as ?auth= (see FbDb.auth).
+var auth := ""
 
 var _http := HTTPClient.new()
 var _host := ""
@@ -117,7 +119,8 @@ func _start_next() -> void:
 	_sent_local = Time.get_unix_time_from_system() * 1000.0
 	var payload := JSON.stringify(_cur.body) if _cur.body != null else ""
 	var headers := PackedStringArray(["Content-Type: application/json", "Connection: keep-alive"])
-	if _http.request(int(_cur.method), "%s/%s.json" % [_prefix, _cur.path], headers, payload) != OK:
+	var q := "?auth=" + auth if auth != "" else ""
+	if _http.request(int(_cur.method), "%s/%s.json%s" % [_prefix, _cur.path, q], headers, payload) != OK:
 		_fail()
 
 

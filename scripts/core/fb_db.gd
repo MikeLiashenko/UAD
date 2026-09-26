@@ -8,6 +8,11 @@ var base_url := ""
 var rtt := 0
 ## Server clock minus local clock, ms — learnt from the timestamps the server writes for us.
 var server_offset := 0
+## ID token of a signed-in account (FbAuth): sent as ?auth= with every request, so the rules know
+## who writes. "" for players without an account.
+var auth := ""
+## Self-test: an in-memory database (a Dictionary) instead of the network; null normally.
+var mock = null
 var _busy := {}
 var _queued := {}
 
@@ -30,6 +35,9 @@ func server_now() -> int:
 ## empty: the offline self-test). data is the parsed JSON reply (the
 ## written value for PUT / PATCH, with server timestamps resolved).
 func request(method: int, path: String, body = null, cb := Callable()) -> void:
+	if mock is Dictionary:
+		_mock_request(method, path, body, cb)
+		return
 	if base_url == "":
 		if cb.is_valid():
 			cb.call_deferred(false, null)
@@ -53,7 +61,10 @@ func request(method: int, path: String, body = null, cb := Callable()) -> void:
 			cb.call(ok, data))
 	var headers := PackedStringArray(["Content-Type: application/json"])
 	var payload := JSON.stringify(body) if body != null else ""
-	if r.request(url(path), headers, method, payload) != OK:
+	var u := url(path)
+	if auth != "":
+		u += "?auth=" + auth
+	if r.request(u, headers, method, payload) != OK:
 		r.queue_free()
 		if cb.is_valid():
 			cb.call_deferred(false, null)
@@ -100,3 +111,64 @@ func patch_latest(key: String, path: String, value: Dictionary) -> void:
 ## Drops a waiting coalesced write (the session it belonged to is over).
 func cancel(key: String) -> void:
 	_queued.erase(key)
+
+
+# --- Offline stand-in (mock, the self-test) ------------------------------------------------------
+## Same answers as the REST API, kept in `mock`: server timestamps resolved, empty nodes gone.
+func _mock_request(method: int, path: String, body, cb: Callable) -> void:
+	var keys := Array(path.split("/", false))
+	var value = _mock_resolve(body)
+	var data = null
+	match method:
+		HTTPClient.METHOD_GET:
+			data = _mock_get(keys)
+		HTTPClient.METHOD_PUT:
+			_mock_set(keys, value)
+			data = value
+		HTTPClient.METHOD_PATCH:
+			if value is Dictionary:
+				for k in value:
+					_mock_set(keys + Array(String(k).split("/", false)), value[k])
+			data = value
+		HTTPClient.METHOD_DELETE:
+			_mock_set(keys, null)
+	if cb.is_valid():
+		cb.call_deferred(true, data.duplicate(true) if data is Dictionary or data is Array else data)
+
+
+func _mock_resolve(v):
+	if v is Dictionary:
+		if v.size() == 1 and v.get(".sv") == "timestamp":
+			return float(server_now())
+		var out := {}
+		for k in v:
+			var r = _mock_resolve(v[k])
+			if r != null:
+				out[k] = r
+		return out
+	return v.duplicate(true) if v is Array else v
+
+
+func _mock_get(keys: Array):
+	var node = mock
+	for k in keys:
+		if not (node is Dictionary) or not (node as Dictionary).has(k):
+			return null
+		node = node[k]
+	return null if node is Dictionary and (node as Dictionary).is_empty() else node
+
+
+func _mock_set(keys: Array, value) -> void:
+	if keys.is_empty():
+		return
+	var node: Dictionary = mock
+	for i in keys.size() - 1:
+		if not (node.get(keys[i]) is Dictionary):
+			if value == null:
+				return
+			node[keys[i]] = {}
+		node = node[keys[i]]
+	if value == null or (value is Dictionary and (value as Dictionary).is_empty()):
+		node.erase(keys[-1])
+	else:
+		node[keys[-1]] = value

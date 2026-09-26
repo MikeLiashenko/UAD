@@ -411,8 +411,9 @@ func key_label(action: String) -> String:
 var settings := {
 	"lang": "en", "volume": 0.8, "music": 0.6, "fullscreen": false, "quality": 2 if OS.has_feature("pc") else 1, "gfx_v2": false,
 	"markers": true, "sens": 1.0, "invert_y": false, "slowmo": true, "keys": {},
-	# Multiplayer (Net): switched on once used, friend code, the name friends see, friends [{code, name}].
-	"mp": false, "mp_code": "", "nick": "", "friends": [],
+	# Multiplayer (Net): switched on once used, friend code, the name friends see, friends [{code, name}],
+	# the signed-in account (Account: uid, email, refresh token, nick, code, friends — never the password).
+	"mp": false, "mp_code": "", "nick": "", "friends": [], "account": {},
 }
 
 # --- Run / world state ---------------------------------------------------------------

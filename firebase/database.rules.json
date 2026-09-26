@@ -7,19 +7,40 @@
         ".validate": "newData.child('build').isNumber() && newData.child('exe').isString() && newData.child('exe').val().beginsWith('https://github.com/MikeLiashenko/UAD/releases/') && newData.child('apk').isString() && newData.child('apk').val().beginsWith('https://github.com/MikeLiashenko/UAD/releases/')"
       },
       "v1": {
+        "accounts": {
+          "$uid": {
+            ".read": "auth != null && auth.uid === $uid",
+            ".write": "auth != null && auth.uid === $uid",
+            ".validate": "!newData.exists() || (newData.child('n').isString() && newData.child('n').val().length <= 16 && newData.child('c').isString() && newData.child('c').val().matches(/^[A-HJ-NP-Z2-9]{8}$/))"
+          }
+        },
+        "names": {
+          "$name": {
+            ".read": true,
+            ".write": "auth != null && (!data.exists() || data.child('u').val() === auth.uid)",
+            ".validate": "!newData.exists() || ($name.length >= 3 && $name.length <= 16 && newData.child('u').val() === auth.uid && newData.child('c').isString() && newData.child('c').val().matches(/^[A-HJ-NP-Z2-9]{8}$/) && newData.child('n').isString() && newData.child('n').val().length <= 16)"
+          }
+        },
+        "codes": {
+          "$code": {
+            ".read": true,
+            ".write": "auth != null && (!data.exists() || data.val() === auth.uid)",
+            ".validate": "!newData.exists() || ($code.matches(/^[A-HJ-NP-Z2-9]{8}$/) && newData.val() === auth.uid)"
+          }
+        },
         "users": {
           "$code": {
             ".read": true,
-            ".write": "$code.matches(/^[A-HJ-NP-Z2-9]{8}$/)",
+            ".write": "$code.matches(/^[A-HJ-NP-Z2-9]{8}$/) && (!root.child('uad/v1/codes/' + $code).exists() || (auth != null && root.child('uad/v1/codes/' + $code).val() === auth.uid))",
             ".validate": "!newData.exists() || (newData.child('n').isString() && newData.child('n').val().length <= 16 && newData.child('t').isNumber() && newData.child('t').val() <= now + 60000)"
           }
         },
         "requests": {
           "$host": {
             ".read": true,
-            ".write": "!newData.exists()",
+            ".write": "!newData.exists() && (!root.child('uad/v1/codes/' + $host).exists() || (auth != null && root.child('uad/v1/codes/' + $host).val() === auth.uid))",
             "$guest": {
-              ".write": "$host.matches(/^[A-HJ-NP-Z2-9]{8}$/) && $guest.matches(/^[A-HJ-NP-Z2-9]{8}$/)",
+              ".write": "$host.matches(/^[A-HJ-NP-Z2-9]{8}$/) && $guest.matches(/^[A-HJ-NP-Z2-9]{8}$/) && (!root.child('uad/v1/codes/' + $guest).exists() || !root.child('uad/v1/codes/' + $host).exists() || (auth != null && (root.child('uad/v1/codes/' + $guest).val() === auth.uid || root.child('uad/v1/codes/' + $host).val() === auth.uid)))",
               ".validate": "!newData.exists() || newData.child('st').isString()"
             }
           }
@@ -27,7 +48,7 @@
         "sessions": {
           "$host": {
             ".read": true,
-            ".write": "$host.matches(/^[A-HJ-NP-Z2-9]{8}$/)",
+            ".write": "$host.matches(/^[A-HJ-NP-Z2-9]{8}$/) && (!root.child('uad/v1/codes/' + $host).exists() || (auth != null && root.child('uad/v1/codes/' + $host).val() === auth.uid))",
             "raid": {
               ".validate": "!newData.exists() || (newData.child('n').isNumber() && newData.child('t').isNumber())"
             },
@@ -35,6 +56,7 @@
               ".validate": "!newData.exists() || newData.hasChildren()"
             },
             "$code": {
+              ".write": "$code.matches(/^[A-HJ-NP-Z2-9]{8}$/) && (!root.child('uad/v1/codes/' + $code).exists() || (auth != null && root.child('uad/v1/codes/' + $code).val() === auth.uid))",
               ".validate": "$code.matches(/^[A-HJ-NP-Z2-9]{8}$/) && (!newData.child('n').exists() || (newData.child('n').isString() && newData.child('n').val().length <= 16))"
             }
           }

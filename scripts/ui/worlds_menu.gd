@@ -1,12 +1,15 @@
 extends Control
 ## The "Play" screen, Minecraft-style, with two tabs:
 ##   Главная     — your own worlds: every defence is a save slot in local storage;
-##   Мультиплеер — friends added by code (Net): who is online and which world they opened. A
-##                 join request goes to the host, who accepts or declines it in their game.
+##   Мультиплеер — friends added by code or nick (Net): who is online and which world they opened.
+##                 A join request goes to the host, who accepts or declines it in their game.
+##                 Playing by code needs nothing; an optional account (AccountUi) keeps the
+##                 code, nick and friends in the cloud, on every device.
 
 const UiKit = preload("res://scripts/ui/ui_kit.gd")
 const Cities = preload("res://scripts/world/cities.gd")
 const PingBars = preload("res://scripts/ui/ping_bars.gd")
+const AccountUi = preload("res://scripts/ui/account_ui.gd")
 
 ## The tab shown when the screen opens again (back from creating a world, a declined request…).
 static var last_tab := "home"
@@ -33,6 +36,8 @@ var _mp_sel := ""
 var _mp_sig := "-"
 var _mp_click := {}
 var _scan_lbl: Label
+## Who we are: nick (or the account), code, and the account strip — rebuilt on sign-in / out.
+var _id_box: VBoxContainer
 var _nick: LineEdit
 var _join_btn: Button
 var _unfriend_btn: Button
@@ -105,6 +110,7 @@ func _ready() -> void:
 	for k in _pages:
 		v.add_child(_pages[k])
 	Net.friends_changed.connect(_rebuild_mp)
+	Net.account_changed.connect(_on_account_changed)
 	Net.request_sent.connect(_on_req_sent)
 	Net.join_answered.connect(_on_req_answer)
 	Net.connect_failed.connect(_on_req_failed)
@@ -291,43 +297,15 @@ func _do_delete() -> void:
 func _build_mp() -> Control:
 	var v := UiKit.vbox(10)
 	v.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	var sub := UiKit.label(GS.t("Добавьте друга по его коду — увидите, когда он в сети и какой мир открыл. Свой мир откройте в игре: пауза → «Открыть для друзей»."), 14, Color(0.6, 0.85, 0.75), HORIZONTAL_ALIGNMENT_CENTER)
+	var sub := UiKit.label(GS.t("Добавьте друга по коду или нику — увидите, когда он в сети и какой мир открыл. Свой мир откройте в игре: пауза → «Открыть для друзей»."), 14, Color(0.6, 0.85, 0.75), HORIZONTAL_ALIGNMENT_CENTER)
 	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	sub.custom_minimum_size = Vector2(740, 0)
 	v.add_child(sub)
-	var idr := UiKit.hbox(10)
-	v.add_child(idr)
-	var nl := UiKit.label(GS.t("Ваш ник"), 16, UiKit.AMBER)
-	nl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	idr.add_child(nl)
-	_nick = LineEdit.new()
-	_nick.max_length = 16
-	_nick.text = String(GS.settings.get("nick", ""))
-	_nick.placeholder_text = Net.nick()
-	_nick.custom_minimum_size = Vector2(230, 40)
-	_nick.add_theme_font_size_override("font_size", 18)
-	_nick.select_all_on_focus = true
-	_nick.text_submitted.connect(func(_t: String) -> void:
-		_save_nick()
-		_nick.release_focus())
-	_nick.focus_exited.connect(_save_nick)
-	idr.add_child(_nick)
-	var gap := Control.new()
-	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	idr.add_child(gap)
-	var cl := UiKit.label(GS.t("Ваш код: %s") % Net.fmt_code(Net.code()), 18, UiKit.NEON)
-	cl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	idr.add_child(cl)
-	var copy := UiKit.button(GS.t("Копировать"), func() -> void: pass, 150, 16)
-	copy.pressed.connect(func() -> void:
-		DisplayServer.clipboard_set(Net.fmt_code(Net.code()))
-		copy.text = GS.t("Скопировано ✓")
-		get_tree().create_timer(1.5).timeout.connect(func() -> void:
-			if is_instance_valid(copy):
-				copy.text = GS.t("Копировать")))
-	idr.add_child(copy)
+	_id_box = UiKit.vbox(8)
+	v.add_child(_id_box)
+	_build_identity()
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(0, 290)
+	scroll.custom_minimum_size = Vector2(0, 240)
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	v.add_child(scroll)
@@ -347,8 +325,105 @@ func _build_mp() -> Control:
 	return v
 
 
+## Nick and code; with an account, its nick instead of the field. Below: the account strip.
+func _build_identity() -> void:
+	_save_nick()
+	for c in _id_box.get_children():
+		c.queue_free()
+	_nick = null
+	var idr := UiKit.hbox(10)
+	_id_box.add_child(idr)
+	if Net.account.active():
+		var who := UiKit.label("◉ " + Net.nick(), 21, UiKit.CYAN)
+		who.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		idr.add_child(who)
+		var tag := UiKit.label(GS.t("аккаунт"), 13, Color(0.45, 0.75, 0.85))
+		tag.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		idr.add_child(tag)
+	else:
+		var nl := UiKit.label(GS.t("Ваш ник"), 16, UiKit.AMBER)
+		nl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		idr.add_child(nl)
+		_nick = LineEdit.new()
+		_nick.max_length = 16
+		_nick.text = String(GS.settings.get("nick", ""))
+		_nick.placeholder_text = Net.nick()
+		_nick.custom_minimum_size = Vector2(230, 40)
+		_nick.add_theme_font_size_override("font_size", 18)
+		_nick.select_all_on_focus = true
+		_nick.text_submitted.connect(func(_t: String) -> void:
+			_save_nick()
+			_nick.release_focus())
+		_nick.focus_exited.connect(_save_nick)
+		idr.add_child(_nick)
+	var gap := Control.new()
+	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	idr.add_child(gap)
+	var cl := UiKit.label(GS.t("Ваш код: %s") % Net.fmt_code(Net.code()), 18, UiKit.NEON)
+	cl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	idr.add_child(cl)
+	var copy := UiKit.button(GS.t("Копировать"), func() -> void: pass, 150, 16)
+	copy.pressed.connect(func() -> void:
+		DisplayServer.clipboard_set(Net.fmt_code(Net.code()))
+		copy.text = GS.t("Скопировано ✓")
+		get_tree().create_timer(1.5).timeout.connect(func() -> void:
+			if is_instance_valid(copy):
+				copy.text = GS.t("Копировать")))
+	idr.add_child(copy)
+	if Net.accounts_enabled():
+		_id_box.add_child(_account_strip())
+
+
+## One line under the identity: play by code (sign in / register) or the account's button.
+func _account_strip() -> Control:
+	var p := PanelContainer.new()
+	p.add_theme_stylebox_override("panel", UiKit.sbox(Color(0.0, 0.07, 0.09, 0.75), Color(0.35, 0.85, 1.0, 0.4), 1, 6, 6))
+	var h := UiKit.hbox(10)
+	p.add_child(h)
+	var text := GS.t("Играете по коду — аккаунт не обязателен. С аккаунтом друзья найдут вас по нику, а код и друзья будут на всех ваших устройствах.")
+	var col := Color(0.6, 0.85, 0.9)
+	if Net.account.active():
+		text = GS.t("Вы в аккаунте: код и друзья хранятся в облаке и доступны на всех ваших устройствах.")
+	elif Net.account.lost:
+		text = GS.t("Вход в аккаунт больше не действует (сменили пароль или удалили аккаунт) — войдите снова. Пока вы играете по коду этого устройства.")
+		col = UiKit.AMBER
+	var l := UiKit.label(text, 13, col)
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	h.add_child(l)
+	if Net.account.active():
+		h.add_child(UiKit.button(GS.t("Аккаунт"), _open_account, 150, 16))
+	else:
+		h.add_child(UiKit.button(GS.t("Войти"), _open_login, 120, 16))
+		h.add_child(UiKit.button(GS.t("Регистрация"), _open_register, 170, 16))
+	return p
+
+
+func _open_login() -> void:
+	_save_nick()
+	_confirm = AccountUi.login(self, _on_account_changed, _open_register)
+
+
+func _open_register() -> void:
+	_save_nick()
+	_confirm = AccountUi.register(self, _on_account_changed, _open_login)
+
+
+func _open_account() -> void:
+	_confirm = AccountUi.manage(self, _on_account_changed, func(root: Control) -> void: _confirm = root)
+
+
+func _on_account_changed() -> void:
+	if _id_box == null or not is_instance_valid(_id_box):
+		return
+	_build_identity()
+	_mp_sig = "-"
+	_rebuild_mp()
+
+
 func _save_nick() -> void:
-	if _nick == null:
+	if _nick == null or not is_instance_valid(_nick):
 		return
 	var n := _nick.text.strip_edges()
 	if n != String(GS.settings.get("nick", "")):
@@ -394,7 +469,7 @@ func _rebuild_mp() -> void:
 	_mp_rows.clear()
 	_mp_entries.clear()
 	if entries.is_empty():
-		_mp_list.add_child(_empty_note(GS.t("Друзей пока нет. Попросите у друга его код (он на этой же вкладке) и нажмите «Добавить друга».")))
+		_mp_list.add_child(_empty_note(GS.t("Друзей пока нет. Попросите у друга его код (он на этой же вкладке) или ник и нажмите «Добавить друга».")))
 	for e in entries:
 		_mp_entries[e.key] = e
 		_mp_list.add_child(_mp_row(e))
@@ -554,13 +629,13 @@ func _ask_add_friend() -> void:
 	var box := _confirm
 	var v: VBoxContainer = m[1]
 	v.add_child(UiKit.glow_label(GS.t("ДОБАВИТЬ ДРУГА"), 28, UiKit.NEON))
-	var hint := UiKit.label(GS.t("Введите код друга — он показан у него на вкладке «Мультиплеер»."), 14, Color(0.6, 0.85, 0.75), HORIZONTAL_ALIGNMENT_CENTER)
+	var hint := UiKit.label(GS.t("Введите код друга — он показан у него на вкладке «Мультиплеер», — или его ник, если у друга есть аккаунт."), 14, Color(0.6, 0.85, 0.75), HORIZONTAL_ALIGNMENT_CENTER)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint.custom_minimum_size = Vector2(440, 0)
 	v.add_child(hint)
 	var a := LineEdit.new()
-	a.max_length = 12
-	a.placeholder_text = "ABCD-EFGH"
+	a.max_length = 16
+	a.placeholder_text = GS.t("ABCD-EFGH или ник")
 	a.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	a.custom_minimum_size = Vector2(440, 50)
 	a.add_theme_font_size_override("font_size", 26)
@@ -578,7 +653,7 @@ func _ask_add_friend() -> void:
 			if not is_instance_valid(box):
 				return
 			if ok:
-				_mp_sel = Net.parse_code(a.text)
+				_mp_sel = Net.last_added
 				_mp_sig = "-"
 				box.queue_free()
 				_rebuild_mp()

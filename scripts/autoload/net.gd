@@ -1,8 +1,8 @@
 extends Node
 ## Multiplayer through the Firebase Realtime Database (autoload "Net").
 ##
-## Every player has a friend code. The multiplayer tab lists the friends added by code: online or
-## not, and the world they have opened. A guest knocks with a join request, the host accepts or
+## Every player has a friend code. The multiplayer tab lists the friends added by code (or by
+## nick, when the friend has an account): online or not, and the world they have opened. A guest knocks with a join request, the host accepts or
 ## declines it in their game, and from then on everyone in the session sees each other — bases
 ## with name tags, where each camera is looking — and can watch through a friend's eyes — and
 ## defends the city against one shared raid.
@@ -19,12 +19,23 @@ extends Node
 ## One raid for everybody: the host simulates the threats, guests fly "puppets" that follow the
 ## snapshots (dead reckoning + smoothing) and report the damage they deal; the host applies it
 ## and credits the kill to whoever brought the target down.
-## "t" is always the server's clock. Nothing is authenticated: see firebase/database.rules.json.
+## "t" is always the server's clock.
+##
+## Two ways to be somebody: by default a player is just the code kept on this device; an optional
+## account (Account, Firebase Authentication: email + password) owns a code and a unique nick and
+## keeps the friend list in the cloud, the same on every device. Requests then carry the account's
+## ID token (?auth=) and the rules let nobody else write as that code — see
+## firebase/database.rules.json.
 
 const FbDb = preload("res://scripts/core/fb_db.gd")
 const FbStream = preload("res://scripts/core/fb_stream.gd")
 const FbConn = preload("res://scripts/core/fb_conn.gd")
 const BuildInfo = preload("res://scripts/build_info.gd")
+const Account = preload("res://scripts/core/account.gd")
+## The Firebase Web API key (accounts) lives in this file, kept out of the public repository:
+##   const FIREBASE_WEB_KEY := "AIza..."
+## Without it the game runs on friend codes only.
+const KEYS_PATH := "res://scripts/keys.gd"
 
 ## Friends' online state refreshed (friend_info).
 signal friends_changed
@@ -51,6 +62,8 @@ signal guest_hits(code: String, totals: Dictionary)
 signal launches_received(code: String, list: Array)
 ## The newest published build arrived from the database (uad/release).
 signal release_checked(info: Dictionary)
+## Signed in or out of the account, or its nick / friends changed.
+signal account_changed
 
 const DB_URL := "https://dream-journal-93835-default-rtdb.firebaseio.com"
 ## Updates are only ever downloaded from here (see update_url).
@@ -102,6 +115,12 @@ var main
 var release := {}
 
 var db: FbDb
+## Optional player account (nick, cloud friends, one identity on every device).
+var account: Account
+## The code our presence was last written under (signing in or out switches it).
+var _presence_code := ""
+## The code of the friend added last (the list selects it).
+var last_added := ""
 ## Kept-alive connections: our presence (both roles) and the raid + map (host).
 var conn: FbConn
 var conn_raid: FbConn
@@ -157,6 +176,38 @@ func _ready() -> void:
 	for a in OS.get_cmdline_user_args():
 		if String(a).begins_with("--mpid="):
 			_code_override = parse_code(String(a).substr(7))
+	account = Account.new()
+	add_child(account)
+	account.setup(_web_key(), db, _save)
+	account.auth.token_changed.connect(_on_token)
+	account.changed.connect(_on_account)
+
+
+func _web_key() -> String:
+	if not ResourceLoader.exists(KEYS_PATH):
+		return ""
+	var s = load(KEYS_PATH)
+	return String(s.get("FIREBASE_WEB_KEY")) if s != null and s.get("FIREBASE_WEB_KEY") != null else ""
+
+
+## The account's ID token goes with every request from now on ("" once signed out).
+func _on_token(token: String) -> void:
+	db.auth = token
+	conn.auth = token
+	conn_raid.auth = token
+
+
+func _on_account() -> void:
+	# signing in or out changes who we are: the old code's presence goes, friends are read again
+	var c := code()
+	if _presence_code != "" and _presence_code != c:
+		db.delete("users/" + _presence_code)
+		_presence_code = ""
+	friend_info.clear()
+	_friends_t = FRIENDS_EVERY
+	_user_t = 999.0
+	account_changed.emit()
+	friends_changed.emit()
 
 
 ## Self-test: nothing reaches the network (every request fails at once, streams stay idle).
@@ -228,17 +279,29 @@ func _save() -> void:
 
 
 # --- Identity ---------------------------------------------------------------------------------
-## This player's friend code (8 characters, generated once and kept in the settings).
+## This player's friend code: the account's while signed in, otherwise this device's.
 func code() -> String:
 	if _code_override != "":
 		return _code_override
+	if account != null and account.active():
+		return account.code
+	return device_code()
+
+
+## The device's own code (8 characters, generated once and kept in the settings).
+func device_code() -> String:
 	var c := String(GS.settings.get("mp_code", ""))
 	if parse_code(c) == "":
-		c = ""
-		for i in CODE_LEN:
-			c += CODE_CHARS[randi() % CODE_CHARS.length()]
+		c = new_code()
 		GS.settings["mp_code"] = c
 		_save()
+	return c
+
+
+static func new_code() -> String:
+	var c := ""
+	for i in CODE_LEN:
+		c += CODE_CHARS[randi() % CODE_CHARS.length()]
 	return c
 
 
@@ -259,6 +322,8 @@ static func parse_code(text: String) -> String:
 
 
 func nick() -> String:
+	if account != null and account.active() and account.nick != "":
+		return account.nick
 	var n := String(GS.settings.get("nick", "")).strip_edges()
 	return n.substr(0, 16) if n != "" else GS.t("Игрок %s") % code().substr(0, 4)
 
@@ -286,7 +351,14 @@ func _enable() -> void:
 
 
 # --- Friends ------------------------------------------------------------------------------------
+## Friends as [{code, name}]: the account's list while signed in, otherwise this device's.
 func friends() -> Array:
+	if account != null and account.active():
+		return account.friends.duplicate()
+	return device_friends()
+
+
+func device_friends() -> Array:
 	var out := []
 	for f in GS.settings.get("friends", []):
 		if f is Dictionary and parse_code(String(f.get("code", ""))) != "":
@@ -294,41 +366,69 @@ func friends() -> Array:
 	return out
 
 
-## Adds a friend by code after checking the player exists. cb(ok: bool, text: String) gets the
-## friend's nick on success or the reason on failure.
+## Adds a friend by code — or by nick, when the friend has an account. cb(ok: bool, text: String)
+## gets the friend's nick on success or the reason on failure; the code lands in last_added.
 func add_friend(typed: String, cb: Callable) -> void:
-	var c := parse_code(typed)
-	if c == "":
-		cb.call(false, GS.t("Код — 8 символов, например %s") % fmt_code("K7MQ4XRT"))
-		return
-	if c == code():
+	var text := typed.strip_edges()
+	var c := parse_code(text)
+	if c != "" and c == code():
 		cb.call(false, GS.t("Это ваш собственный код"))
 		return
 	_enable()
+	if c == "":
+		if Account.check_nick(text) != "":
+			cb.call(false, GS.t("Введите код друга (8 символов, например %s) или его ник") % fmt_code("K7MQ4XRT"))
+		else:
+			_add_by_nick(text, cb)
+		return
 	db.get_value("users/" + c, func(ok: bool, d) -> void:
 		if not ok:
 			cb.call(false, GS.t("Нет связи с сервером"))
-		elif not (d is Dictionary):
-			cb.call(false, GS.t("Игрок с таким кодом не найден"))
+		elif d is Dictionary:
+			_added(c, _clean_nick(d.get("n")), cb)
+		elif Account.check_nick(text) == "":
+			_add_by_nick(text, cb) # eight letters that look like a code can still be a nick
 		else:
-			var n := _clean_nick(d.get("n"))
-			_remember_friend(c, n)
-			_friends_t = FRIENDS_EVERY
-			cb.call(true, n))
+			cb.call(false, GS.t("Игрок с таким кодом не найден")))
+
+
+func _add_by_nick(n: String, cb: Callable) -> void:
+	account.lookup(n, func(ok: bool, info) -> void:
+		if not ok:
+			cb.call(false, GS.t("Нет связи с сервером"))
+		elif info == null:
+			cb.call(false, GS.t("Игрока с ником «%s» нет. Ник есть только у игроков с аккаунтом — попросите код.") % n)
+		elif String(info.c) == code():
+			cb.call(false, GS.t("Это ваш собственный ник"))
+		else:
+			_added(String(info.c), _clean_nick(info.get("n", n)), cb))
+
+
+func _added(c: String, n: String, cb: Callable) -> void:
+	_remember_friend(c, n)
+	last_added = c
+	_friends_t = FRIENDS_EVERY
+	cb.call(true, n)
 
 
 func _remember_friend(c: String, n: String) -> void:
 	if c == "" or c == code():
 		return
-	var list := friends().filter(func(f) -> bool: return String(f.code) != c)
+	if account != null and account.active():
+		account.add_friend(c, n)
+		return
+	var list := device_friends().filter(func(f) -> bool: return String(f.code) != c)
 	list.append({"code": c, "name": n})
 	GS.settings["friends"] = list
 	_save()
 
 
 func remove_friend(c: String) -> void:
-	GS.settings["friends"] = friends().filter(func(f) -> bool: return String(f.code) != c)
-	_save()
+	if account != null and account.active():
+		account.remove_friend(c)
+	else:
+		GS.settings["friends"] = device_friends().filter(func(f) -> bool: return String(f.code) != c)
+		_save()
 	friend_info.erase(c)
 	friends_changed.emit()
 
@@ -340,6 +440,44 @@ func watch_friends(on: bool) -> void:
 		_enable()
 		_friends_t = FRIENDS_EVERY
 		_user_t = 999.0
+		account.sync()
+
+
+# --- Account -------------------------------------------------------------------------------------
+## Accounts work in this build (the Firebase key is in).
+func accounts_enabled() -> bool:
+	return account != null and account.enabled()
+
+
+## cb(ok: bool, text: String) for all of these; text says why when it failed.
+func register(n: String, mail: String, password: String, cb: Callable) -> void:
+	account.register(n, mail, password, code(), device_friends(), cb)
+
+
+func login(mail: String, password: String, cb: Callable) -> void:
+	account.login(mail, password, code(), device_friends(), cb)
+
+
+## Signs out: this device's own code, nick and friends come back.
+func logout() -> void:
+	close()
+	if account.active():
+		db.delete("users/" + account.code) # sent while the token is still on: only we may do it
+	_presence_code = ""
+	account.logout()
+
+
+func rename(n: String, cb: Callable) -> void:
+	account.rename(n, cb)
+
+
+func reset_password(mail: String, cb: Callable) -> void:
+	account.reset_password(mail, cb)
+
+
+func delete_account(password: String, cb: Callable) -> void:
+	close()
+	account.delete_account(password, cb)
 
 
 func _poll_friends() -> void:
@@ -370,7 +508,8 @@ func _heartbeat() -> void:
 	var d := {"n": nick(), "t": FbDb.now_placeholder(), "s": s}
 	if role == "host":
 		d["w"] = _world_info()
-	db.put("users/" + code(), d)
+	_presence_code = code()
+	db.put("users/" + _presence_code, d)
 
 
 # --- Hosting -------------------------------------------------------------------------------------

@@ -4,3 +4,6 @@ tools/
 *.tmp
 android/
 override.cfg
+# Firebase Web API key for accounts (see Net.KEYS_PATH) — local only
+scripts/keys.gd
+scripts/keys.gd.uid
