@@ -986,3 +986,99 @@ static func metro_train(cars := 5) -> Node3D:
 	tail.position = Vector3(0, 1.4, (cars - 1) * 15.0 + 7.4)
 	root.add_child(tail)
 	return root
+
+
+## F-16 fighter for the interceptor sorties (scripts/game/fighter.gd), nose towards -Z, about
+## 15 m long. Meta "burner": the afterburner flame (shown with the throttle past military power),
+## "muzzle": the M61 gun port, "rails": the four missile stations under the wings.
+static func f16() -> Node3D:
+	var root := Node3D.new()
+	var grey := Fx.solid(Color(0.46, 0.5, 0.54), 0.55, 0.15)
+	var dark := Fx.solid(Color(0.2, 0.22, 0.25), 0.6)
+	var glass := Fx.solid(Color(0.55, 0.45, 0.2), 0.08, 0.6)
+	# fuselage with the chin intake and a pointed radome
+	cyl(root, 0.75, 0.85, 11.0, Vector3(0, 0, 0.5), grey, Vector3(90, 0, 0), 12)
+	cyl(root, 0.0, 0.75, 3.2, Vector3(0, 0, -6.6), grey, Vector3(-90, 0, 0), 12)
+	box(root, Vector3(1.3, 0.8, 3.2), Vector3(0, -0.85, -1.6), dark)
+	# bubble canopy
+	var can := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 0.62
+	sm.height = 1.24
+	can.mesh = sm
+	can.material_override = glass
+	can.scale = Vector3(0.85, 0.75, 2.3)
+	can.position = Vector3(0, 0.72, -3.4)
+	root.add_child(can)
+	# cropped-delta wing, horizontal tail, the fin
+	for sx in [-1.0, 1.0]:
+		var wing := MeshInstance3D.new()
+		wing.mesh = _wing_mesh(4.9, 3.6, 1.2, 0.18)
+		wing.material_override = grey
+		wing.position = Vector3(0.6 * sx, -0.1, 1.2)
+		wing.scale = Vector3(sx, 1, 1)
+		root.add_child(wing)
+		var stab := MeshInstance3D.new()
+		stab.mesh = _wing_mesh(2.6, 2.0, 0.9, 0.14)
+		stab.material_override = grey
+		stab.position = Vector3(0.5 * sx, 0.0, 5.2)
+		stab.scale = Vector3(sx, 1, 1)
+		root.add_child(stab)
+		# wingtip rail with a missile, and the navigation light
+		box(root, Vector3(0.14, 0.14, 2.6), Vector3(5.45 * sx, -0.05, 2.1), Fx.solid(Color(0.85, 0.85, 0.82), 0.5))
+		var nav := MeshInstance3D.new()
+		nav.mesh = Fx.cube(Vector3(0.18, 0.18, 0.18))
+		nav.material_override = Fx.glow(Color(1.0, 0.1, 0.05) if sx < 0.0 else Color(0.1, 1.0, 0.25), 6.0)
+		nav.position = Vector3(5.5 * sx, 0.0, 0.8)
+		root.add_child(nav)
+	var fin := MeshInstance3D.new()
+	fin.mesh = _wing_mesh(2.9, 2.8, 1.0, 0.14)
+	fin.material_override = grey
+	fin.rotation_degrees = Vector3(0, 0, 90)
+	fin.position = Vector3(0, 0.6, 4.3)
+	root.add_child(fin)
+	# nozzle and the afterburner
+	cyl(root, 0.62, 0.72, 1.2, Vector3(0, 0, 6.5), dark, Vector3(90, 0, 0), 12)
+	var burner := Node3D.new()
+	burner.position = Vector3(0, 0, 7.2)
+	root.add_child(burner)
+	var flame := cyl(burner, 0.05, 0.62, 4.5, Vector3(0, 0, 2.2), Fx.ghost(Color(1.0, 0.6, 0.3, 1.0), 5.0), Vector3(90, 0, 0), 10)
+	flame.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var g := Fx.glare(Color(1.0, 0.7, 0.45), 5.0, 2.6, 0.006, 0.35, 0.25)
+	burner.add_child(g)
+	burner.visible = false
+	# the nozzle glows even at military power; a white strobe on the fin for the night
+	var glow := MeshInstance3D.new()
+	glow.mesh = Fx.sphere(0.5, 8)
+	glow.material_override = Fx.glow(Color(1.0, 0.55, 0.25), 3.0)
+	glow.position = Vector3(0, 0, 7.05)
+	glow.scale = Vector3(1, 1, 0.3)
+	root.add_child(glow)
+	var strobe := Fx.glare(Color(1.0, 1.0, 1.0), 4.0, 1.6, 0.005, 0.2, 0.9)
+	strobe.position = Vector3(0, 3.2, 5.6)
+	root.add_child(strobe)
+	root.set_meta("burner", burner)
+	root.set_meta("muzzle", node(root, Vector3(-0.7, 0.4, -3.8)))
+	return root
+
+
+## A flat, swept surface (wing, tail) of span `span` along +x, root chord `root_c`, tip chord
+## `tip_c`, thickness `t`; the leading edge sweeps back towards +z.
+static func _wing_mesh(span: float, root_c: float, tip_c: float, t: float) -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var sweep := root_c - tip_c
+	var top := [Vector3(0, t, -root_c * 0.5), Vector3(span, t * 0.4, -root_c * 0.5 + sweep), Vector3(span, t * 0.4, -root_c * 0.5 + sweep + tip_c), Vector3(0, t, root_c * 0.5)]
+	var bot := []
+	for p in top:
+		bot.append(Vector3(p.x, -p.y, p.z))
+	var quads := [[top[0], top[1], top[2], top[3]], [bot[3], bot[2], bot[1], bot[0]],
+		[bot[0], bot[1], top[1], top[0]], [top[3], top[2], bot[2], bot[3]], [top[1], bot[1], bot[2], top[2]]]
+	for q in quads:
+		# both windings: the surfaces are thin and must show from either side
+		for tri in [[q[0], q[1], q[2]], [q[0], q[2], q[3]], [q[0], q[2], q[1]], [q[0], q[3], q[2]]]:
+			var n: Vector3 = (tri[2] - tri[0]).cross(tri[1] - tri[0]).normalized()
+			for v in tri:
+				st.set_normal(n)
+				st.add_vertex(v)
+	return st.commit()

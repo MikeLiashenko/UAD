@@ -134,6 +134,18 @@ func _rebuild() -> void:
 		])
 	if not any_ammo:
 		_row(GS.t("Боекомплект"), GS.t("Купите ЗРК или дроны — их ракеты появятся здесь."), "", [])
+	_section(GS.t("АВИАЦИЯ"))
+	if not GS.unlocked.get("f16", false):
+		_row(GS.t("Звено F-16"), GS.t("Истребитель-перехватчик для вылетов над городом [%s]: пушка M61, ракеты AIM-9X и AIM-120. Бейте крылатые ракеты и шахеды на подлёте — и следите, куда падают обломки.") % GS.key_label("fighter"), GS.fmt_money(GS.F16_PRICE), [_buy_btn(GS.t("Купить"), GS.money >= GS.F16_PRICE, _buy_f16)])
+	else:
+		_row(GS.t("Звено F-16"), GS.t("В строю. Вылет — %s, между вылетами заправка и подвеска.") % GS.key_label("fighter"), GS.t("В строю"), [])
+		for id in ["aim9", "aim120"]:
+			var def: Dictionary = GS.WEAPONS[id]
+			var price := int(def.missile_price)
+			_row(GS.t("Ракета %s") % String(def.short), GS.t("%s В наличии: %d шт.") % [GS.t(String(def.desc)), int(GS.ammo.get(id, 0))], GS.fmt_money(price) + GS.t(" / шт."), [
+				_buy_btn("+1", GS.money >= price, _buy_ammo.bind(id, 1)),
+				_buy_btn("+4", GS.money >= price * 4, _buy_ammo.bind(id, 4)),
+			])
 	_section(GS.t("УСИЛЕНИЕ БАЗЫ"))
 	if GS.camo:
 		_row(GS.t("Маскировочная сеть"), GS.t("Установлена: разведчикам заметно труднее найти базу."), GS.t("Есть"), [])
@@ -163,6 +175,15 @@ func _buy_weapon(id: String) -> void:
 
 func _buy_ammo(id: String, n: int) -> void:
 	if GS.buy_ammo(id, n):
+		_bought()
+
+
+func _buy_f16() -> void:
+	if GS.spend(GS.F16_PRICE):
+		GS.unlocked["f16"] = true
+		GS.ammo["aim9"] = int(GS.ammo.get("aim9", 0)) + 4
+		GS.ammo["aim120"] = int(GS.ammo.get("aim120", 0)) + 2
+		GS.state_changed.emit()
 		_bought()
 
 

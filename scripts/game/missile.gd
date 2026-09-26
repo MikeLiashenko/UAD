@@ -87,6 +87,8 @@ func _process(delta: float) -> void:
 			var ang := dir.angle_to(want)
 			if ang > 0.0001:
 				dir = dir.slerp(want, clampf(turn * delta / ang, 0.0, 1.0)).normalized()
+	elif String(def.get("class", "")) == "air" and not cosmetic and _retarget(dir):
+		pass # an air-to-air missile whose target is gone turns on the next threat ahead
 	else:
 		life = minf(life, 1.2)
 	vel = dir * speed
@@ -100,6 +102,25 @@ func _process(delta: float) -> void:
 			return
 	if life <= 0.0 or position.y < 0.5:
 		_detonate(false)
+
+
+## The nearest threat within 35° of the nose and 1200 units that is not already taken care of.
+func _retarget(dir: Vector3) -> bool:
+	var best = null
+	var bd := 1200.0
+	for e in game.enemies:
+		if e.dead or GS.eff(weapon_id, e) <= 0.0 or e.inbound >= e.hp:
+			continue
+		var to: Vector3 = e.position - position
+		if to.length() < bd and dir.angle_to(to) < deg_to_rad(35.0):
+			bd = to.length()
+			best = e
+	if best == null:
+		return false
+	target = best
+	_committed = float(def.damage) * GS.eff(weapon_id, target)
+	target.inbound += _committed
+	return true
 
 
 ## Fragments still reach a target this close to the burst point.

@@ -3,6 +3,8 @@ extends Node3D
 ## the two views (overhead map / gunner at the base).
 
 const Strikes = preload("res://scripts/game/strikes.gd")
+const MobileGroup = preload("res://scripts/game/mobile_group.gd")
+const Fighter = preload("res://scripts/game/fighter.gd")
 const Fx = preload("res://scripts/core/fx.gd")
 const Meshes = preload("res://scripts/core/meshes.gd")
 const Enemy = preload("res://scripts/game/enemy.gd")
@@ -84,6 +86,10 @@ var _watch_fov := 62.0
 var ui_cursor := false
 ## A window is open in a multiplayer game, which never pauses: the mouse is released for it.
 var overlay_open := false
+## The mobile fire group: a pickup with a machine gun the player drives through the city [M].
+var mfg
+## The F-16 flight for interceptor sorties [J].
+var fighter
 
 # Shared raid (see "Multiplayer" at the end). Host: numbers for the threats, kills and impacts
 # repeated in the snapshots, friends' damage counted so far and what they earned and paid, and who
@@ -154,6 +160,16 @@ func _ready() -> void:
 	walker.map = map
 	walker.cam = cam
 	add_child(walker)
+	mfg = MobileGroup.new()
+	mfg.game = self
+	mfg.map = map
+	mfg.cam = cam
+	add_child(mfg)
+	fighter = Fighter.new()
+	fighter.game = self
+	fighter.map = map
+	fighter.cam = cam
+	add_child(fighter)
 	hud = Hud.new()
 	hud.game = self
 	add_child(hud)
@@ -227,6 +243,10 @@ func set_view(v: String) -> void:
 		walker.exit()
 	elif prev == "fpv":
 		fpv_view.exit()
+	elif prev == "mfg":
+		mfg.exit()
+	elif prev == "fighter":
+		fighter.exit()
 	elif prev == "watch":
 		cam.fov = _watch_fov
 		watch_code = ""
@@ -253,6 +273,20 @@ func set_view(v: String) -> void:
 			locked = null
 			fpv_view.enter(_fpv_drone, prev if prev != "fpv" else "top")
 			_fpv_drone = null
+		"fighter":
+			rig.set_process(false)
+			rig.set_process_unhandled_input(false)
+			range_ring.visible = false
+			hovered = null
+			locked = null
+			fighter.enter()
+		"mfg":
+			rig.set_process(false)
+			rig.set_process_unhandled_input(false)
+			range_ring.visible = false
+			hovered = null
+			locked = null
+			mfg.enter()
 		"walk":
 			rig.set_process(false)
 			rig.set_process_unhandled_input(false)
@@ -271,6 +305,8 @@ func set_view(v: String) -> void:
 			locked = null
 			if prev == "walk":
 				rig.focus(walker.pos)
+			elif prev == "mfg":
+				rig.focus(mfg.pos)
 	hud.on_view_changed()
 
 
@@ -301,9 +337,37 @@ func toggle_walk() -> void:
 	set_view("top" if view == "walk" else "walk")
 
 
+## Up in the F-16 and back to the airfield [J].
+func toggle_fighter() -> void:
+	if view == "fighter":
+		set_view("top")
+		return
+	var why: String = fighter.blocker()
+	if why != "":
+		hud.alert(why, Color(1.0, 0.7, 0.3))
+		return
+	set_view("fighter")
+
+
+## Into the mobile fire group's pickup and out again [M].
+func toggle_mfg() -> void:
+	if view == "mfg":
+		set_view("top")
+		return
+	mfg.ensure_truck()
+	if mfg.wrecked:
+		hud.alert(GS.t("Пикап МОГ подбит — новый будет утром"), Color(1.0, 0.6, 0.3))
+		return
+	set_view("mfg")
+
+
 ## The on-screen hold button: fire / launch in the gunner view, boost on the FPV console.
 func set_trigger(on: bool) -> void:
-	if view == "fpv":
+	if view == "fighter":
+		fighter.set_trigger(on)
+	elif view == "mfg":
+		mfg.fire_held = on and mfg.seat == "gun"
+	elif view == "fpv":
 		fpv_view.set_trigger(on)
 	else:
 		base_view.set_trigger(on)
@@ -313,6 +377,8 @@ func refresh_capture() -> void:
 	base_view.refresh_capture()
 	fpv_view.refresh_capture()
 	walker.refresh_capture()
+	mfg.refresh_capture()
+	fighter.refresh_capture()
 
 
 ## Label3D markers are replaced by the sight / video overlay in the gunner and FPV views.
@@ -572,12 +638,13 @@ func spawn_bullet(pos: Vector3, vel: Vector3, wid: String, life: float, manual :
 	fx_root.add_child(b)
 
 
-func spawn_missile(pos: Vector3, dir: Vector3, tgt, wid: String) -> void:
+## `carrier`: the velocity of an aircraft launching it (the missile leaves the rail at its speed).
+func spawn_missile(pos: Vector3, dir: Vector3, tgt, wid: String, carrier := Vector3.ZERO) -> void:
 	var m := Missile.new()
 	m.game = self
 	m.target = tgt
 	m.weapon_id = wid
-	m.vel = dir.normalized() * 40.0
+	m.vel = dir.normalized() * 40.0 + carrier
 	m.position = pos
 	fx_root.add_child(m)
 	_net_note_launch(pos, tgt, wid)
@@ -930,6 +997,7 @@ func enemy_impact(e) -> void:
 		_remove_enemy(e)
 		return
 	Fx.explosion(fx_root, p, 2.2, Color(1.0, 0.45, 0.1), true)
+	mfg.on_blast(p, 1.4)
 	strike_damage(p, String(e.type), float(e.def.get("crush", 1.0)), 2.0)
 	for k in int(e.def.get("mirv", 0)) - 1:
 		# kinetic submunitions: a spray of hits around the aim point
@@ -1039,6 +1107,7 @@ func debris_landed(d, gh: float) -> void:
 	_event_notes[d.event_id] = notes
 	var boom: bool = d.wreck != null and d.warhead
 	if boom:
+		mfg.on_blast(p, 1.0)
 		Fx.explosion(fx_root, p + Vector3(0, 2, 0), 1.3, Color(1.0, 0.5, 0.12), true)
 		play_boom("explosion", p, 2.0)
 		shake(clampf(1.0 - cam.global_position.distance_to(p) / 900.0, 0.1, 0.7))
@@ -1204,6 +1273,12 @@ func _unhandled_input(event: InputEvent) -> void:
 				toggle_auto()
 		"shop":
 			hud.open_shop()
+		"mfg":
+			if view != "walk" and view != "fighter":
+				toggle_mfg()
+		"fighter":
+			if view != "walk":
+				toggle_fighter()
 		"strikes":
 			hud.open_strikes()
 		"feed":
@@ -1314,6 +1389,8 @@ func play_boom(sound: String, pos: Vector3, vol := 0.0) -> void:
 
 # --- Flow ------------------------------------------------------------------------------------
 func on_morning(report: Dictionary) -> void:
+	mfg.repair() # a wrecked pickup is replaced, a damaged one mended
+	fighter.morning()
 	map.clear_blackouts()
 	var vid := publish_video(int(report.get("day", GS.day)))
 	report["clips"] = (vid.get("clips", []) as Array).size()

@@ -408,6 +408,12 @@ func _process(delta: float) -> void:
 		game.locked = near
 	if _args.has("aimbot") and game and is_instance_valid(game) and game.view == "base" and not game.enemies.is_empty():
 		_aimbot()
+	if _args.has("aimbot") and game and is_instance_valid(game) and game.view == "fighter":
+		_fighter_pilot(delta)
+	elif _args.has("aimbot") and String(_args.get("view", "")) == "fighter" and game and is_instance_valid(game) and game.fighter.state == "ready" and not game.enemies.is_empty():
+		game.toggle_fighter() # the test pilot goes up again once the jet is rearmed
+	if _args.has("aimbot") and game and is_instance_valid(game) and game.view == "mfg":
+		_mfg_pilot(delta)
 	if _args.has("aimbot") and game and is_instance_valid(game) and game.view == "fpv":
 		_fpv_pilot(delta)
 	elif _args.has("aimbot") and String(_args.get("view", "")) == "fpv" and game and is_instance_valid(game) and not game.drones.is_empty() and not game.enemies.is_empty():
@@ -550,6 +556,93 @@ func _nearest_enemy():
 ## Test helper: points the gunner sight at the nearest threat (with lead) and fires.
 ## --aimbot in the FPV view: a test pilot turns the aim ring towards the nearest threat no faster
 ## than a hand on a mouse would (1.5 rad/s); the console's own lead assist does the rest.
+## --view=fighter --aimbot: a test pilot. The ring goes to the lead point of the nearest threat
+## no faster than a hand would move it; AIM-120 from afar, AIM-9X closer, the gun at the end.
+func _fighter_pilot(delta: float) -> void:
+	var f = game.fighter
+	if not f.active or f.state != "air":
+		return
+	var best = null
+	var bd := INF
+	for e in game.enemies:
+		if not e.dead and GS.eff("aim9", e) > 0.0 and f.pos.distance_to(e.position) < bd:
+			bd = f.pos.distance_to(e.position)
+			best = e
+	f.trigger = false
+	var want: Vector3 = Vector3(-f.pos.x, 250.0 - f.pos.y, -f.pos.z).normalized()
+	if best != null:
+		want = (Bullet.lead(f.pos, best.position, best.vel, 900.0 + f.speed) - f.pos).normalized()
+		f.burner = bd > 1600.0
+		f.throttle = 0.85
+		if f.locked and f.lock == best and float(best.inbound) < float(best.hp):
+			if bd > 950.0 and int(f.loaded.aim120) > 0 and bd < f.range_of("aim120"):
+				f.fire("aim120")
+			elif bd <= f.range_of("aim9") and bd > 320.0 and int(f.loaded.aim9) > 0:
+				f.fire("aim9")
+		f.trigger = bd < 330.0 and f.dir.angle_to(want) < 0.05
+	# the test pilot keeps above the roofs: missiles do the low work
+	if f.pos.y + want.y * 400.0 < 130.0:
+		want = Vector3(want.x, maxf(want.y, (130.0 - f.pos.y) / 400.0), want.z).normalized()
+	if f.pull_up or f.pos.y < 90.0:
+		want = (want + Vector3(0, 1.5, 0)).normalized()
+		f.aim = want # a pilot pulls hard when the warning sounds
+	var off: float = f.aim.angle_to(want)
+	if off > 0.0001:
+		f.aim = f.aim.slerp(want, clampf(1.5 * delta / off, 0.0, 1.0)).normalized()
+
+
+## --view=mfg --aimbot: a test crew. The driver makes for the radio's beacon and backs off the
+## walls it runs into; once the drone is in reach the gunner takes over and leads it.
+var _mfg_stuck := 0.0
+var _mfg_back := 0.0
+
+
+func _mfg_pilot(delta: float) -> void:
+	var m = game.mfg
+	if not m.active:
+		return
+	var tip = m.tip
+	if tip == null or not is_instance_valid(tip) or tip.dead:
+		m._touch_vec = Vector2.ZERO
+		m.fire_held = false
+		return
+	var reach: bool = m.pos.distance_to(tip.position) < float(GS.WEAPONS.mg.range) * 0.85
+	if reach and m.seat == "drive":
+		m._touch_vec = Vector2.ZERO
+		m.switch_seat()
+	elif not reach and m.seat == "gun":
+		m.fire_held = false
+		m.switch_seat()
+	if m.seat == "gun":
+		var muzzle: Vector3 = (m.unit.muzzle as Node3D).global_position
+		var ld := Bullet.lead(muzzle, tip.position, tip.vel, float(GS.WEAPONS.mg.speed))
+		var d := (ld - muzzle).normalized()
+		var wy := atan2(-d.x, -d.z)
+		var wp := asin(clampf(d.y, -1.0, 1.0))
+		m.gun_yaw = rotate_toward(m.gun_yaw, wy, 2.5 * delta)
+		m.gun_pitch = move_toward(m.gun_pitch, wp, 2.5 * delta)
+		m.fire_held = absf(angle_difference(m.gun_yaw, wy)) < 0.03 and absf(m.gun_pitch - wp) < 0.03
+		return
+	var to: Vector3 = m.tip_point - m.pos
+	var diff := angle_difference(m.heading, atan2(-to.x, -to.z))
+	var steer := clampf(-diff * 2.0, -1.0, 1.0)
+	var thr := 1.0 if absf(diff) < 1.2 else 0.4
+	if Vector2(to.x, to.z).length() < 20.0:
+		thr = 0.0
+	if _mfg_back > 0.0:
+		_mfg_back -= delta
+		thr = -1.0
+		steer = -steer
+	elif absf(m.speed) < 1.0 and thr > 0.0:
+		_mfg_stuck += delta
+		if _mfg_stuck > 1.0:
+			_mfg_back = 1.2
+			_mfg_stuck = 0.0
+	else:
+		_mfg_stuck = 0.0
+	m._touch_vec = Vector2(steer, thr)
+
+
 func _fpv_pilot(delta: float) -> void:
 	var fv = game.fpv_view
 	if fv.drone == null or not is_instance_valid(fv.drone):
@@ -622,6 +715,18 @@ func _start_autotest() -> void:
 		game.base_view.nv = _args.has("nv")
 	elif String(_args.get("view", "top")) == "fpv":
 		game.enter_fpv()
+	elif String(_args.get("view", "top")) == "fighter":
+		if _args.has("f16"):
+			GS.unlocked["f16"] = true
+			GS.ammo["aim9"] = 8
+			GS.ammo["aim120"] = 4
+		game.toggle_fighter()
+		if _args.has("aimbot"):
+			game.auto_fire = 0 # every kill is the jet's
+	elif String(_args.get("view", "top")) == "mfg":
+		game.toggle_mfg()
+		if _args.has("aimbot"):
+			game.auto_fire = 0 # every kill is the mobile group's own
 	elif String(_args.get("view", "top")) == "walk":
 		game.set_view("walk")
 		if _args.has("walkat"):
@@ -1322,6 +1427,10 @@ func _print_summary() -> void:
 			GS.day, game.director.phase, game.director.phase_time, str(get_tree().paused)])
 	if game:
 		print("UAD LAUNCHED: ", game.launched)
+		if game.fighter != null and bool(GS.unlocked.get("f16", false)):
+			print("UAD F16: state=%s kills=%d aim9_left=%d aim120_left=%d money=%d" % [game.fighter.state, int(GS.stats.kills), int(GS.ammo.get("aim9", 0)) + int(game.fighter.loaded.aim9), int(GS.ammo.get("aim120", 0)) + int(game.fighter.loaded.aim120), GS.money])
+		if game.mfg != null and game.mfg.unit != null:
+			print("UAD MFG: hp=%d wrecked=%s pos=%s kills=%d" % [int(game.mfg.hp), game.mfg.wrecked, game.mfg.pos, int(GS.stats.kills)])
 	if game and game.view == "walk":
 		print("UAD WALK: pos=%s on_floor=%s" % [str(game.walker.pos), game.walker.on_floor])
 	if game:

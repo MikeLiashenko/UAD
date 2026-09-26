@@ -132,7 +132,31 @@ const WEAPONS := {
 		"eff": {"scout": 1.0, "shahed": 1.0, "cruise": 1.0, "ballistic": 1.0},
 		"desc": "Самое надёжное средство против баллистики: одна ракета — одна цель.",
 	},
+	# --- the F-16's own weapons (scripts/game/fighter.gd): not systems of the battery, so they are
+	# in neither WEAPON_ORDER nor AMMO_ORDER; the missiles are bought in the shop's aviation section
+	"f16gun": {
+		"name": "Пушка M61 Vulcan", "short": "M61", "kind": "gun", "class": "air", "group": "air", "unlock": 0, "fcs": false,
+		"range": 300.0, "rate": 0.03, "damage": 7.0, "spread": 0.006, "speed": 900.0, "eye": 0.0,
+		"eff": {"scout": 1.0, "shahed": 1.0, "cruise": 0.8, "ballistic": 0.0},
+		"desc": "20-мм шестиствольная пушка: 510 снарядов, бить с 1–1.5 км.",
+	},
+	"aim9": {
+		"name": "AIM-9X Sidewinder", "short": "AIM-9X", "kind": "missile", "class": "air", "group": "air", "unlock": 0, "fcs": true,
+		"range": 900.0, "rate": 0.8, "damage": 220.0, "speed": 430.0, "turn": 7.0, "eye": 0.0,
+		"missile_price": 2500, "start_ammo": 0,
+		"eff": {"scout": 1.0, "shahed": 1.0, "cruise": 1.0, "ballistic": 0.0},
+		"desc": "Тепловая ракета ближнего боя: захват в конусе перед носом, до 4.5 км.",
+	},
+	"aim120": {
+		"name": "AIM-120 AMRAAM", "short": "AIM-120", "kind": "missile", "class": "air", "group": "air", "unlock": 0, "fcs": true,
+		"range": 2200.0, "rate": 1.2, "damage": 260.0, "speed": 520.0, "turn": 4.5, "eye": 0.0,
+		"missile_price": 4500, "start_ammo": 0,
+		"eff": {"scout": 1.0, "shahed": 1.0, "cruise": 1.0, "ballistic": 0.0},
+		"desc": "Ракета средней дальности с радиолокационным наведением: до 11 км.",
+	},
 }
+## An F-16 flight for interceptor sorties over the city (scripts/game/fighter.gd).
+const F16_PRICE := 40000
 ## Panel and shop order: barrels, then short range, then medium, then long.
 const WEAPON_ORDER := ["mg", "zu23", "gepard", "shilka", "igla", "avenger", "drone", "osa", "iris", "nasams", "buk", "s300", "patriot"]
 ## Systems whose shots are bought as ammunition.
@@ -358,6 +382,8 @@ const KEY_ACTIONS := [
 	["fpv_next", "FPV: следующий дрон", KEY_SPACE],
 	["fpv_home", "FPV: отправить дрон на базу", KEY_R],
 	["strikes", "Удары по точкам пуска", KEY_K],
+	["mfg", "Мобильная огневая группа (пикап)", KEY_M],
+	["fighter", "Вылет истребителя F-16", KEY_J],
 ]
 
 

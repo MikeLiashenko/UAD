@@ -9,6 +9,8 @@ const StrikeMap = preload("res://scripts/ui/strike_map.gd")
 const SettingsMenu = preload("res://scripts/ui/settings_menu.gd")
 const Reticle = preload("res://scripts/ui/reticle.gd")
 const FpvOsd = preload("res://scripts/ui/fpv_osd.gd")
+const MfgHud = preload("res://scripts/ui/mfg_hud.gd")
+const FighterHud = preload("res://scripts/ui/fighter_hud.gd")
 const VideoUi = preload("res://scripts/ui/video_ui.gd")
 const VideoExport = preload("res://scripts/game/video_export.gd")
 const Shaders = preload("res://scripts/world/shaders.gd")
@@ -69,6 +71,10 @@ var _requests_box: VBoxContainer
 var _req_cards := {}
 var _watch_lbl: Label
 var _players_btn: Button
+## Buttons of the mobile fire group: out of the truck, swap seats (touch screens, Alt + mouse).
+var _mfg_ui: Control
+## Buttons of the F-16 sortie (touch screens, Alt + mouse): missiles, afterburner, back home.
+var _fighter_ui: Control
 
 
 func _ready() -> void:
@@ -94,6 +100,14 @@ func _ready() -> void:
 	fpv_osd.fv = game.fpv_view
 	game.fpv_view.osd = fpv_osd
 	root.add_child(fpv_osd)
+	var mh := MfgHud.new()
+	mh.game = game
+	mh.mg = game.mfg
+	root.add_child(mh)
+	var fh := FighterHud.new()
+	fh.game = game
+	fh.fg = game.fighter
+	root.add_child(fh)
 	_build_status()
 	_build_radar()
 	_build_alert()
@@ -106,6 +120,8 @@ func _ready() -> void:
 	root.add_child(flash_rect)
 	_build_walk_ui()
 	_build_fpv_ui()
+	_build_mfg_ui()
+	_build_fighter_ui()
 	_build_multiplayer()
 	GS.money_changed.connect(_on_money)
 	GS.state_changed.connect(refresh)
@@ -185,6 +201,49 @@ func _build_fpv_ui() -> void:
 	_fpv_ui = p
 
 
+func _build_mfg_ui() -> void:
+	var p := UiKit.panel()
+	p.anchor_left = 1.0
+	p.anchor_right = 1.0
+	p.anchor_top = 1.0
+	p.anchor_bottom = 1.0
+	p.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	p.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	p.offset_right = -16
+	p.offset_bottom = -52
+	p.visible = false
+	root.add_child(p)
+	var h := UiKit.hbox(8)
+	p.add_child(h)
+	_small_btn(h, GS.t("⟵ ИЗ МАШИНЫ [%s]") % GS.key_label("mfg"), func() -> void: game.toggle_mfg()).custom_minimum_size = Vector2(170, 38)
+	_small_btn(h, GS.t("РУЛЬ ⇄ ПУЛЕМЁТ [Пробел]"), func() -> void: game.mfg.switch_seat()).custom_minimum_size = Vector2(230, 38)
+	_mfg_ui = p
+
+
+func _build_fighter_ui() -> void:
+	var p := UiKit.panel()
+	p.anchor_left = 1.0
+	p.anchor_right = 1.0
+	p.anchor_top = 1.0
+	p.anchor_bottom = 1.0
+	p.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	p.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	p.offset_right = -16
+	p.offset_bottom = -52
+	p.visible = false
+	root.add_child(p)
+	var h := UiKit.hbox(8)
+	p.add_child(h)
+	_small_btn(h, GS.t("⟵ НА АЭРОДРОМ [%s]") % GS.key_label("fighter"), func() -> void: game.toggle_fighter()).custom_minimum_size = Vector2(190, 38)
+	_small_btn(h, "AIM-9X", func() -> void: game.fighter.fire("aim9")).custom_minimum_size = Vector2(110, 38)
+	_small_btn(h, "AIM-120", func() -> void: game.fighter.fire("aim120")).custom_minimum_size = Vector2(110, 38)
+	var ab := _small_btn(h, GS.t("ФОРСАЖ"), func() -> void: pass)
+	ab.custom_minimum_size = Vector2(110, 38)
+	ab.button_down.connect(func() -> void: game.fighter.burner = true)
+	ab.button_up.connect(func() -> void: game.fighter.burner = false)
+	_fighter_ui = p
+
+
 func _next_drone() -> void:
 	if not game.fpv_view.next_drone():
 		alert(GS.t("В воздухе больше нет дронов"), Color(1.0, 0.7, 0.3))
@@ -209,6 +268,8 @@ func on_view_changed() -> void:
 	var walk: bool = game.view == "walk"
 	var fpv: bool = game.view == "fpv"
 	var watch: bool = game.view == "watch"
+	var mfg: bool = game.view == "mfg"
+	var air: bool = game.view == "fighter"
 	if view_btn:
 		var vname := GS.t("СВЕРХУ")
 		if base:
@@ -217,22 +278,30 @@ func on_view_changed() -> void:
 			vname = GS.t("FPV")
 		elif watch:
 			vname = GS.t("ДРУГ")
+		elif mfg:
+			vname = GS.t("МОГ")
+		elif air:
+			vname = GS.t("F-16")
 		view_btn.text = GS.t("ВИД [%s]: %s") % [GS.key_label("view"), vname]
 	if fire_btn:
-		fire_btn.visible = (base or fpv) and DisplayServer.is_touchscreen_available()
+		fire_btn.visible = (base or fpv or mfg or air) and DisplayServer.is_touchscreen_available()
 		fire_btn.text = GS.t("РАЗГОН") if fpv else GS.t("ОГОНЬ")
 	if target_panel:
 		target_panel.visible = false
 	if _weapons_panel:
-		_weapons_panel.visible = not walk and not fpv and not watch
+		_weapons_panel.visible = not walk and not fpv and not watch and not mfg and not air
 	if _watch_lbl:
 		_watch_lbl.visible = watch
 	if _walk_ui:
 		_walk_ui.visible = walk
 	if _fpv_ui:
 		_fpv_ui.visible = fpv
+	if _mfg_ui:
+		_mfg_ui.visible = mfg
+	if _fighter_ui:
+		_fighter_ui.visible = air
 	if zoom_box:
-		zoom_box.visible = not walk and not fpv
+		zoom_box.visible = not walk and not fpv and not mfg and not air
 	refresh()
 
 
@@ -346,6 +415,7 @@ func _build_weapons() -> void:
 	h.add_child(side2)
 	_small_btn(side2, GS.t("❚❚ ПАУЗА"), toggle_pause)
 	_small_btn(side2, GS.t("⌂ К БАЗЕ [%s]") % GS.key_label("home"), func() -> void: game.rig.focus(GS.base_pos))
+	_small_btn(side2, GS.t("🚙 МОГ [%s]") % GS.key_label("mfg"), func() -> void: game.toggle_mfg())
 	_players_btn = _small_btn(side2, GS.t("👥 ИГРОКИ [%s]") % GS.key_label("players"), toggle_players)
 	_players_btn.visible = Net.is_online()
 	var side3 := UiKit.vbox(6)
@@ -354,6 +424,7 @@ func _build_weapons() -> void:
 	view_btn.custom_minimum_size = Vector2(132, 24)
 	_small_btn(side3, GS.t("🚶 ГУЛЯТЬ [%s]") % GS.key_label("walk"), func() -> void: game.toggle_walk()).custom_minimum_size = Vector2(132, 24)
 	_small_btn(side3, GS.t("🛩 ДРОН FPV [%s]") % GS.key_label("fpv"), func() -> void: game.enter_fpv()).custom_minimum_size = Vector2(132, 24)
+	_small_btn(side3, GS.t("✈ F-16 [%s]") % GS.key_label("fighter"), func() -> void: game.toggle_fighter()).custom_minimum_size = Vector2(132, 24)
 	_weapons_panel = p
 	_rebuild_weapon_buttons()
 
