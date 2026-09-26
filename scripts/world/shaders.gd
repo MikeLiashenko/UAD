@@ -259,6 +259,27 @@ void fragment() {
 }
 """
 
+## Flat strips lying on the ground: asphalt, road markings, rail beds (vertex colours, lit like
+## Fx.vcolor). Their depth is pulled toward the camera along the view ray, so they cover exactly the
+## same pixels but always win over the ground — and markings over asphalt — however coarse the depth
+## buffer is (0.5 m near plane at street level, 16/24-bit depth on phones). Raised parts (ramps,
+## decks) get the base pull only, so they never show through things in front of them.
+const FLAT := """
+shader_type spatial;
+
+void vertex() {
+	float lift = VERTEX.y < 1.0 ? 1.0 + VERTEX.y * 4.0 : 1.0;
+	vec4 v = MODELVIEW_MATRIX * vec4(VERTEX, 1.0);
+	v.xyz *= 1.0 - 0.0015 * lift;
+	POSITION = PROJECTION_MATRIX * v;
+}
+
+void fragment() {
+	ALBEDO = COLOR.rgb;
+	ROUGHNESS = 0.9;
+}
+"""
+
 ## Ground: zone colours from a small texture; inside urban areas the street grid of the
 ## nearest district (rotated grid, avenues every 3rd line) with sodium-lamp light pools.
 const GROUND := """
@@ -419,6 +440,11 @@ void vertex() {
 	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	// COLOR.r: 0 on the shore line, 1 out in open water (1 where the mesh has no colours)
 	shore = COLOR.r;
+	// depth pulled 0.2 % toward the camera along the view ray (same pixels): the water never
+	// flickers against the riverbed under it, even with a phone's coarse depth buffer
+	vec4 v = MODELVIEW_MATRIX * vec4(VERTEX, 1.0);
+	v.xyz *= 0.998;
+	POSITION = PROJECTION_MATRIX * v;
 }
 
 void fragment() {

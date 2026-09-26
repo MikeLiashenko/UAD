@@ -393,6 +393,7 @@ func _notification(what: int) -> void:
 
 
 func _process(delta: float) -> void:
+	_fit_near()
 	if _args.has("follow") and game and is_instance_valid(game) and not game.enemies.is_empty():
 		var near = _nearest_enemy()
 		game.rig.focus(near.position)
@@ -790,6 +791,14 @@ func _mp_unit_selftest() -> void:
 			"DESA7777": {"online": true, "nick": "Оля", "s": "game", "ping": 320, "w": {}},
 			"ZHRAXXX3": {"online": false, "nick": "Жора", "s": "", "ping": 0, "w": {}},
 		}
+
+
+## Depth precision: the near plane moves out as the camera climbs — 0.5 m at street level, up to
+## 12 m high over the city. With 0.5 m everywhere the depth buffer could no longer tell the roads,
+## their markings and the water from the ground a kilometre away, and the map flickered.
+func _fit_near() -> void:
+	var high: bool = game == null or not is_instance_valid(game) or String(game.view) == "top"
+	cam.near = clampf(cam.global_position.y * 0.03, 0.5, 12.0) if high else 0.5
 
 
 ## Waits for an account call that answers through cb(ok: bool, text: String); returns [ok, text].

@@ -713,7 +713,7 @@ func _gen_routes() -> void:
 	a[Mesh.ARRAY_COLOR] = st.c
 	var am := ArrayMesh.new()
 	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, a)
-	var mi := Meshes.part(self, am, Fx.vcolor())
+	var mi := Meshes.part(self, am, Shaders.material(Shaders.FLAT))
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 
@@ -774,12 +774,12 @@ func _build_road(r: Dictionary, st: Dictionary) -> void:
 			var s2 := minf(s + 10.0, s1)
 			var seg_b := _point_at(pts, s2)
 			if seg_a.distance_to(seg_b) > 0.3:
-				_strip(st, seg_a, seg_b, w, 0.06, asphalt)
-				_strip(st, seg_a, seg_b, 0.18, 0.08, paint)
+				_strip(st, seg_a, seg_b, w, 0.12, asphalt)
+				_strip(st, seg_a, seg_b, 0.18, 0.2, paint)
 				var dn := (seg_b - seg_a).normalized()
 				var side := Vector2(-dn.y, dn.x)
 				for sg in [-1.0, 1.0]:
-					_strip(st, seg_a + side * sg * (w - 0.7), seg_b + side * sg * (w - 0.7), 0.12, 0.08, paint)
+					_strip(st, seg_a + side * sg * (w - 0.7), seg_b + side * sg * (w - 0.7), 0.12, 0.2, paint)
 				if run_dir == Vector2.ZERO:
 					run_dir = dn
 				elif run_dir.angle_to(dn) > 0.12 or run_a.distance_to(seg_b) > 220.0:
@@ -1474,8 +1474,22 @@ func _gen_outer() -> void:
 	mat.set_shader_parameter("exit_dirs", dirs)
 	mat.set_shader_parameter("exit_count", count)
 	mat.set_shader_parameter("map_half", HALF)
-	var outer := PlaneMesh.new()
-	outer.size = Vector2(44000, 44000)
+	# a ring around the map, not a plane under it: two surfaces 0.4 m apart all over the city
+	# fought for the depth buffer from a kilometre or two away and the fields flickered through
+	# the streets. The ring tucks one metre under the map's edge, so no seam can open.
+	var R := 22000.0
+	var h := HALF - 1.0
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_normal(Vector3.UP)
+	for q in [[-R, -R, R, -h], [-R, h, R, R], [-R, -h, -h, h], [h, -h, R, h]]:
+		var a := Vector3(q[0], 0.0, q[1])
+		var b := Vector3(q[2], 0.0, q[1])
+		var c := Vector3(q[2], 0.0, q[3])
+		var d := Vector3(q[0], 0.0, q[3])
+		for v in [a, b, c, a, c, d]:
+			st.add_vertex(v)
+	var outer := st.commit()
 	var mi := Meshes.part(self, outer, mat, Vector3(0, -0.4, 0))
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
