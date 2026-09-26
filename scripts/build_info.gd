@@ -3,6 +3,6 @@ extends RefCounted
 ## BUILD grows by one with each build; the database keeps the newest published one
 ## (uad/release) and a game that is behind offers the update in the main menu.
 
-const BUILD := 6
+const BUILD := 7
 const DATE := "2026-09-26"
-const COMMIT := "353f4f6"
+const COMMIT := "41d6aa3"
