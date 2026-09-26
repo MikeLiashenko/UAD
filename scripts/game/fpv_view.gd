@@ -42,6 +42,9 @@ var signal_q := 1.0
 var boost := false
 ## Image intensifier on the drone camera: on by default at night, N toggles it.
 var nv := false
+## The camera picks plain / night vision by the light (proper night only: at dusk the plain
+## camera still sees more) until the pilot presses N.
+var nv_auto := true
 var _throttle := 1.0
 ## Where the pilot steers: a world direction (drone.aim follows it).
 var aim := Vector3.FORWARD
@@ -84,7 +87,8 @@ func enter(d, from_view: String) -> void:
 	signal_q = 1.0
 	boost = false
 	_throttle = 1.0
-	nv = game.map.night > 0.65 # proper night only: at dusk the plain camera still sees more
+	nv_auto = true
+	nv = game.map.night > 0.65
 	_warned_link = false
 	_warned_batt = false
 	lost_t = 0.0
@@ -242,6 +246,8 @@ func _process(delta: float) -> void:
 		if Input.is_key_pressed(KEY_S):
 			add_throttle(-KEY_THROTTLE * delta)
 		boost = boost or Input.is_key_pressed(KEY_SHIFT)
+	if nv_auto:
+		nv = game.map.night > 0.65
 	_assist(delta)
 	drone.aim = aim
 	drone.in_throttle = _throttle * (1.35 if boost else 1.0)

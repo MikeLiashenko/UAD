@@ -1215,6 +1215,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				base_view.nv = not base_view.nv
 			elif view == "fpv":
 				fpv_view.nv = not fpv_view.nv
+				fpv_view.nv_auto = false
 
 
 ## [F] cycles: off -> barrels and drones -> the whole battery. Automatic fire still waits for a
