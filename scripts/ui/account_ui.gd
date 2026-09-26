@@ -70,11 +70,37 @@ static func say(st: Label, text: String, good := false) -> void:
 	st.add_theme_color_override("font_color", UiKit.NEON if good else UiKit.RED)
 
 
+## Phones: the on-screen keyboard covers the lower half of the screen, so the dialog slides up
+## until the field being typed in is above it (nothing moves on a computer).
+class KeyboardLift extends Control:
+	var target: Control
+
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _process(delta: float) -> void:
+		if target == null or not is_instance_valid(target):
+			return
+		var shift := 0.0
+		var kb := DisplayServer.virtual_keyboard_get_height()
+		var f := get_viewport().gui_get_focus_owner()
+		if kb > 0 and f is LineEdit:
+			var view := get_viewport().get_visible_rect().size
+			var k := view.y / maxf(1.0, float(DisplayServer.window_get_size().y))
+			var bottom := f.get_global_rect().end.y - target.position.y
+			shift = maxf(0.0, bottom - (view.y - kb * k - 16.0))
+		target.position.y = lerpf(target.position.y, -shift, minf(1.0, delta * 12.0))
+
+
 ## UiKit.modal with a solid panel: forms read better without the tab showing through.
 static func dialog(parent: Node) -> Array:
 	var m := UiKit.modal(parent, Vector2(WIDTH, 0))
+	var root: Control = m[0]
 	var v: VBoxContainer = m[1]
 	(v.get_parent() as PanelContainer).add_theme_stylebox_override("panel", UiKit.sbox(Color(0.0, 0.045, 0.045, 0.97), Color(0.35, 0.85, 1.0, 0.55), 2, 8, 14))
+	var lift := KeyboardLift.new()
+	lift.target = root.get_child(1) # the CenterContainer holding the panel
+	root.add_child(lift)
 	return m
 
 
