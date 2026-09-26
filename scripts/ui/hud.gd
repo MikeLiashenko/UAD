@@ -231,7 +231,7 @@ func on_view_changed() -> void:
 	if _fpv_ui:
 		_fpv_ui.visible = fpv
 	if zoom_box:
-		zoom_box.visible = not walk
+		zoom_box.visible = not walk and not fpv
 	refresh()
 
 

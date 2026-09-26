@@ -33,7 +33,9 @@ var battery := 46.0
 var fpv := false
 ## Serial number inside the sortie — what the FPV console and the event log call this drone.
 var serial := 1
-## Player input while in FPV: -1..1 steering and 0..1.6 throttle.
+## Player input while in FPV: where to fly (a world direction the console steers with the mouse
+## or swipes) and the 0.25..1.35 throttle; in_yaw is the resulting bank, -1..1.
+var aim := Vector3.ZERO
 var in_yaw := 0.0
 var in_pitch := 0.0
 var in_throttle := 1.0
@@ -133,15 +135,30 @@ func retarget() -> bool:
 	return true
 
 
+## The console's pilot picks this threat: the ram is committed to it.
+func lock(e) -> void:
+	if e == target:
+		return
+	_release()
+	target = e
+	_commit()
+	state = "chase"
+
+
 func take_control() -> void:
 	fpv = true
 	in_throttle = 1.0
+	aim = vel.normalized()
+	# the camera sits in the nose: the frame and props would only block the picture
+	_model.visible = false
 
 
 func release_control() -> void:
 	fpv = false
 	in_yaw = 0.0
 	in_pitch = 0.0
+	aim = Vector3.ZERO
+	_model.visible = true
 	if not _target_ok():
 		retarget()
 
@@ -183,18 +200,15 @@ func _process(delta: float) -> void:
 	var want := dir
 	var want_speed := max_speed
 	if fpv:
-		# The player flies it: steering input turns the drone, throttle sets the speed.
-		var up := Vector3.UP
-		var right := dir.cross(up).normalized()
-		if right.length_squared() < 0.01:
-			right = Vector3.RIGHT
-		want = (dir + right * in_yaw * 1.4 + up * in_pitch * 1.2).normalized()
-		if absf(in_pitch) < 0.05:
-			# stabilised flight: with the stick centred the quad levels off and keeps clear of the
-			# roofs; push the stick down and it dives where you tell it to
-			want = Vector3(want.x, want.y * exp(-delta * 1.6), want.z).normalized()
+		# The player flies it: the console points where to go, the drone turns there as fast as
+		# it can. Roofs are still avoided unless the pilot dives on purpose.
+		want = aim if aim != Vector3.ZERO else dir
+		if want.y > -0.3:
 			want = _avoid(want)
 		want_speed = max_speed * clampf(in_throttle, 0.25, 1.35)
+		var right := dir.cross(Vector3.UP)
+		if right.length_squared() > 0.0001:
+			in_yaw = lerpf(in_yaw, clampf((want - dir).dot(right.normalized()) * 2.5, -1.0, 1.0), 1.0 - exp(-delta * 5.0))
 	else:
 		match state:
 			"chase":
@@ -248,6 +262,13 @@ func _process(delta: float) -> void:
 		if Bullet.seg_dist(p0, position, target.position) < r:
 			_detonate(true)
 			return
+	if fpv:
+		# by hand any threat in the way counts, not only the one the drone was sent after
+		for e in game.enemies:
+			if not e.dead and e != target and GS.eff(weapon_id, e) > 0.0 and Bullet.seg_dist(p0, position, e.position) < e.radius + HIT_MARGIN:
+				lock(e)
+				_detonate(true)
+				return
 	# Real collision: ground_height() is the roof of the building actually under the drone.
 	# ceiling() is only the conservative 3x3-cell maximum used by the avoidance planner.
 	if position.y <= game.map.ground_height(position.x, position.z) + 0.6:
@@ -272,6 +293,8 @@ func _detonate(hit: bool) -> void:
 		elif not was.dead:
 			game.hud.log_event(GS.t("Дрон #%d таранил цель, но она осталась в воздухе") % serial, Color(1.0, 0.8, 0.4))
 	elif not hit:
+		if fpv:
+			GS.stats.fpv_crash = int(GS.stats.get("fpv_crash", 0)) + 1
 		var why: String = GS.t("разряжен аккумулятор") if battery <= 0.0 else GS.t("столкновение")
 		game.hud.log_event(GS.t("Дрон #%d потерян: %s") % [serial, why], Color(1.0, 0.55, 0.3))
 	Fx.explosion(game.fx_root, position, 0.45, Color(1.0, 0.8, 0.4))

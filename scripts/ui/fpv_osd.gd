@@ -34,7 +34,7 @@ func kill(text: String, color := NEON) -> void:
 func _process(delta: float) -> void:
 	_t += delta
 	_kill_t = maxf(0.0, _kill_t - delta)
-	visible = fv != null and fv.active and fv.drone != null and is_instance_valid(fv.drone)
+	visible = fv != null and fv.active and ((fv.drone != null and is_instance_valid(fv.drone)) or fv.lost_t > 0.0)
 	if visible:
 		queue_redraw()
 
@@ -83,11 +83,27 @@ func _static(q: float) -> void:
 	draw_rect(Rect2(0, bar, sz.x, 14.0 * noise + 3.0), Color(0.7, 1.0, 0.85, 0.03 + 0.06 * noise))
 
 
+## The drone is gone: the receiver shows snow, "NO SIGNAL" and how it ended.
+func _no_signal() -> void:
+	var sz := size
+	draw_rect(Rect2(Vector2.ZERO, sz), Color(0.02, 0.03, 0.03, 0.82))
+	for i in 900:
+		var g := _rng.randf_range(0.2, 0.9)
+		draw_rect(Rect2(_rng.randf() * sz.x, _rng.randf() * sz.y, _rng.randf_range(2.0, 7.0), 2.0), Color(g, g, g, 0.55))
+	_static(0.0)
+	var c := sz * 0.5
+	_txt(Vector2(c.x - 300, c.y + 10), GS.t("НЕТ СИГНАЛА"), 40, Color(1, 1, 1, 0.9), HORIZONTAL_ALIGNMENT_CENTER, 600)
+	if _kill_t > 0.0:
+		_txt(Vector2(c.x - 300, c.y - 60), _kill_text.split("\n")[0], 32, _kill_color, HORIZONTAL_ALIGNMENT_CENTER, 600)
+
+
 func _draw() -> void:
 	if fv == null or not fv.active:
 		return
 	var d = fv.drone
 	if d == null or not is_instance_valid(d):
+		if fv.lost_t > 0.0:
+			_no_signal()
 		return
 	var cam: Camera3D = fv.cam
 	var sz := size
@@ -113,6 +129,41 @@ func _draw() -> void:
 	draw_line(c + Vector2(0, -26), c + Vector2(0, -12), Color(col.r, col.g, col.b, 0.7), 1.5)
 	draw_arc(c, 7.0, 0, TAU, 16, col, 1.5)
 	draw_circle(c, 1.5, col)
+	# --- pitch of the flight path, next to the reticle (the horizon leaves the picture in a climb)
+	var pitch := rad_to_deg(asin(clampf(f.y, -1.0, 1.0)))
+	_txt(c + Vector2(44, 5), ("▲ %d°" if pitch >= 0.0 else "▼ %d°") % int(absf(pitch)), 13, Color(col.r, col.g, col.b, 0.8))
+	# --- where the pilot steers: the drone turns until this ring sits in the reticle
+	var aim_p: Vector3 = cam.global_position + fv.aim * 1000.0
+	if not cam.is_position_behind(aim_p):
+		var ap := cam.unproject_position(aim_p)
+		draw_arc(ap, 13.0, 0, TAU, 24, Color(1, 1, 1, 0.85), 2.0)
+		draw_circle(ap, 2.0, Color(1, 1, 1, 0.85))
+	# --- the lock: lead diamond on the feed, or an arrow on the edge towards it
+	var lk = d.target
+	if lk != null and is_instance_valid(lk) and not lk.dead:
+		var lead: Vector3 = fv.lead
+		if lead != Vector3.INF and not cam.is_position_behind(lead):
+			var lp := cam.unproject_position(lead)
+			if Rect2(Vector2.ZERO, sz).has_point(lp):
+				var dm := PackedVector2Array([lp + Vector2(0, -11), lp + Vector2(11, 0), lp + Vector2(0, 11), lp + Vector2(-11, 0), lp + Vector2(0, -11)])
+				draw_polyline(dm, RED, 2.0)
+		var tp := cam.unproject_position(lk.position)
+		var inside := not cam.is_position_behind(lk.position) and Rect2(Vector2(40, 40), sz - Vector2(80, 80)).has_point(tp)
+		if not inside:
+			# direction to the threat in the picture's own plane
+			var rel: Vector3 = cam.global_transform.basis.inverse() * (lk.position - cam.global_position)
+			var dir2 := Vector2(rel.x, -rel.y)
+			if dir2.length_squared() < 0.0001:
+				dir2 = Vector2(0, 1)
+			dir2 = dir2.normalized()
+			# where the ray from the centre leaves a frame 70 px inside the screen
+			var half := c - Vector2(70, 70)
+			var edge := c + dir2 * minf(half.x / maxf(absf(dir2.x), 0.0001), half.y / maxf(absf(dir2.y), 0.0001))
+			var tip := edge + dir2 * 22.0
+			var side := Vector2(-dir2.y, dir2.x) * 12.0
+			draw_colored_polygon(PackedVector2Array([tip, edge - dir2 * 6.0 + side, edge - dir2 * 6.0 - side]), RED)
+			var ldist: float = cam.global_position.distance_to(lk.position)
+			_txt(edge - dir2 * 34.0 + Vector2(-60, 5), GS.t("%s · %d м") % [GS.t(String(lk.def.abbr)), int(ldist * 5.0)], 13, RED, HORIZONTAL_ALIGNMENT_CENTER, 120)
 	# --- threats in the feed
 	var tracked = fv.feed_target()
 	for e in game.enemies:
@@ -132,7 +183,7 @@ func _draw() -> void:
 		if e == tracked or locked:
 			var closing: float = (d.vel - e.vel).dot((e.position - d.position).normalized())
 			_txt(sp + Vector2(r + 6, -2), GS.t("%s · %d м") % [GS.t(String(e.def.abbr)), int(dist * 5.0)], 13, ec)
-			_txt(sp + Vector2(r + 6, 16), GS.t("сближение %d м/с · %d%%") % [int(closing * 5.0), int(100.0 * e.hp / e.max_hp)], 12, Color(ec.r, ec.g, ec.b, 0.85))
+			_txt(sp + Vector2(r + 6, 16), GS.t("сближение %d км/ч · %d%%") % [int(closing), int(100.0 * e.hp / e.max_hp)], 12, Color(ec.r, ec.g, ec.b, 0.85))
 			if locked:
 				_txt(sp + Vector2(-60, -r - 10), GS.t("ЦЕЛЬ"), 14, RED, HORIZONTAL_ALIGNMENT_CENTER, 120)
 	# --- telemetry, bottom left (clear of the status panel and the event log)
@@ -165,8 +216,8 @@ func _draw() -> void:
 		var lines := _kill_text.split("\n")
 		for i in lines.size():
 			_txt(Vector2(c.x - 300, c.y - 90 + i * 34), lines[i], 32 if i == 0 else 22, kc, HORIZONTAL_ALIGNMENT_CENTER, 600)
-	var hint := GS.t("мышь — управление · W/S — тяга · Shift/ЛКМ — разгон · %s — следующий дрон · %s — на базу · %s — ночная камера · %s — пульт выкл · Alt — курсор") % [GS.key_label("fpv_next"), GS.key_label("fpv_home"), GS.key_label("night"), GS.key_label("fpv")]
+	var hint := GS.t("мышь — куда лететь (кольцо) · W/S — тяга · A/D, стрелки — поворот · Shift/ЛКМ — разгон · %s — следующий дрон · %s — на базу · %s — ночная камера · %s — пульт выкл · Alt — курсор") % [GS.key_label("fpv_next"), GS.key_label("fpv_home"), GS.key_label("night"), GS.key_label("fpv")]
 	if DisplayServer.is_touchscreen_available():
-		hint = GS.t("свайп — управление · «РАЗГОН» — ускорение · «СЛЕД.» — другой дрон · «НАЗАД» — выйти с пульта")
-	_txt(Vector2(c.x - 450, sz.y - 26), hint, 13, Color(col.r, col.g, col.b, 0.75), HORIZONTAL_ALIGNMENT_CENTER, 900)
+		hint = GS.t("свайп — куда лететь (кольцо) · ромб — точка встречи с целью · «РАЗГОН» — ускорение · «СЛЕД.» — другой дрон · «НАЗАД» — выйти")
+	_txt(Vector2(40, sz.y - 26), hint, 13, Color(col.r, col.g, col.b, 0.75), HORIZONTAL_ALIGNMENT_CENTER, sz.x - 80.0)
 	_static(q)

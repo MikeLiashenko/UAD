@@ -1013,15 +1013,19 @@ void fragment() {
 }
 """
 
-## Full-screen night-vision filter for the gunner sight.
+## Full-screen night-vision filter for the gunner sight and the FPV camera. Like a real image
+## intensifier it has automatic gain: full amplification in the dark, far less at dusk or by day,
+## and bright spots roll off softly instead of flooding the picture green.
 const NIGHT_VISION := """
 shader_type canvas_item;
+global uniform float night;
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear;
 
 void fragment() {
 	vec3 c = texture(screen_tex, SCREEN_UV).rgb;
 	float l = dot(c, vec3(0.3, 0.59, 0.11));
-	l = pow(clamp(l, 0.0, 4.0), 0.5) * 1.7 + 0.03;
+	l = pow(clamp(l, 0.0, 4.0), 0.5) * mix(0.5, 1.7, clamp(night, 0.0, 1.0));
+	l = 1.05 * l / (1.0 + 0.45 * l) + 0.03;
 	float noise = fract(sin(dot(SCREEN_UV * vec2(1234.5, 987.6) + fract(TIME) * 91.0, vec2(12.9898, 78.233))) * 43758.5453);
 	float scan = 0.93 + 0.07 * sin(SCREEN_UV.y * 1100.0 + TIME * 30.0);
 	float vig = smoothstep(0.78, 0.25, length((SCREEN_UV - 0.5) * vec2(1.3, 1.0)));

@@ -426,15 +426,13 @@ func leave_fpv() -> void:
 func on_drone_gone(d) -> void:
 	drones.erase(d)
 	if fpv_view != null and fpv_view.drone == d:
-		fpv_view.drone = null
-		if drones.is_empty():
-			leave_fpv()
-		else:
-			fpv_view.adopt(drones[drones.size() - 1])
+		# the feed dies with the drone: a moment of static, then the next drone or the old view
+		fpv_view.feed_lost()
 
 
 ## Ram hit scored while the player was flying the drone by hand.
 func fpv_hit(e) -> void:
+	GS.stats.fpv_rams = int(GS.stats.get("fpv_rams", 0)) + 1
 	if fpv_view != null and fpv_view.active:
 		fpv_view.on_hit(e)
 

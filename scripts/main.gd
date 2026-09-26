@@ -402,6 +402,10 @@ func _process(delta: float) -> void:
 		game.locked = near
 	if _args.has("aimbot") and game and is_instance_valid(game) and game.view == "base" and not game.enemies.is_empty():
 		_aimbot()
+	if _args.has("aimbot") and game and is_instance_valid(game) and game.view == "fpv":
+		_fpv_pilot(delta)
+	elif _args.has("aimbot") and String(_args.get("view", "")) == "fpv" and game and is_instance_valid(game) and not game.drones.is_empty() and not game.enemies.is_empty():
+		game.enter_fpv() # the test pilot takes the next drone as soon as one is up
 	if _args.has("fpv-at") and game and is_instance_valid(game) and _clock >= float(_args["fpv-at"]):
 		# test hook: sit down at the FPV console mid-raid (a drone is launched if none is up)
 		_args.erase("fpv-at")
@@ -529,6 +533,26 @@ func _nearest_enemy():
 
 
 ## Test helper: points the gunner sight at the nearest threat (with lead) and fires.
+## --aimbot in the FPV view: a test pilot turns the aim ring towards the nearest threat no faster
+## than a hand on a mouse would (1.5 rad/s); the console's own lead assist does the rest.
+func _fpv_pilot(delta: float) -> void:
+	var fv = game.fpv_view
+	if fv.drone == null or not is_instance_valid(fv.drone):
+		return
+	var best = null
+	var bd := INF
+	for e in game.enemies:
+		if not e.dead and GS.eff("drone", e) > 0.0 and fv.drone.position.distance_to(e.position) < bd:
+			bd = fv.drone.position.distance_to(e.position)
+			best = e
+	if best == null:
+		return
+	var to: Vector3 = (best.position - fv.drone.position).normalized()
+	var off: float = fv.aim.angle_to(to)
+	if off > 0.0001:
+		fv.aim = fv.aim.slerp(to, clampf(1.5 * delta / off, 0.0, 1.0)).normalized()
+
+
 func _aimbot() -> void:
 	var bv = game.base_view
 	var w = bv.weapon()
@@ -822,6 +846,9 @@ func _acct_selftest() -> void:
 	Net.set_offline()
 	Net.db.mock = {}
 	Net.account.auth.api_key = "mock"
+	# a real session saved on this computer is set aside (in memory only: Net.dry keeps the file)
+	Net.account.logout()
+	Net.account.lost = false
 	GS.settings["account"] = {}
 	GS.settings["nick"] = "Тарас"
 	GS.settings["friends"] = [{"code": "FRNDAAAA", "name": "Мыкола"}]

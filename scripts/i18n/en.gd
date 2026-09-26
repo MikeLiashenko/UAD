@@ -989,4 +989,10 @@ const T := {
 	"Друзей пока нет. Попросите у друга его код (он на этой же вкладке) или ник и нажмите «Добавить друга».": "No friends yet. Ask a friend for their code (it's on this same tab) or nick and press «Add friend».",
 	"Введите код друга — он показан у него на вкладке «Мультиплеер», — или его ник, если у друга есть аккаунт.": "Enter your friend's code — it's on their «Multiplayer» tab — or their nick, if they have an account.",
 	"ABCD-EFGH или ник": "ABCD-EFGH or nick",
+	# --- FPV console -------------------------------------------------------------------------
+	"мышь — куда лететь (кольцо) · W/S — тяга · A/D, стрелки — поворот · Shift/ЛКМ — разгон · %s — следующий дрон · %s — на базу · %s — ночная камера · %s — пульт выкл · Alt — курсор": "mouse — where to fly (ring) · W/S — throttle · A/D, arrows — turn · Shift/LMB — boost · %s — next drone · %s — home · %s — night camera · %s — console off · Alt — cursor",
+	"сближение %d км/ч · %d%%": "closing %d km/h · %d%%",
+	"свайп — куда лететь (кольцо) · ромб — точка встречи с целью · «РАЗГОН» — ускорение · «СЛЕД.» — другой дрон · «НАЗАД» — выйти": "swipe — where to fly (ring) · diamond — where you meet the target · «BOOST» — speed up · «NEXT» — another drone · «BACK» — leave",
+	"ДРОН ПОТЕРЯН": "DRONE LOST",
+	"НЕТ СИГНАЛА": "NO SIGNAL",
 }

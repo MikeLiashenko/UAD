@@ -94,6 +94,7 @@ func sign_out() -> void:
 	refresh_token = ""
 	expires_at = 0.0
 	_retry = 0.0
+	_refreshing = false # an answer still on its way is dropped (refresh token changed)
 	if had:
 		token_changed.emit("")
 
@@ -105,8 +106,11 @@ func refresh(cb := Callable()) -> void:
 			cb.call_deferred(false, "BUSY")
 		return
 	_refreshing = true
+	var asked := refresh_token
 	var done := func(ok: bool, d, err: String) -> void:
 		_refreshing = false
+		if refresh_token != asked:
+			return # signed out (or in as someone else) while this was on its way
 		if ok and d is Dictionary:
 			id_token = String(d.get("id_token", ""))
 			refresh_token = String(d.get("refresh_token", refresh_token))
