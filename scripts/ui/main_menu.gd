@@ -78,7 +78,7 @@ func _ready() -> void:
 	_status.offset_left = 20
 	_status.offset_top = -40
 	add_child(_status)
-	var ver := UiKit.label(GS.t("v%s · сборка %d · процедурная графика · Godot %s") % [ProjectSettings.get_setting("application/config/version", "1.0"), BuildInfo.BUILD, Engine.get_version_info().string], 13, Color(0.5, 0.7, 0.6))
+	var ver := UiKit.label(GS.t("%s · процедурная графика · Godot %s") % [BuildInfo.label(), Engine.get_version_info().string], 13, Color(0.5, 0.7, 0.6))
 	ver.anchor_left = 1.0
 	ver.anchor_right = 1.0
 	ver.anchor_top = 1.0
@@ -107,7 +107,7 @@ func _ready() -> void:
 func _on_release(_info: Dictionary) -> void:
 	if not Net.update_available():
 		return
-	_update_btn.text = GS.t("⬆ Доступна сборка %d — обновить") % int(float(Net.release.build))
+	_update_btn.text = GS.t("⬆ Доступна %s — обновить") % Net.release_label()
 	_update_btn.visible = true
 	if not _offered:
 		_offered = true
@@ -127,15 +127,15 @@ func _show_update() -> void:
 	var v: VBoxContainer = m[1]
 	var r: Dictionary = Net.release
 	v.add_child(UiKit.glow_label(GS.t("ДОСТУПНО ОБНОВЛЕНИЕ"), 32, UiKit.AMBER))
-	v.add_child(UiKit.label(GS.t("Сборка %d · версия %s · от %s") % [int(float(r.get("build", 0))), String(r.get("version", "")), String(r.get("date", ""))], 18, Color(1, 1, 1), HORIZONTAL_ALIGNMENT_CENTER))
-	v.add_child(UiKit.label(GS.t("У вас сборка %d") % BuildInfo.BUILD, 15, Color(0.6, 0.85, 0.75), HORIZONTAL_ALIGNMENT_CENTER))
+	v.add_child(UiKit.label(GS.t("%s · от %s") % [Net.release_label(), String(r.get("date", ""))], 18, Color(1, 1, 1), HORIZONTAL_ALIGNMENT_CENTER))
+	v.add_child(UiKit.label(GS.t("У вас %s") % BuildInfo.label(), 15, Color(0.6, 0.85, 0.75), HORIZONTAL_ALIGNMENT_CENTER))
 	var notes := String(r.get("notes", "")).strip_edges()
 	if notes != "":
 		var nl := UiKit.label(notes, 15, Color(0.8, 1.0, 0.9))
 		nl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		nl.custom_minimum_size = Vector2(480, 0)
 		v.add_child(nl)
-	var hint := UiKit.label(GS.t("Скачайте новую сборку и запустите её вместо этой — миры и настройки сохранятся."), 14, Color(0.6, 0.85, 0.75), HORIZONTAL_ALIGNMENT_CENTER)
+	var hint := UiKit.label(GS.t("Скачайте новую версию и запустите её вместо этой — миры и настройки сохранятся."), 14, Color(0.6, 0.85, 0.75), HORIZONTAL_ALIGNMENT_CENTER)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint.custom_minimum_size = Vector2(480, 0)
 	v.add_child(hint)

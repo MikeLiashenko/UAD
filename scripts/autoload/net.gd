@@ -248,6 +248,12 @@ func update_available() -> bool:
 	return int(float(release.get("build", 0))) > BuildInfo.BUILD
 
 
+## The newest published version as people see it: "v1.0.8 Alpha".
+func release_label() -> String:
+	var n := String(release.get("name", "")).strip_edges().left(32)
+	return n if n != "" else BuildInfo.label(int(float(release.get("build", 0))))
+
+
 ## Where this platform gets the new build: the .apk on Android, the .exe on Windows. The record in
 ## the database only picks the file: a link that leads anywhere but this game's GitHub releases
 ## (or its site) is replaced by the site, so a forged record cannot hand players a strange .exe.

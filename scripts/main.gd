@@ -116,7 +116,7 @@ func _ready() -> void:
 		Net.check_release()
 	if _args.has("fakerelease"):
 		# test hook: pretend the database announced a newer build (the update offer in the menu)
-		Net.release = {"build": int(_args.fakerelease), "version": "1.0.0", "date": "2026-09-24",
+		Net.release = {"build": int(_args.fakerelease), "version": "1.0.%d" % int(_args.fakerelease), "name": "v1.0.%d Alpha" % int(_args.fakerelease), "date": "2026-09-24",
 			"notes": GS.t("Общие налёты в сети, новые города, отражения в воде."), "exe": "https://example.invalid/UAD.exe",
 			"apk": "https://example.invalid/UAD.apk", "site": "https://mikeliashenko.github.io/UAD/"}
 		# a link outside the game's releases must fall back to the site

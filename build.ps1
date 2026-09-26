@@ -7,11 +7,12 @@
   2. Installs the export templates into %APPDATA%\Godot\export_templates\4.7.2.stable
      (from tools\templates.tpz, downloading it if missing).
   3. Stamps the next build number: scripts\build_info.gd (BUILD, date, commit), the Windows file
-     version and the Android versionCode / versionName in export_presets.cfg.
+     version and the Android versionCode / versionName in export_presets.cfg. People see the
+     version name "v1.0.N Alpha" (VERSION and STAGE in build_info.gd).
   4. Imports the project headlessly and exports the requested targets. Release APKs are signed with
      the project key in %USERPROFILE%\.uad (created on the first release build — back it up: an
      update signed with another key will not install over the old app).
-  5. With -Publish: commits the stamp, pushes, creates the GitHub release build-N with the .exe and
+  5. With -Publish: commits the stamp, pushes, creates the GitHub release v1.0.N-alpha with the .exe and
      the .apk, and writes the newest build into the database (uad/release) — every game that is
      older offers the update in its main menu.
 
@@ -97,28 +98,32 @@ $InfoPath = Join-Path $Root 'scripts\build_info.gd'
 $info = [System.IO.File]::ReadAllText($InfoPath)
 $Build = [int]([regex]::Match($info, 'const BUILD := (\d+)').Groups[1].Value)
 if (-not $NoBump) { $Build += 1 }
-$AppVersion = [regex]::Match([System.IO.File]::ReadAllText((Join-Path $Root 'project.godot')), 'config/version="([^"]+)"').Groups[1].Value
-if (-not $AppVersion) { $AppVersion = '1.0.0' }
+# the version people see: v<VERSION>.<build> <STAGE> ("v1.0.8 Alpha"), both from build_info.gd
+$Base = [regex]::Match($info, 'const VERSION := "([^"]+)"').Groups[1].Value
+if (-not $Base) { $Base = '1.0' }
+$Stage = [regex]::Match($info, 'const STAGE := "([^"]*)"').Groups[1].Value
+$AppVersion = "$Base.$Build"
+$VersionName = ("v$AppVersion $Stage").Trim()
 $Date = Get-Date -Format 'yyyy-MM-dd'
 $Commit = ''
 if (Get-Command git -ErrorAction SilentlyContinue) {
     $Commit = (git -C $Root rev-parse --short HEAD 2>$null)
     if ($LASTEXITCODE -ne 0) { $Commit = '' }
 }
-Step "Build $Build (v$AppVersion, $Date)"
+Step "$VersionName (build $Build, $Date)"
 $info = [regex]::Replace($info, 'const BUILD := \d+', "const BUILD := $Build")
 $info = [regex]::Replace($info, 'const DATE := "[^"]*"', "const DATE := `"$Date`"")
 $info = [regex]::Replace($info, 'const COMMIT := "[^"]*"', "const COMMIT := `"$Commit`"")
 Write-Text $InfoPath $info
-$parts = $AppVersion.Split('.')
-while ($parts.Count -lt 3) { $parts += '0' }
-$FileVersion = "$($parts[0]).$($parts[1]).$($parts[2]).$Build"
+$parts = @($AppVersion.Split('.'))
+while ($parts.Count -lt 4) { $parts += '0' }
+$FileVersion = ($parts[0..3] -join '.')
 $PresetsPath = Join-Path $Root 'export_presets.cfg'
 $presets = [System.IO.File]::ReadAllText($PresetsPath)
 $presets = [regex]::Replace($presets, 'application/file_version="[^"]*"', "application/file_version=`"$FileVersion`"")
 $presets = [regex]::Replace($presets, 'application/product_version="[^"]*"', "application/product_version=`"$FileVersion`"")
 $presets = [regex]::Replace($presets, 'version/code=\d+', "version/code=$Build")
-$presets = [regex]::Replace($presets, 'version/name="[^"]*"', "version/name=`"$AppVersion.$Build`"")
+$presets = [regex]::Replace($presets, 'version/name="[^"]*"', "version/name=`"$("$AppVersion $Stage".Trim())`"")
 Write-Text $PresetsPath $presets
 
 # --- 4. Android signing key ---------------------------------------------------------------------
@@ -185,12 +190,12 @@ if ($Publish) {
     $exe = Join-Path $Root 'build\windows\UAD.exe'
     $apk = Join-Path $Root 'build\android\UAD.apk'
     foreach ($f in $exe, $apk) { if (-not (Test-Path $f)) { throw "Nothing to publish: $f is missing" } }
-    $tagName = "build-$Build"
-    if (-not $Notes) { $Notes = "Сборка $Build" }
+    $tagName = if ($Stage) { "v$AppVersion-$($Stage.ToLower())" } else { "v$AppVersion" }
+    if (-not $Notes) { $Notes = $VersionName }
 
     Step "Committing the build stamp and pushing"
     git -C $Root add scripts/build_info.gd export_presets.cfg | Out-Host
-    git -C $Root commit -m "Build $Build" | Out-Host
+    git -C $Root commit -m "$VersionName" | Out-Host
     git -C $Root push | Out-Host
     if ($LASTEXITCODE -ne 0) { throw 'git push failed' }
 
@@ -201,7 +206,7 @@ if ($Publish) {
         # a second -Publish of the same number (-NoBump) replaces the files
         & $gh release upload $tagName $exe $apk --repo $Repo --clobber | Out-Host
     } else {
-        & $gh release create $tagName $exe $apk --repo $Repo --title "UAD · сборка $Build" --notes $body --latest | Out-Host
+        & $gh release create $tagName $exe $apk --repo $Repo --title "UAD $VersionName" --notes $body --latest | Out-Host
     }
     if ($LASTEXITCODE -ne 0) { throw 'gh release failed' }
 
@@ -209,6 +214,7 @@ if ($Publish) {
     $release = [ordered]@{
         build   = $Build
         version = $AppVersion
+        name    = $VersionName
         date    = $Date
         notes   = $Notes
         exe     = "https://github.com/$Repo/releases/download/$tagName/UAD.exe"
@@ -229,6 +235,6 @@ if ($Publish) {
     } catch {
         throw "The release is on GitHub, but the database refused uad/release ($($_.Exception.Message)). Put the database secret into $SecretFile and run: .\build.ps1 -Publish -NoBump"
     }
-    Write-Host "    Published build ${Build}: https://github.com/$Repo/releases/tag/$tagName" -ForegroundColor Green
+    Write-Host "    Published ${VersionName}: https://github.com/$Repo/releases/tag/$tagName" -ForegroundColor Green
 }
 Step 'Done'
