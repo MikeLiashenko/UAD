@@ -59,6 +59,11 @@ func _draw() -> void:
 			continue
 		var sp := cam.unproject_position(e.position)
 		var is_lock: bool = e == lk
+		if GS.eff("aim9", e) <= 0.0:
+			# a ballistic missile: not the fighter's job
+			var bp := cam.unproject_position(e.position)
+			_txt(bp + Vector2(10, 4), GS.t("%s — только Patriot") % GS.t(String(e.def.abbr)), 11, Color(0.75, 0.75, 0.75, 0.8))
+			continue
 		var col := RED if is_lock and fg.locked else (AMBER if is_lock else Color(HUD.r, HUD.g, HUD.b, 0.75))
 		if is_lock:
 			var r := 22.0 if fg.locked else 30.0 - 8.0 * clampf(fg.lock_t / fg.LOCK_TIME, 0.0, 1.0)
@@ -125,11 +130,12 @@ func _draw() -> void:
 	_txt(r + Vector2(0, 84), GS.t("ТОПЛИВО"), 12, Color(fc.r, fc.g, fc.b, 0.8))
 	draw_rect(Rect2(r + Vector2(0, 92), Vector2(160, 9)), Color(0, 0, 0, 0.4))
 	draw_rect(Rect2(r + Vector2(0, 92), Vector2(160 * clampf(fq, 0.0, 1.0), 9)), fc)
-	var kills := int(GS.stats.kills) - int(fg.kills_at_start)
+	var kills := int(GS.stats.get("f16_kills", 0)) - int(fg.kills_at_start)
 	_txt(r + Vector2(0, 126), GS.t("Сбито за вылет: %d") % kills, 14, HUD)
 	# --- warnings
 	if fg.gcas:
-		_txt(Vector2(c.x - 200, c.y + 130), "AUTO-GCAS", 26, AMBER, HORIZONTAL_ALIGNMENT_CENTER, 400)
+		# the floor is holding the jet up: a quiet note, the pilot keeps the controls
+		_txt(Vector2(c.x - 200, c.y + 130), GS.t("GCAS: минимальная высота"), 15, Color(AMBER.r, AMBER.g, AMBER.b, 0.8), HORIZONTAL_ALIGNMENT_CENTER, 400)
 	if fg.pull_up and int(t * 4.0) % 2 == 0:
 		_txt(Vector2(c.x - 200, c.y + 90), "PULL UP", 34, RED, HORIZONTAL_ALIGNMENT_CENTER, 400)
 	elif fq < 0.2 and int(t * 2.0) % 2 == 0:

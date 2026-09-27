@@ -648,6 +648,7 @@ func spawn_missile(pos: Vector3, dir: Vector3, tgt, wid: String, carrier := Vect
 	m.target = tgt
 	m.weapon_id = wid
 	m.vel = dir.normalized() * 40.0 + carrier
+	m.speed = maxf(40.0, m.vel.length()) # off an aircraft's rail it starts at the aircraft's speed
 	m.position = pos
 	fx_root.add_child(m)
 	_net_note_launch(pos, tgt, wid)
@@ -880,6 +881,8 @@ func launch(type: String, count: int, at_base: bool, alt := -1.0, aim := "") -> 
 
 
 func enemy_destroyed(e) -> void:
+	if String(e.last_hit_by) in ["f16gun", "aim9", "aim120"]:
+		GS.stats.f16_kills = int(GS.stats.get("f16_kills", 0)) + 1 # the F-16's own score
 	# a friend's hit that brought it down earns them the reward (multiplayer host)
 	var killer := _killer_of(e)
 	var reward := _reward_for(e, killer)

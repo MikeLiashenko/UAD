@@ -27,7 +27,15 @@ const LOCK_TIME := 0.3
 ## A missile fired before the lock is complete takes the best threat this far off the nose.
 const SNAP_CONE := deg_to_rad(75.0)
 ## The gun helps: its rounds go to the lead point of a threat this close to the pipper.
-const GUN_ASSIST := deg_to_rad(6.0)
+const GUN_ASSIST := deg_to_rad(10.0)
+## How far the gun reaches (its rounds fly GUN_LIFE seconds) and helps.
+const GUN_REACH := 850.0
+const GUN_LIFE := 0.8
+## The lowest the jet goes above the roofs around its course: Auto-GCAS levels it off there instead
+## of letting it dive in — low drones are hunted from just above the rooftops.
+const FLOOR := 20.0
+## How much harder than the pilot Auto-GCAS pulls (a multiple of TURN).
+const GCAS_PULL := 2.4
 const LOCK_RANGE := 2400.0
 const REARM := 25.0
 const LOSS := 15000
@@ -59,9 +67,12 @@ var locked := false
 var trigger := false
 var pull_up := false
 var outside := false
-## Auto-GCAS, the automatic ground collision avoidance of the real F-16: less than two seconds
-## from the ground or a roof on the present course, the jet pulls up by itself.
+## Auto-GCAS, the automatic ground collision avoidance of the real F-16: it holds the jet at
+## FLOOR above the ground and the roofs ahead. The pilot's aim ring stays where it is: the moment
+## the ring points above the floor again, the jet follows it.
 var gcas := false
+## The least climb (rise per run) the floor allows this frame.
+var _min_slope := -1.0
 var kills_at_start := 0
 ## Seconds since the take-off (the HUD shows the controls card at the start of a sortie).
 var air_t := 0.0
@@ -134,7 +145,7 @@ func enter() -> void:
 		loaded[k] = n
 		GS.ammo[k] = int(GS.ammo.get(k, 0)) - n
 	GS.state_changed.emit()
-	kills_at_start = int(GS.stats.kills)
+	kills_at_start = int(GS.stats.get("f16_kills", 0))
 	jet = Meshes.f16()
 	game.add_child(jet)
 	_place_jet()
@@ -169,7 +180,7 @@ func _land(why: String) -> void:
 	if jet != null and is_instance_valid(jet):
 		jet.queue_free()
 	jet = null
-	var kills := int(GS.stats.kills) - kills_at_start
+	var kills := int(GS.stats.get("f16_kills", 0)) - kills_at_start
 	game.hud.log_event(GS.t("F-16 садится (%s). Сбито за вылет: %d") % [why, kills], Color(0.5, 0.9, 1.0))
 
 
@@ -182,6 +193,7 @@ func _crash(why: String) -> void:
 		jet.queue_free()
 	jet = null
 	state = "lost"
+	GS.stats.f16_crashes = int(GS.stats.get("f16_crashes", 0)) + 1
 	GS.add_money(-LOSS)
 	game.hud.alert(GS.t("F-16 ПОТЕРЯН — пилот катапультировался"), Color(1.0, 0.35, 0.3))
 	game.hud.log_event(GS.t("F-16 разбился: %s. Потеря самолёта −%s, новый — утром.") % [why, GS.fmt_money(LOSS)], Color(1.0, 0.4, 0.3))
@@ -192,6 +204,16 @@ func _crash(why: String) -> void:
 func morning() -> void:
 	if state == "lost" or state == "rearm":
 		state = "ready"
+	# the partners' deliveries keep the flight armed: the store is topped up to a sortie's load
+	if owned():
+		var got := []
+		for k in LOAD:
+			var n := int(LOAD[k]) - int(GS.ammo.get(k, 0))
+			if n > 0:
+				GS.ammo[k] = int(LOAD[k])
+				got.append("%s ×%d" % [String(GS.WEAPONS[k].short), n])
+		if not got.is_empty():
+			game.hud.log_event(GS.t("Поставка ракет для F-16: %s") % ", ".join(got), Color(0.5, 0.9, 1.0))
 
 
 func refresh_capture() -> void:
@@ -273,15 +295,16 @@ func _fly(delta: float) -> void:
 	if flat > PATROL + 500.0:
 		var home := Vector3(-pos.x, 0.0, -pos.z).normalized()
 		aim = aim.slerp(home, clampf(delta * 0.7, 0.0, 1.0)).normalized()
-	gcas = _gcas_needed()
-	if gcas:
-		var flat_d := Vector3(dir.x, 0.0, dir.z).normalized() if Vector2(dir.x, dir.z).length() > 0.05 else Vector3.FORWARD
-		aim = (flat_d + Vector3(0, 0.55, 0)).normalized()
+	var steer := _floor_hold(aim)
+	# the present course counts too: pulling out of a dive is done at full strength, wherever the
+	# ring already is
+	var dir_slope := dir.y / maxf(Vector2(dir.x, dir.z).length(), 0.05)
+	gcas = steer.y > aim.y + 0.01 or dir_slope < _min_slope
 	var old := dir
-	var rate := TURN * clampf(speed / 175.0, 0.55, 1.15) * (0.9 if burner else 1.0) * (1.8 if gcas else 1.0)
-	var ang := dir.angle_to(aim)
+	var rate := TURN * clampf(speed / 175.0, 0.55, 1.15) * (0.9 if burner else 1.0) * (GCAS_PULL if gcas else 1.0)
+	var ang := dir.angle_to(steer)
 	if ang > 0.0001:
-		dir = dir.slerp(aim, clampf(rate * delta / ang, 0.0, 1.0)).normalized()
+		dir = dir.slerp(steer, clampf(rate * delta / ang, 0.0, 1.0)).normalized()
 	pos += dir * speed * delta
 	# bank into the turn by the rate of turn around the vertical
 	var yaw_rate := 0.0
@@ -296,22 +319,54 @@ func _fly(delta: float) -> void:
 		game.set_view("top") # exit() lands it
 		return
 	var ground: float = _ground(pos)
-	# the towers ahead count too: a second and a half of flight
-	var ahead: float = _ground(pos + dir * speed * 1.5)
-	pull_up = (pos.y - maxf(ground, ahead) < 60.0 and dir.y < 0.05) or pos.y < ahead + 12.0
+	# PULL UP: the present course meets the ground or a roof within a second
+	pull_up = false
+	for k in [0.25, 0.5, 0.75, 1.0]:
+		var q: Vector3 = pos + dir * speed * float(k)
+		if q.y < _ground(q) + 3.0:
+			pull_up = true
+			break
 	if pos.y < ground + 2.5:
 		_crash(GS.t("столкновение с землёй") if ground < 1.0 else GS.t("столкновение со зданием"))
 
 
-## Anything below the course within two seconds of flight (the ground, the roofs)?
-func _gcas_needed() -> bool:
-	if dir.y > 0.05:
-		return false
-	for k in [0.4, 0.8, 1.2, 1.6, 2.0]:
-		var q: Vector3 = pos + dir * speed * float(k)
-		if q.y < _ground(q) + 14.0:
-			return true
-	return false
+## The course the jet may take towards `want`: as steep down as it goes, but never below FLOOR
+## over the ground and the roofs along the next second and a half of flight.
+func _floor_hold(want: Vector3) -> Vector3:
+	var flat := Vector3(want.x, 0.0, want.z)
+	if flat.length() < 0.05:
+		flat = Vector3(dir.x, 0.0, dir.z)
+	if flat.length() < 0.05:
+		flat = Vector3.FORWARD
+	flat = flat.normalized()
+	# the ground under the course the ring asks for, the present one (still turning) and the arc
+	var now := Vector3(dir.x, 0.0, dir.z).normalized() if Vector2(dir.x, dir.z).length() > 0.05 else flat
+	var mid := (flat + now).normalized() if (flat + now).length() > 0.05 else flat
+	# a dive cannot be stopped at once: the height it still loses while pulling out is added
+	var dive := maxf(0.0, -asin(clampf(dir.y, -1.0, 1.0)))
+	var pull_out := speed / (TURN * GCAS_PULL) * (1.0 - cos(dive))
+	var floor_at := FLOOR + pull_out
+	# below the floor already (it came in from above the rooftops): straight up to it
+	var min_y := -1.0
+	if pos.y < _canopy(pos) + FLOOR:
+		min_y = 0.6
+	for f in [flat, mid, now]:
+		for k in [0.08, 0.15, 0.25, 0.35, 0.5, 0.65, 0.8, 1.0, 1.2, 1.5, 1.8]:
+			var run: float = speed * float(k)
+			var q: Vector3 = pos + (f as Vector3) * run
+			# the climb (slope) needed to be at the floor over that spot
+			min_y = maxf(min_y, (_canopy(q) + floor_at - pos.y) / run)
+	_min_slope = min_y
+	var slope := want.y / maxf(Vector2(want.x, want.z).length(), 0.05)
+	if slope >= min_y:
+		return want
+	return (flat + Vector3(0, clampf(min_y, -3.0, 3.0), 0)).normalized()
+
+
+## The highest roof around a spot: the floor keeps the jet above the rooftops, out of the street
+## canyons where a tower could come up faster than it can climb.
+func _canopy(p: Vector3) -> float:
+	return map.ceiling(p.x, p.z) if absf(p.x) < 1000.0 and absf(p.z) < 1000.0 else 0.0
 
 
 func _ground(p: Vector3) -> float:
@@ -353,7 +408,7 @@ func _gun_aim() -> void:
 		if e.dead or GS.eff("f16gun", e) <= 0.0:
 			continue
 		var rel: Vector3 = e.position - pos
-		if rel.length() > 700.0 or rel.dot(dir) <= 0.0:
+		if rel.length() > GUN_REACH or rel.dot(dir) <= 0.0:
 			continue
 		var lp: Vector3 = e.position + e.vel * (rel.length() / (float(def.speed) + speed))
 		var a := dir.angle_to(lp - pos)
@@ -376,7 +431,7 @@ func _gun(delta: float) -> void:
 		var s: float = def.spread
 		var at := (gun_lead - muzzle).normalized() if gun_target != null else dir
 		var d := (at + Vector3(randf_range(-s, s), randf_range(-s, s), randf_range(-s, s))).normalized()
-		game.spawn_bullet(muzzle, d * float(def.speed) + dir * speed, "f16gun", 0.55, true)
+		game.spawn_bullet(muzzle, d * float(def.speed) + dir * speed, "f16gun", GUN_LIFE, true)
 	if _gun_snd <= 0.0:
 		_gun_snd = 0.07
 		game.play_3d("cannon", pos, -4.0, 0.05)
@@ -459,6 +514,11 @@ func _why_not(kind: String) -> void:
 			nd = d
 			near = e
 	var short := GS.t(String(GS.WEAPONS[kind].short))
+	if near == null:
+		for e in game.enemies:
+			if not e.dead and GS.eff(kind, e) <= 0.0 and dir.angle_to(e.position - pos) <= SNAP_CONE:
+				game.hud.alert(GS.t("%s — баллистика: её сбивает только Patriot (и С-300), не истребитель") % GS.t(String(e.def.abbr)), Color(1.0, 0.7, 0.3))
+				return
 	if near != null:
 		game.hud.alert(GS.t("Цель в %.1f км, %s бьёт до %.1f км — подлетите ближе") % [nd * 0.005, short, range_of(kind) * 0.005], Color(1.0, 0.7, 0.3))
 	else:

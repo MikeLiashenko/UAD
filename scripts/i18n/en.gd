@@ -1135,6 +1135,10 @@ const T := {
 	"захват…": "locking…",
 	"левая половина — руль и газ · правая — обзор · кнопки — пулемёт и огонь": "left half — steering and gas · right half — look · buttons — gun and fire",
 	# F-16 controls, second take
+	"GCAS: минимальная высота": "GCAS: minimum altitude",
+	"%s — баллистика: её сбивает только Patriot (и С-300), не истребитель": "%s — a ballistic missile: only Patriot (and S-300) bring it down, not a fighter",
+	"%s — только Patriot": "%s — Patriot only",
+	"Поставка ракет для F-16: %s": "Missiles delivered for the F-16: %s",
 	"по ней уже летят ракеты": "missiles already on the way",
 	"Ракеты кончились — сближайся для пушки": "Out of missiles — close in for the cannon",
 	"Сближайся: %s бьёт с %.1f км": "Close in: %s reaches from %.1f km",
