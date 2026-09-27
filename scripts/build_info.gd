@@ -7,9 +7,9 @@ extends RefCounted
 
 const VERSION := "1.0"
 const STAGE := "Alpha"
-const BUILD := 10
+const BUILD := 11
 const DATE := "2026-09-27"
-const COMMIT := "c32285a"
+const COMMIT := "8dedb2e"
 
 
 ## "v1.0.7 Alpha" for the given build number (this build by default).
