@@ -65,11 +65,11 @@ func _draw() -> void:
 			draw_rect(Rect2(sp - Vector2(r, r), Vector2(r * 2, r * 2)), col, false, 2.2)
 			var k := 0
 			var lines := [GS.t("ЗАХВАТ") if fg.locked else GS.t("захват…"), "%s · %.1f км" % [GS.t(String(e.def.name)), dist * 0.005]]
-			for kind in ([] if float(e.inbound) >= float(e.hp) else ["aim9", "aim120"]):
+			for kind in ["aim9", "aim120"]:
 				var ok: bool = fg.can_hit(e, kind) and int(fg.loaded[kind]) > 0
 				lines.append("%s %s" % [GS.t(String(GS.WEAPONS[kind].short)), "✔" if ok else "✖"])
 			if float(e.inbound) >= float(e.hp):
-				lines.append(GS.t("уже перехвачена"))
+				lines.append(GS.t("по ней уже летят ракеты"))
 			var fall: Dictionary = game.predict_debris(e)
 			lines.append(GS.t("обломки: безопасно") if bool(fall.get("safe", true)) else GS.t("обломки: НА ДОМА"))
 			for ln in lines:
@@ -156,8 +156,6 @@ func _prompt(c: Vector2, t: float) -> void:
 		_txt(p, GS.t("В ПРИЦЕЛЕ — ДЕРЖИ «ПУШКА»") if touch else GS.t("В ПРИЦЕЛЕ — ДЕРЖИ ЛКМ"), 22, RED, HORIZONTAL_ALIGNMENT_CENTER, 700)
 	elif fg.lock == null or not is_instance_valid(fg.lock):
 		_txt(p, GS.t("Разверни нос к цели — по жёлтой стрелке"), 16, Color(HUD.r, HUD.g, HUD.b, 0.8), HORIZONTAL_ALIGNMENT_CENTER, 700)
-	elif float(fg.lock.inbound) >= float(fg.lock.hp):
-		_txt(p, GS.t("По этой цели уже летят ракеты — ищи следующую"), 18, Color(0.5, 0.95, 0.7), HORIZONTAL_ALIGNMENT_CENTER, 700)
 	else:
 		# a threat ahead, but too far for the missiles on the rails (or they are gone)
 		var k := "aim120" if int(fg.loaded.aim120) > 0 else ("aim9" if int(fg.loaded.aim9) > 0 else "")

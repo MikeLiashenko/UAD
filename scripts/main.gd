@@ -408,7 +408,9 @@ func _process(delta: float) -> void:
 		game.locked = near
 	if _args.has("aimbot") and game and is_instance_valid(game) and game.view == "base" and not game.enemies.is_empty():
 		_aimbot()
-	if _args.has("aimbot") and game and is_instance_valid(game) and game.view == "fighter":
+	if _args.has("f16input") and game and is_instance_valid(game) and game.view == "fighter":
+		_f16_input(delta)
+	elif _args.has("aimbot") and game and is_instance_valid(game) and game.view == "fighter":
 		_fighter_pilot(delta)
 	elif _args.has("aimbot") and String(_args.get("view", "")) == "fighter" and game and is_instance_valid(game) and game.fighter.state == "ready" and not game.enemies.is_empty():
 		game.toggle_fighter() # the test pilot goes up again once the jet is rearmed
@@ -589,6 +591,71 @@ func _fighter_pilot(delta: float) -> void:
 	var off: float = f.aim.angle_to(want)
 	if off > 0.0001:
 		f.aim = f.aim.slerp(want, clampf(1.5 * delta / off, 0.0, 1.0)).normalized()
+
+
+## --view=fighter --f16input: a pilot with the person's hands only — the arrow keys to steer and
+## the right mouse button for missiles, sent as real input events, so what a person presses is
+## what gets checked. Chases KABs first (--city=kharkiv); --f16kab spends missiles on KABs only.
+var _in := {"presses": 0, "launched": 0, "kab": 0, "gun": 0.0, "cd": 0.0, "seen_kab": false}
+
+
+func _f16_input(delta: float) -> void:
+	var f = game.fighter
+	if not f.active or f.state != "air":
+		return
+	var best = null
+	var bd := INF
+	for e in game.enemies:
+		if e.dead or GS.eff("aim9", e) <= 0.0:
+			continue
+		var d: float = f.pos.distance_to(e.position) * (0.3 if String(e.variant) == "kab" else 1.0)
+		if d < bd:
+			bd = d
+			best = e
+	var want: Vector3 = Vector3(-f.pos.x, 300.0 - f.pos.y, -f.pos.z).normalized()
+	if best != null:
+		want = (best.position - f.pos).normalized()
+		if String(best.variant) == "kab":
+			_in.seen_kab = true
+	if f.pos.y < 150.0 or f.pull_up:
+		want = (want + Vector3(0, 1.2, 0)).normalized()
+	# steer towards `want`
+	var yaw := wrapf(atan2(want.x, -want.z) - atan2(f.aim.x, -f.aim.z), -PI, PI)
+	var pitch := asin(clampf(want.y, -1.0, 1.0)) - asin(clampf(f.aim.y, -1.0, 1.0))
+	# with the arrow keys (a window-less run cannot capture the mouse for mouse steering)
+	var hold := {KEY_RIGHT: yaw > 0.03, KEY_LEFT: yaw < -0.03, KEY_UP: pitch > 0.03, KEY_DOWN: pitch < -0.03}
+	for kc in hold:
+		if bool(hold[kc]) != Input.is_key_pressed(kc):
+			var ke := InputEventKey.new()
+			ke.keycode = kc
+			ke.physical_keycode = kc
+			ke.pressed = bool(hold[kc])
+			Input.parse_input_event(ke)
+	# RMB for a missile when there is a target for it (the events reach the jet on the next
+	# frame: launches are counted by the stores going down)
+	var total: int = int(f.loaded.aim9) + int(f.loaded.aim120)
+	if total < int(_in.get("total", total)):
+		_in.launched += 1
+		if bool(_in.get("aim_kab", false)):
+			_in.kab += 1
+	_in.total = total
+	_in.cd -= delta
+	var kind: String = f.auto_kind()
+	var tgt = f.best_target(kind) if kind != "" else null
+	# --f16kab: missiles for the KABs only
+	if tgt != null and _in.cd <= 0.0 and (String(tgt.variant) == "kab" or not _args.has("f16kab")):
+		_in.cd = 1.2
+		_in.aim_kab = String(tgt.variant) == "kab"
+		for pressed in [true, false]:
+			var mb := InputEventMouseButton.new()
+			mb.button_index = MOUSE_BUTTON_RIGHT
+			mb.pressed = pressed
+			Input.parse_input_event(mb)
+		_in.presses += 1
+	# the gun: the on-screen button's way (a window-less run has no captured mouse for LMB)
+	game.set_trigger(f.gun_target != null)
+	if f.trigger:
+		_in.gun += delta
 
 
 ## --view=mfg --aimbot: a test crew. The driver makes for the radio's beacon and backs off the
@@ -1429,6 +1496,8 @@ func _print_summary() -> void:
 		print("UAD LAUNCHED: ", game.launched)
 		if game.fighter != null and bool(GS.unlocked.get("f16", false)):
 			print("UAD F16: state=%s kills=%d aim9_left=%d aim120_left=%d money=%d" % [game.fighter.state, int(GS.stats.kills), int(GS.ammo.get("aim9", 0)) + int(game.fighter.loaded.aim9), int(GS.ammo.get("aim120", 0)) + int(game.fighter.loaded.aim120), GS.money])
+			if _args.has("f16input"):
+				print("UAD F16IN: mouse_mode=%d seen_kab=%s rmb_presses=%d launched=%d at_kab=%d gun_s=%.1f" % [Input.mouse_mode, _in.seen_kab, _in.presses, _in.launched, _in.kab, _in.gun])
 		if game.mfg != null and game.mfg.unit != null:
 			print("UAD MFG: hp=%d wrecked=%s pos=%s kills=%d" % [int(game.mfg.hp), game.mfg.wrecked, game.mfg.pos, int(GS.stats.kills)])
 	if game and game.view == "walk":

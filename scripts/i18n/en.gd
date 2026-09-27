@@ -1135,8 +1135,7 @@ const T := {
 	"захват…": "locking…",
 	"левая половина — руль и газ · правая — обзор · кнопки — пулемёт и огонь": "left half — steering and gas · right half — look · buttons — gun and fire",
 	# F-16 controls, second take
-	"уже перехвачена": "already intercepted",
-	"По этой цели уже летят ракеты — ищи следующую": "Missiles are already on this one — find the next",
+	"по ней уже летят ракеты": "missiles already on the way",
 	"Ракеты кончились — сближайся для пушки": "Out of missiles — close in for the cannon",
 	"Сближайся: %s бьёт с %.1f км": "Close in: %s reaches from %.1f km",
 	"Ракеты кончились — бейте из пушки или садитесь на аэродром": "Out of missiles — use the cannon or land at the airfield",

@@ -33,7 +33,7 @@ const REARM := 25.0
 const LOSS := 15000
 const AIM_GAIN := 0.0024
 const MAX_ELEV := deg_to_rad(72.0)
-const PATROL := 3300.0
+const PATROL := 4500.0
 
 var game
 var map
@@ -272,7 +272,7 @@ func _fly(delta: float) -> void:
 	outside = flat > PATROL
 	if flat > PATROL + 500.0:
 		var home := Vector3(-pos.x, 0.0, -pos.z).normalized()
-		aim = aim.slerp(home, clampf(delta * 1.5, 0.0, 1.0)).normalized()
+		aim = aim.slerp(home, clampf(delta * 0.7, 0.0, 1.0)).normalized()
 	gcas = _gcas_needed()
 	if gcas:
 		var flat_d := Vector3(dir.x, 0.0, dir.z).normalized() if Vector2(dir.x, dir.z).length() > 0.05 else Vector3.FORWARD
@@ -382,26 +382,28 @@ func _gun(delta: float) -> void:
 		game.play_3d("cannon", pos, -4.0, 0.05)
 
 
-## Could a missile of this kind go at `e` now: alive, not already taken care of by missiles in
-## flight, within its range and off the nose by no more than SNAP_CONE?
+## Could a missile of this kind go at `e` now: alive, within its range and off the nose by no
+## more than SNAP_CONE? (Missiles of the ground batteries already on the way do not stop it: the
+## pilot decides, they may still miss.)
 func can_hit(e, kind: String) -> bool:
 	if e == null or not is_instance_valid(e) or e.dead or GS.eff(kind, e) <= 0.0:
-		return false
-	if float(e.inbound) >= float(e.hp):
 		return false
 	return pos.distance_to(e.position) <= range_of(kind) and dir.angle_to(e.position - pos) <= SNAP_CONE
 
 
-## The best threat for a missile of this kind: the nearest to the nose, then the closest.
+## The best threat for a missile of this kind: the nearest to the nose, then the closest; the
+## locked one is kept, and one nobody is shooting at yet goes before one with missiles on the way.
 func best_target(kind: String):
-	if locked and can_hit(lock, kind):
-		return lock
 	var best = null
 	var score := INF
 	for e in game.enemies:
 		if not can_hit(e, kind):
 			continue
 		var sc: float = dir.angle_to(e.position - pos) + pos.distance_to(e.position) / range_of(kind) * 0.3
+		if e == lock and locked:
+			sc -= 0.4
+		if float(e.inbound) >= float(e.hp):
+			sc += 1.0
 		if sc < score:
 			score = sc
 			best = e
@@ -449,12 +451,8 @@ func fire(kind: String) -> void:
 func _why_not(kind: String) -> void:
 	var near = null
 	var nd := INF
-	var taken := false
 	for e in game.enemies:
 		if e.dead or GS.eff(kind, e) <= 0.0 or dir.angle_to(e.position - pos) > SNAP_CONE:
-			continue
-		if float(e.inbound) >= float(e.hp):
-			taken = true
 			continue
 		var d := pos.distance_to(e.position)
 		if d < nd:
@@ -463,8 +461,6 @@ func _why_not(kind: String) -> void:
 	var short := GS.t(String(GS.WEAPONS[kind].short))
 	if near != null:
 		game.hud.alert(GS.t("Цель в %.1f км, %s бьёт до %.1f км — подлетите ближе") % [nd * 0.005, short, range_of(kind) * 0.005], Color(1.0, 0.7, 0.3))
-	elif taken:
-		game.hud.alert(GS.t("ЦЕЛЬ УЖЕ ПЕРЕХВАЧЕНА — ракета не потрачена"), Color(0.5, 0.95, 0.7))
 	else:
 		game.hud.alert(GS.t("Впереди нет целей — разверните нос по жёлтой стрелке"), Color(1.0, 0.7, 0.3))
 
