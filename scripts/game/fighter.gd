@@ -6,8 +6,9 @@ extends Node
 ##
 ## Steering is the mouse aim of the FPV console (an aim ring, the jet turns to it as hard as its
 ## speed allows); W/S throttle, Shift afterburner (drinks fuel), A/D and the arrows turn too.
-## LMB gun, RMB / E AIM-9X, Q AIM-120 — the missiles need a lock: keep a threat in the cone in
-## front of the nose for half a second. Fuel runs out (the jet goes home by itself), the
+## LMB gun (the rounds bend to the lead point of a threat near the pipper), RMB a missile: it
+## takes the threat nearest the nose and picks AIM-9X or AIM-120 by the range itself; E / Q fire
+## the one type. The lock marker only shows which threat that is. Fuel runs out (the jet goes home by itself), the
 ## ground and the tower blocks are fatal. Between sorties the jet is refuelled and rearmed;
 ## a lost one is replaced in the morning. Missiles come from the shop, unused ones go back.
 
@@ -21,8 +22,12 @@ const TURN := 1.2
 const FUEL := 160.0
 const ROUNDS := 510
 const LOAD := {"aim9": 4, "aim120": 2}
-const LOCK_CONE := deg_to_rad(22.0)
-const LOCK_TIME := 0.55
+const LOCK_CONE := deg_to_rad(40.0)
+const LOCK_TIME := 0.3
+## A missile fired before the lock is complete takes the best threat this far off the nose.
+const SNAP_CONE := deg_to_rad(75.0)
+## The gun helps: its rounds go to the lead point of a threat this close to the pipper.
+const GUN_ASSIST := deg_to_rad(6.0)
 const LOCK_RANGE := 2400.0
 const REARM := 25.0
 const LOSS := 15000
@@ -58,6 +63,11 @@ var outside := false
 ## from the ground or a roof on the present course, the jet pulls up by itself.
 var gcas := false
 var kills_at_start := 0
+## Seconds since the take-off (the HUD shows the controls card at the start of a sortie).
+var air_t := 0.0
+## A threat in the gun's help cone this frame, and where to aim the rounds to meet it.
+var gun_target = null
+var gun_lead := Vector3.ZERO
 var _gun_cd := 0.0
 var _gun_snd := 0.0
 var _cam_pos := Vector3.ZERO
@@ -117,6 +127,8 @@ func enter() -> void:
 	locked = false
 	lock_t = 0.0
 	_bingo = false
+	air_t = 0.0
+	gun_target = null
 	for k in LOAD:
 		var n := mini(int(LOAD[k]), int(GS.ammo.get(k, 0)))
 		loaded[k] = n
@@ -214,12 +226,14 @@ func _process(delta: float) -> void:
 	if not active or state != "air":
 		return
 	refresh_capture()
+	air_t += delta
 	if not get_tree().paused:
 		_keys(delta)
 	_fly(delta)
 	if state != "air":
 		return
 	_lock(delta)
+	_gun_aim()
 	_gun(delta)
 	_place_jet()
 	_camera(delta)
@@ -329,6 +343,26 @@ func _lock(delta: float) -> void:
 		locked = false
 
 
+## The threat nearest the pipper within the gun's reach, and its lead point (where the rounds
+## meet it); the rounds are sent there when it is within GUN_ASSIST of the nose.
+func _gun_aim() -> void:
+	gun_target = null
+	var def: Dictionary = GS.WEAPONS.f16gun
+	var best := GUN_ASSIST
+	for e in game.enemies:
+		if e.dead or GS.eff("f16gun", e) <= 0.0:
+			continue
+		var rel: Vector3 = e.position - pos
+		if rel.length() > 700.0 or rel.dot(dir) <= 0.0:
+			continue
+		var lp: Vector3 = e.position + e.vel * (rel.length() / (float(def.speed) + speed))
+		var a := dir.angle_to(lp - pos)
+		if a < best:
+			best = a
+			gun_target = e
+			gun_lead = lp
+
+
 func _gun(delta: float) -> void:
 	_gun_cd -= delta
 	_gun_snd -= delta
@@ -340,34 +374,99 @@ func _gun(delta: float) -> void:
 		_gun_cd += float(def.rate)
 		rounds -= 1
 		var s: float = def.spread
-		var d := (dir + Vector3(randf_range(-s, s), randf_range(-s, s), randf_range(-s, s))).normalized()
+		var at := (gun_lead - muzzle).normalized() if gun_target != null else dir
+		var d := (at + Vector3(randf_range(-s, s), randf_range(-s, s), randf_range(-s, s))).normalized()
 		game.spawn_bullet(muzzle, d * float(def.speed) + dir * speed, "f16gun", 0.55, true)
 	if _gun_snd <= 0.0:
 		_gun_snd = 0.07
 		game.play_3d("cannon", pos, -4.0, 0.05)
 
 
-## Fires a missile at the locked threat.
+## Could a missile of this kind go at `e` now: alive, not already taken care of by missiles in
+## flight, within its range and off the nose by no more than SNAP_CONE?
+func can_hit(e, kind: String) -> bool:
+	if e == null or not is_instance_valid(e) or e.dead or GS.eff(kind, e) <= 0.0:
+		return false
+	if float(e.inbound) >= float(e.hp):
+		return false
+	return pos.distance_to(e.position) <= range_of(kind) and dir.angle_to(e.position - pos) <= SNAP_CONE
+
+
+## The best threat for a missile of this kind: the nearest to the nose, then the closest.
+func best_target(kind: String):
+	if locked and can_hit(lock, kind):
+		return lock
+	var best = null
+	var score := INF
+	for e in game.enemies:
+		if not can_hit(e, kind):
+			continue
+		var sc: float = dir.angle_to(e.position - pos) + pos.distance_to(e.position) / range_of(kind) * 0.3
+		if sc < score:
+			score = sc
+			best = e
+	return best
+
+
+## Which missile the "РАКЕТА" button fires now: AIM-9X if a threat is within its reach (it is
+## cheaper), else AIM-120; "" when neither has a target.
+func auto_kind() -> String:
+	for k in ["aim9", "aim120"]:
+		if int(loaded[k]) > 0 and best_target(k) != null:
+			return k
+	return ""
+
+
+## Fires a missile — "auto" picks the type — at the locked threat or, when the lock is not there
+## yet, at the best one in front of the nose. Says why when it cannot.
 func fire(kind: String) -> void:
 	if not active or state != "air":
 		return
+	if kind == "auto":
+		if int(loaded.aim9) + int(loaded.aim120) <= 0:
+			game.hud.alert(GS.t("Ракеты кончились — бейте из пушки или садитесь на аэродром"), Color(1.0, 0.6, 0.3))
+			return
+		kind = auto_kind()
+		if kind == "":
+			_why_not("aim120" if int(loaded.aim120) > 0 else "aim9")
+			return
 	if int(loaded.get(kind, 0)) <= 0:
 		game.hud.alert(GS.t("%s: пусто") % GS.t(String(GS.WEAPONS[kind].short)), Color(1.0, 0.6, 0.3))
 		return
-	if lock == null or not is_instance_valid(lock) or lock.dead or not locked:
-		game.hud.alert(GS.t("Нет захвата — держите цель перед носом"), Color(1.0, 0.7, 0.3))
+	var t = best_target(kind)
+	if t == null:
+		_why_not(kind)
 		return
-	if float(lock.inbound) >= float(lock.hp):
-		# missiles already on their way will finish it: this one stays on the rail
-		game.hud.alert(GS.t("ЦЕЛЬ УЖЕ ПЕРЕХВАЧЕНА — ракета не потрачена"), Color(0.5, 0.95, 0.7))
-		return
-	if pos.distance_to(lock.position) > range_of(kind):
-		game.hud.alert(GS.t("%s: цель вне зоны пуска") % GS.t(String(GS.WEAPONS[kind].short)), Color(1.0, 0.7, 0.3))
-		return
+	lock = t
+	locked = true
 	loaded[kind] = int(loaded[kind]) - 1
 	var from := pos - Vector3(0, 1.2, 0) + dir * 2.0
 	game.spawn_missile(from, dir, lock, kind, dir * speed)
 	game.hud.log_event(GS.t("Пуск %s по цели «%s»") % [GS.t(String(GS.WEAPONS[kind].short)), GS.t(String(lock.def.name))], Color(0.6, 0.95, 1.0))
+
+
+## No target for this missile: tell the pilot what to do instead.
+func _why_not(kind: String) -> void:
+	var near = null
+	var nd := INF
+	var taken := false
+	for e in game.enemies:
+		if e.dead or GS.eff(kind, e) <= 0.0 or dir.angle_to(e.position - pos) > SNAP_CONE:
+			continue
+		if float(e.inbound) >= float(e.hp):
+			taken = true
+			continue
+		var d := pos.distance_to(e.position)
+		if d < nd:
+			nd = d
+			near = e
+	var short := GS.t(String(GS.WEAPONS[kind].short))
+	if near != null:
+		game.hud.alert(GS.t("Цель в %.1f км, %s бьёт до %.1f км — подлетите ближе") % [nd * 0.005, short, range_of(kind) * 0.005], Color(1.0, 0.7, 0.3))
+	elif taken:
+		game.hud.alert(GS.t("ЦЕЛЬ УЖЕ ПЕРЕХВАЧЕНА — ракета не потрачена"), Color(0.5, 0.95, 0.7))
+	else:
+		game.hud.alert(GS.t("Впереди нет целей — разверните нос по жёлтой стрелке"), Color(1.0, 0.7, 0.3))
 
 
 # --- Picture -----------------------------------------------------------------------------------------
@@ -416,7 +515,7 @@ func _unhandled_input(event: InputEvent) -> void:
 					trigger = mb.pressed
 			MOUSE_BUTTON_RIGHT:
 				if mb.pressed:
-					fire("aim9")
+					fire("auto")
 			MOUSE_BUTTON_MIDDLE:
 				if mb.pressed:
 					fire("aim120")
@@ -426,6 +525,9 @@ func _unhandled_input(event: InputEvent) -> void:
 				throttle = maxf(0.0, throttle - 0.1)
 	elif event is InputEventKey and (event as InputEventKey).pressed and not (event as InputEventKey).echo:
 		match (event as InputEventKey).keycode:
+			KEY_R:
+				get_viewport().set_input_as_handled()
+				fire("auto")
 			KEY_E:
 				get_viewport().set_input_as_handled()
 				fire("aim9")

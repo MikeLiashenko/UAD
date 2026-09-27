@@ -569,6 +569,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_LEFT and (Input.mouse_mode == Input.MOUSE_MODE_CAPTURED or not mb.pressed):
+			# LMB at the wheel jumps to the gun and fires where the camera looks
+			if mb.pressed and seat == "drive":
+				switch_seat()
 			fire_held = mb.pressed and seat == "gun"
 		elif mb.button_index == MOUSE_BUTTON_RIGHT and mb.pressed and seat == "gun":
 			zoomed = not zoomed

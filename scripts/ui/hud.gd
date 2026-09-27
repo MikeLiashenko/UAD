@@ -235,6 +235,9 @@ func _build_fighter_ui() -> void:
 	var h := UiKit.hbox(8)
 	p.add_child(h)
 	_small_btn(h, GS.t("⟵ НА АЭРОДРОМ [%s]") % GS.key_label("fighter"), func() -> void: game.toggle_fighter()).custom_minimum_size = Vector2(190, 38)
+	var mb := _small_btn(h, GS.t("🚀 РАКЕТА"), func() -> void: game.fighter.fire("auto"))
+	mb.custom_minimum_size = Vector2(150, 38)
+	mb.add_theme_color_override("font_color", UiKit.AMBER)
 	_small_btn(h, "AIM-9X", func() -> void: game.fighter.fire("aim9")).custom_minimum_size = Vector2(110, 38)
 	_small_btn(h, "AIM-120", func() -> void: game.fighter.fire("aim120")).custom_minimum_size = Vector2(110, 38)
 	var ab := _small_btn(h, GS.t("ФОРСАЖ"), func() -> void: pass)
@@ -285,7 +288,7 @@ func on_view_changed() -> void:
 		view_btn.text = GS.t("ВИД [%s]: %s") % [GS.key_label("view"), vname]
 	if fire_btn:
 		fire_btn.visible = (base or fpv or mfg or air) and DisplayServer.is_touchscreen_available()
-		fire_btn.text = GS.t("РАЗГОН") if fpv else GS.t("ОГОНЬ")
+		fire_btn.text = GS.t("РАЗГОН") if fpv else (GS.t("ПУШКА") if air else GS.t("ОГОНЬ"))
 	if target_panel:
 		target_panel.visible = false
 	if _weapons_panel:

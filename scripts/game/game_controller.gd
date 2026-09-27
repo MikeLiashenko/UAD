@@ -366,6 +366,9 @@ func set_trigger(on: bool) -> void:
 	if view == "fighter":
 		fighter.set_trigger(on)
 	elif view == "mfg":
+		# the fire button at the wheel: jump to the gun, facing where the camera looks
+		if on and mfg.seat == "drive":
+			mfg.switch_seat()
 		mfg.fire_held = on and mfg.seat == "gun"
 	elif view == "fpv":
 		fpv_view.set_trigger(on)

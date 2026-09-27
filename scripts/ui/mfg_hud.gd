@@ -87,7 +87,7 @@ func _draw() -> void:
 	var auto_on: bool = int(game.auto_fire) >= 1
 	_txt(top + Vector2(0, 128), GS.t("Экипаж стреляет сам [%s]: %s") % [GS.key_label("auto"), GS.t("ДА") if auto_on else GS.t("НЕТ")], 13, NEON if auto_on else Color(0.6, 0.75, 0.7))
 	# --- hints, bottom
-	var hint := GS.t("W/S — газ/тормоз · A/D — руль · мышь — осмотреться · Пробел — к пулемёту · %s — выйти из машины") % GS.key_label("mfg")
+	var hint := GS.t("W/S — газ/тормоз · A/D — руль · мышь — осмотреться · ЛКМ — к пулемёту и огонь · Пробел — сменить место · %s — выйти из машины") % GS.key_label("mfg")
 	if mg.seat == "gun":
 		hint = GS.t("мышь — прицел · ЛКМ — огонь очередями · ПКМ — зум · Пробел — за руль · %s — выйти из машины") % GS.key_label("mfg")
 	if DisplayServer.is_touchscreen_available():

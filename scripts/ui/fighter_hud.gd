@@ -65,9 +65,11 @@ func _draw() -> void:
 			draw_rect(Rect2(sp - Vector2(r, r), Vector2(r * 2, r * 2)), col, false, 2.2)
 			var k := 0
 			var lines := [GS.t("ЗАХВАТ") if fg.locked else GS.t("захват…"), "%s · %.1f км" % [GS.t(String(e.def.name)), dist * 0.005]]
-			for kind in ["aim9", "aim120"]:
-				var ok: bool = dist <= fg.range_of(kind) and int(fg.loaded[kind]) > 0
+			for kind in ([] if float(e.inbound) >= float(e.hp) else ["aim9", "aim120"]):
+				var ok: bool = fg.can_hit(e, kind) and int(fg.loaded[kind]) > 0
 				lines.append("%s %s" % [GS.t(String(GS.WEAPONS[kind].short)), "✔" if ok else "✖"])
+			if float(e.inbound) >= float(e.hp):
+				lines.append(GS.t("уже перехвачена"))
 			var fall: Dictionary = game.predict_debris(e)
 			lines.append(GS.t("обломки: безопасно") if bool(fall.get("safe", true)) else GS.t("обломки: НА ДОМА"))
 			for ln in lines:
@@ -90,6 +92,13 @@ func _draw() -> void:
 				show = e
 	if show != null and is_instance_valid(show):
 		_edge_arrow(cam, show.position, AMBER, "%.1f км" % (fg.pos.distance_to(show.position) * 0.005), sz)
+	# the gun's lead point: put the pipper on it and hold the trigger
+	if fg.gun_target != null and is_instance_valid(fg.gun_target) and not cam.is_position_behind(fg.gun_lead):
+		var lp := cam.unproject_position(fg.gun_lead)
+		draw_arc(lp, 13.0, 0, TAU, 24, RED, 2.2)
+		draw_line(lp + Vector2(0, -19), lp + Vector2(0, -13), RED, 2.2)
+		draw_line(lp + Vector2(0, 13), lp + Vector2(0, 19), RED, 2.2)
+	_prompt(c, t)
 	# --- left: speed, altitude, throttle
 	var l := Vector2(40, c.y - 95)
 	_txt(l, GS.t("СКОРОСТЬ"), 12, Color(HUD.r, HUD.g, HUD.b, 0.7))
@@ -102,9 +111,15 @@ func _draw() -> void:
 	# --- right: stores and fuel
 	# under the flight data: the right side belongs to the event log
 	var r := Vector2(40, c.y + 85)
-	_txt(r, "AIM-9X ×%d" % int(fg.loaded.aim9), 18, HUD if int(fg.loaded.aim9) > 0 else Color(0.5, 0.6, 0.55))
-	_txt(r + Vector2(0, 26), "AIM-120 ×%d" % int(fg.loaded.aim120), 18, HUD if int(fg.loaded.aim120) > 0 else Color(0.5, 0.6, 0.55))
-	_txt(r + Vector2(0, 52), "M61 %d" % int(fg.rounds), 18, HUD if int(fg.rounds) > 0 else Color(0.5, 0.6, 0.55))
+	var touch := DisplayServer.is_touchscreen_available()
+	var dim := Color(0.5, 0.6, 0.55)
+	_txt(r, "AIM-9X ×%d" % int(fg.loaded.aim9), 18, HUD if int(fg.loaded.aim9) > 0 else dim)
+	_txt(r + Vector2(0, 26), "AIM-120 ×%d" % int(fg.loaded.aim120), 18, HUD if int(fg.loaded.aim120) > 0 else dim)
+	_txt(r + Vector2(0, 52), "M61 %d" % int(fg.rounds), 18, HUD if int(fg.rounds) > 0 else dim)
+	if not touch:
+		_txt(r + Vector2(140, 0), "E", 14, AMBER)
+		_txt(r + Vector2(140, 26), "Q", 14, AMBER)
+		_txt(r + Vector2(140, 52), GS.t("ЛКМ"), 14, AMBER)
 	var fq: float = fg.fuel / fg.FUEL
 	var fc := HUD if fq > 0.2 else RED
 	_txt(r + Vector2(0, 84), GS.t("ТОПЛИВО"), 12, Color(fc.r, fc.g, fc.b, 0.8))
@@ -121,10 +136,66 @@ func _draw() -> void:
 		_txt(Vector2(c.x - 200, c.y + 90), GS.t("БИНГО — ТОПЛИВО"), 26, AMBER, HORIZONTAL_ALIGNMENT_CENTER, 400)
 	if fg.outside:
 		_txt(Vector2(c.x - 300, 90), GS.t("ВЫ ПОКИДАЕТЕ РАЙОН ПАТРУЛИРОВАНИЯ"), 18, AMBER, HORIZONTAL_ALIGNMENT_CENTER, 600)
-	var hint := GS.t("мышь — куда лететь · W/S — тяга · Shift — форсаж · ЛКМ — пушка · ПКМ/E — AIM-9X · Q — AIM-120 · %s — на аэродром") % GS.key_label("fighter")
-	if DisplayServer.is_touchscreen_available():
-		hint = GS.t("свайп — куда лететь · кнопки — пушка, ракеты, форсаж")
+	var hint := GS.t("мышь — куда лететь · ЛКМ — пушка · ПКМ или R — ракета · W/S — тяга · Shift — форсаж · F1 — управление · %s — на аэродром") % GS.key_label("fighter")
+	if touch:
+		hint = GS.t("свайп — куда лететь · ПУШКА — держать · РАКЕТА — пуск · ФОРСАЖ — держать")
 	_txt(Vector2(40, sz.y - 22), hint, 13, Color(HUD.r, HUD.g, HUD.b, 0.8), HORIZONTAL_ALIGNMENT_CENTER, sz.x - 80.0)
+	if fg.air_t < 12.0 or Input.is_key_pressed(KEY_F1):
+		_controls_card(c, touch)
+
+
+## What to press now, in big letters under the centre.
+func _prompt(c: Vector2, t: float) -> void:
+	var touch := DisplayServer.is_touchscreen_available()
+	var p := Vector2(c.x - 350, c.y + 180)
+	var kind: String = fg.auto_kind()
+	if kind != "":
+		var s := GS.t("ЦЕЛЬ ДЛЯ %s — ЖМИ «РАКЕТА»") if touch else GS.t("ЦЕЛЬ ДЛЯ %s — ЖМИ ПКМ")
+		_txt(p, s % String(GS.WEAPONS[kind].short), 22, RED if int(t * 3.0) % 2 == 0 else AMBER, HORIZONTAL_ALIGNMENT_CENTER, 700)
+	elif fg.gun_target != null and int(fg.rounds) > 0:
+		_txt(p, GS.t("В ПРИЦЕЛЕ — ДЕРЖИ «ПУШКА»") if touch else GS.t("В ПРИЦЕЛЕ — ДЕРЖИ ЛКМ"), 22, RED, HORIZONTAL_ALIGNMENT_CENTER, 700)
+	elif fg.lock == null or not is_instance_valid(fg.lock):
+		_txt(p, GS.t("Разверни нос к цели — по жёлтой стрелке"), 16, Color(HUD.r, HUD.g, HUD.b, 0.8), HORIZONTAL_ALIGNMENT_CENTER, 700)
+	elif float(fg.lock.inbound) >= float(fg.lock.hp):
+		_txt(p, GS.t("По этой цели уже летят ракеты — ищи следующую"), 18, Color(0.5, 0.95, 0.7), HORIZONTAL_ALIGNMENT_CENTER, 700)
+	else:
+		# a threat ahead, but too far for the missiles on the rails (or they are gone)
+		var k := "aim120" if int(fg.loaded.aim120) > 0 else ("aim9" if int(fg.loaded.aim9) > 0 else "")
+		var s := GS.t("Ракеты кончились — сближайся для пушки") if k == "" else GS.t("Сближайся: %s бьёт с %.1f км") % [String(GS.WEAPONS[k].short), fg.range_of(k) * 0.005]
+		_txt(p, s, 18, AMBER, HORIZONTAL_ALIGNMENT_CENTER, 700)
+
+
+## The controls, on the screen for the first seconds of a sortie (and while F1 is held).
+func _controls_card(c: Vector2, touch: bool) -> void:
+	var a := clampf(12.0 - fg.air_t, 0.0, 1.0) if not Input.is_key_pressed(KEY_F1) else 1.0
+	var lines: Array
+	if touch:
+		lines = [
+			[GS.t("Свайп по экрану"), GS.t("куда лететь (белое кольцо)")],
+			[GS.t("ПУШКА (держать)"), GS.t("очередь; красный круг — куда целиться")],
+			[GS.t("🚀 РАКЕТА"), GS.t("пуск по цели перед носом, тип выберется сам")],
+			[GS.t("ФОРСАЖ (держать)"), GS.t("быстрее, но жжёт топливо")],
+			[GS.t("НА АЭРОДРОМ"), GS.t("закончить вылет")],
+		]
+	else:
+		lines = [
+			[GS.t("Мышь"), GS.t("куда лететь (белое кольцо)")],
+			[GS.t("ЛКМ (держать)"), GS.t("пушка; красный круг — куда целиться")],
+			[GS.t("ПКМ или R"), GS.t("ракета по цели перед носом, тип выберется сам")],
+			["E / Q", GS.t("AIM-9X (до 4,5 км) / AIM-120 (до 11 км)")],
+			["W / S · Shift", GS.t("тяга · форсаж (жжёт топливо)")],
+			[GS.key_label("fighter"), GS.t("на аэродром")],
+		]
+	var w := 620.0
+	var h := 50.0 + lines.size() * 28.0
+	var box := Rect2(Vector2(c.x - w * 0.5, 80), Vector2(w, h))
+	draw_rect(box, Color(0.02, 0.08, 0.05, 0.78 * a))
+	draw_rect(box, Color(HUD.r, HUD.g, HUD.b, 0.7 * a), false, 1.5)
+	_txt(box.position + Vector2(0, 30), GS.t("УПРАВЛЕНИЕ F-16"), 18, Color(AMBER.r, AMBER.g, AMBER.b, a), HORIZONTAL_ALIGNMENT_CENTER, w)
+	for i in lines.size():
+		var y := box.position.y + 62 + i * 28
+		_txt(Vector2(box.position.x + 20, y), String(lines[i][0]), 16, Color(AMBER.r, AMBER.g, AMBER.b, a), HORIZONTAL_ALIGNMENT_RIGHT, 190)
+		_txt(Vector2(box.position.x + 225, y), String(lines[i][1]), 16, Color(1, 1, 1, a))
 
 
 func _edge_arrow(cam: Camera3D, p: Vector3, col: Color, label: String, sz: Vector2) -> void:
