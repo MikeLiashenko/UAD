@@ -3,7 +3,7 @@ extends Node
 ## sight. Mouse (captured) or touch-drag aims; LMB fires guns / launches a missile at a locked
 ## target; RMB or wheel zooms; N toggles the night-vision sight; hold Alt for a free cursor.
 
-const FOV_MIN := 10.0
+const FOV_MIN := 1.6
 const FOV_MAX := 75.0
 const LOCK_TIME := 0.7
 
@@ -111,7 +111,7 @@ func _process(delta: float) -> void:
 	cam.global_position = eye + so
 	cam.look_at(eye + dir * 100.0 + so * 3.0, Vector3.UP)
 	candidate = _find_candidate(dir)
-	var conv := 450.0
+	var conv := 1500.0
 	if candidate != null:
 		conv = cam.global_position.distance_to(candidate.position)
 	w.manual = true
@@ -200,7 +200,8 @@ func _unhandled_input(event: InputEvent) -> void:
 					set_trigger(mb.pressed)
 			MOUSE_BUTTON_RIGHT:
 				if mb.pressed:
-					zoom_fov = 20.0 if zoom_fov > 40.0 else 70.0
+					# the sight steps through three magnifications: wide, ×3.5 and ×14 for the far targets
+					zoom_fov = 20.0 if zoom_fov > 40.0 else (5.0 if zoom_fov > 10.0 else 70.0)
 			MOUSE_BUTTON_WHEEL_UP:
 				if mb.pressed:
 					zoom(0.85)

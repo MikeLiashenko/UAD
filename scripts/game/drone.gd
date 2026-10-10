@@ -8,18 +8,18 @@ const Fx = preload("res://scripts/core/fx.gd")
 const Meshes = preload("res://scripts/core/meshes.gd")
 const Bullet = preload("res://scripts/game/bullet.gd")
 
-const ACCEL := 90.0
-const HIT_MARGIN := 3.0
-const RTB_BATTERY := 12.0
-const LOITER_ALT := 120.0
+const ACCEL := 45.0
+const HIT_MARGIN := 4.0
+const RTB_BATTERY := 110.0
+const LOITER_ALT := 400.0
 ## The swarm works over its own sector: a drone dragged further than this gives up the chase.
-const PATROL_RADIUS := 1700.0
+const PATROL_RADIUS := 12000.0
 ## Clearance kept over roofs and terrain on autopilot (dropped for the terminal dive).
-const CLEARANCE := 12.0
+const CLEARANCE := 25.0
 ## Range at which the autopilot stops avoiding obstacles and goes straight for the target.
-const TERMINAL := 60.0
-## Soft ceiling: above this the drone stops climbing and settles back down (~2.1 km on the HUD).
-const MAX_ALT := 420.0
+const TERMINAL := 250.0
+## Soft ceiling: above this the drone stops climbing and settles back down.
+const MAX_ALT := 4000.0
 
 var game
 var target
@@ -27,9 +27,9 @@ var weapon_id := "drone"
 var def: Dictionary
 var vel := Vector3.FORWARD
 var speed := 30.0
-var max_speed := 175.0
+var max_speed := 90.0
 var turn := 2.8
-var battery := 46.0
+var battery := 420.0
 var fpv := false
 ## Serial number inside the sortie — what the FPV console and the event log call this drone.
 var serial := 1
@@ -55,7 +55,7 @@ func _ready() -> void:
 	def = GS.WEAPONS[weapon_id]
 	max_speed = float(def.speed)
 	turn = float(def.turn)
-	battery = float(def.get("battery", 46.0))
+	battery = float(def.get("battery", 420.0))
 	_model = Meshes.fpv_drone()
 	_model.scale = Vector3.ONE * 2.2
 	add_child(_model)
@@ -72,7 +72,7 @@ func cam_mount() -> Node3D:
 
 ## Battery left, 0..1 — the FPV console's fuel gauge.
 func charge() -> float:
-	return clampf(battery / maxf(float(def.get("battery", 46.0)), 1.0), 0.0, 1.0)
+	return clampf(battery / maxf(float(def.get("battery", 420.0)), 1.0), 0.0, 1.0)
 
 
 func state_text() -> String:
@@ -181,12 +181,12 @@ func _orient() -> void:
 func _avoid(want: Vector3) -> Vector3:
 	if position.y > MAX_ALT:
 		return (want + Vector3.DOWN * 0.7).normalized()
-	var ahead := position + want * 45.0
+	var ahead := position + want * 150.0
 	var obst: float = maxf(game.map.ground_height(ahead.x, ahead.z), game.map.ceiling(ahead.x, ahead.z))
 	obst = maxf(obst, game.map.ceiling(position.x, position.z))
 	if position.y >= obst + CLEARANCE:
 		return want
-	var climb: float = clampf((obst + CLEARANCE - position.y) / 40.0, 0.0, 1.0)
+	var climb: float = clampf((obst + CLEARANCE - position.y) / 120.0, 0.0, 1.0)
 	return (want + Vector3.UP * climb * 1.6).normalized()
 
 
@@ -231,16 +231,16 @@ func _process(delta: float) -> void:
 				else:
 					var c := _loiter_at + Vector3(0, LOITER_ALT - _loiter_at.y, 0)
 					var ang := float(Time.get_ticks_msec()) * 0.0006
-					want = _avoid((c + Vector3(cos(ang), 0, sin(ang)) * 90.0 - position).normalized())
+					want = _avoid((c + Vector3(cos(ang), 0, sin(ang)) * 300.0 - position).normalized())
 					want_speed = max_speed * 0.45
 			"rtb":
 				var home: Vector3 = GS.base_pos + Vector3(0, 26, 0)
 				var d_home: float = position.distance_to(home)
 				want = (home - position).normalized()
-				if d_home > 40.0:
+				if d_home > 150.0:
 					want = _avoid(want)
-				want_speed = max_speed * (0.35 if d_home < 60.0 else 0.8)
-				if d_home < 18.0:
+				want_speed = max_speed * (0.3 if d_home < 220.0 else 0.85)
+				if d_home < 30.0:
 					_recover()
 					return
 		if state != "rtb" and battery < RTB_BATTERY and not _target_ok():

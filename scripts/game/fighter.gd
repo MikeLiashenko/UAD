@@ -15,11 +15,11 @@ extends Node
 const Meshes = preload("res://scripts/core/meshes.gd")
 const Fx = preload("res://scripts/core/fx.gd")
 
-const MIN_SPEED := 95.0
-const MIL := 205.0
-const BURNER := 260.0
-const TURN := 1.2
-const FUEL := 160.0
+const MIN_SPEED := 115.0
+const MIL := 250.0
+const BURNER := 410.0
+const TURN := 0.62
+const FUEL := 300.0
 const ROUNDS := 510
 const LOAD := {"aim9": 4, "aim120": 2}
 const LOCK_CONE := deg_to_rad(40.0)
@@ -29,19 +29,19 @@ const SNAP_CONE := deg_to_rad(75.0)
 ## The gun helps: its rounds go to the lead point of a threat this close to the pipper.
 const GUN_ASSIST := deg_to_rad(10.0)
 ## How far the gun reaches (its rounds fly GUN_LIFE seconds) and helps.
-const GUN_REACH := 850.0
+const GUN_REACH := 1100.0
 const GUN_LIFE := 0.8
 ## The lowest the jet goes above the roofs around its course: Auto-GCAS levels it off there instead
 ## of letting it dive in — low drones are hunted from just above the rooftops.
-const FLOOR := 20.0
+const FLOOR := 100.0
 ## How much harder than the pilot Auto-GCAS pulls (a multiple of TURN).
 const GCAS_PULL := 2.4
-const LOCK_RANGE := 2400.0
+const LOCK_RANGE := 45000.0
 const REARM := 25.0
 const LOSS := 15000
 const AIM_GAIN := 0.0024
 const MAX_ELEV := deg_to_rad(72.0)
-const PATROL := 4500.0
+const PATROL := 26000.0
 
 var game
 var map
@@ -54,7 +54,7 @@ var jet: Node3D
 var pos := Vector3.ZERO
 var dir := Vector3.FORWARD
 var aim := Vector3.FORWARD
-var speed := 170.0
+var speed := 240.0
 var throttle := 0.7
 var burner := false
 var fuel := FUEL
@@ -125,10 +125,10 @@ func enter() -> void:
 	for a in sectors:
 		v += Vector2(sin(deg_to_rad(float(a))), -cos(deg_to_rad(float(a))))
 	var threat := Vector3(v.x, 0, v.y).normalized() if v.length() > 0.01 else Vector3.FORWARD
-	pos = -threat * 900.0 + Vector3(0, 260.0, 0)
+	pos = GS.base_pos - threat * 9000.0 + Vector3(0, 1500.0, 0)
 	dir = threat
 	aim = dir
-	speed = 175.0
+	speed = 240.0
 	throttle = 0.7
 	burner = false
 	fuel = FUEL
@@ -287,12 +287,12 @@ func _keys(delta: float) -> void:
 
 func _fly(delta: float) -> void:
 	var want := BURNER if burner else lerpf(MIN_SPEED, MIL, throttle)
-	speed = move_toward(speed, want, (40.0 if want > speed else 28.0) * delta)
-	speed = clampf(speed - dir.y * 45.0 * delta, MIN_SPEED * 0.8, BURNER * 1.1) # climbing costs speed
+	speed = move_toward(speed, want, (55.0 if want > speed else 36.0) * delta)
+	speed = clampf(speed - dir.y * 60.0 * delta, MIN_SPEED * 0.8, BURNER * 1.1) # climbing costs speed
 	# the patrol area: past it the jet is turned back towards the city
 	var flat := Vector2(pos.x, pos.z).length()
 	outside = flat > PATROL
-	if flat > PATROL + 500.0:
+	if flat > PATROL + 3000.0:
 		var home := Vector3(-pos.x, 0.0, -pos.z).normalized()
 		aim = aim.slerp(home, clampf(delta * 0.7, 0.0, 1.0)).normalized()
 	var steer := _floor_hold(aim)
@@ -301,7 +301,7 @@ func _fly(delta: float) -> void:
 	var dir_slope := dir.y / maxf(Vector2(dir.x, dir.z).length(), 0.05)
 	gcas = steer.y > aim.y + 0.01 or dir_slope < _min_slope
 	var old := dir
-	var rate := TURN * clampf(speed / 175.0, 0.55, 1.15) * (0.9 if burner else 1.0) * (GCAS_PULL if gcas else 1.0)
+	var rate := TURN * clampf(speed / 240.0, 0.55, 1.15) * (0.9 if burner else 1.0) * (GCAS_PULL if gcas else 1.0)
 	var ang := dir.angle_to(steer)
 	if ang > 0.0001:
 		dir = dir.slerp(steer, clampf(rate * delta / ang, 0.0, 1.0)).normalized()
@@ -366,11 +366,11 @@ func _floor_hold(want: Vector3) -> Vector3:
 ## The highest roof around a spot: the floor keeps the jet above the rooftops, out of the street
 ## canyons where a tower could come up faster than it can climb.
 func _canopy(p: Vector3) -> float:
-	return map.ceiling(p.x, p.z) if absf(p.x) < 1000.0 and absf(p.z) < 1000.0 else 0.0
+	return map.ceiling(p.x, p.z) if absf(p.x) < map.half and absf(p.z) < map.half else 0.0
 
 
 func _ground(p: Vector3) -> float:
-	return map.ground_height(p.x, p.z) if absf(p.x) < 1000.0 and absf(p.z) < 1000.0 else 0.0
+	return map.ground_height(p.x, p.z) if absf(p.x) < map.half and absf(p.z) < map.half else 0.0
 
 
 ## Keeps the threat nearest the nose in the lock cone; half a second there and it is locked.
@@ -520,7 +520,7 @@ func _why_not(kind: String) -> void:
 				game.hud.alert(GS.t("%s — баллистика: её сбивает только Patriot (и С-300), не истребитель") % GS.t(String(e.def.abbr)), Color(1.0, 0.7, 0.3))
 				return
 	if near != null:
-		game.hud.alert(GS.t("Цель в %.1f км, %s бьёт до %.1f км — подлетите ближе") % [nd * 0.005, short, range_of(kind) * 0.005], Color(1.0, 0.7, 0.3))
+		game.hud.alert(GS.t("Цель в %.1f км, %s бьёт до %.1f км — подлетите ближе") % [nd * 0.001, short, range_of(kind) * 0.001], Color(1.0, 0.7, 0.3))
 	else:
 		game.hud.alert(GS.t("Впереди нет целей — разверните нос по жёлтой стрелке"), Color(1.0, 0.7, 0.3))
 

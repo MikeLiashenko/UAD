@@ -2,7 +2,9 @@ extends Control
 ## Classic round air-defense radar scope, centered on the player's base.
 ## Blips are refreshed when the rotating sweep passes over a target and then fade out.
 
-const RANGE_WORLD := 1500.0
+## Radius of the scope in metres: it follows the reach of the selected system.
+var RANGE_WORLD := 6000.0
+const SCALES := [3000.0, 6000.0, 12000.0, 25000.0, 50000.0, 90000.0]
 const SWEEP_PERIOD := 2.4
 
 var game
@@ -16,6 +18,14 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	var sw = game.weapons.get(game.selected_weapon)
+	if sw != null:
+		var want: float = sw.effective_range() * 1.15
+		RANGE_WORLD = SCALES[SCALES.size() - 1]
+		for sc in SCALES:
+			if sc >= want:
+				RANGE_WORLD = sc
+				break
 	var prev := _sweep
 	_sweep = fmod(_sweep + delta * TAU / SWEEP_PERIOD, TAU)
 	var base: Vector3 = GS.base_pos
@@ -57,7 +67,7 @@ func _draw() -> void:
 				river = PackedVector2Array()
 		if river.size() > 1:
 			draw_polyline(river, Color(0.25, 0.6, 1.0, 0.35), 3.0)
-	# range rings (500 m step in world units) and crosshair
+	# range rings (quarters of the scale) and crosshair
 	for k in [0.25, 0.5, 0.75, 1.0]:
 		draw_arc(c, r * k, 0, TAU, 64, Color(neon.r, neon.g, neon.b, 0.22), 1.0)
 	draw_line(c + Vector2(-r, 0), c + Vector2(r, 0), Color(neon.r, neon.g, neon.b, 0.15), 1.0)
@@ -136,4 +146,4 @@ func _draw() -> void:
 	draw_arc(c, r, 0, TAU, 96, Color(neon.r, neon.g, neon.b, 0.9), 2.5)
 	var f: Font = GS.font
 	draw_string(f, c + Vector2(-5, -r + 16), GS.t("С"), HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(neon.r, neon.g, neon.b, 0.9))
-	draw_string(f, c + Vector2(-r + 6, r - 4), GS.t("%.1f км") % (RANGE_WORLD * 0.005), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(neon.r, neon.g, neon.b, 0.7))
+	draw_string(f, c + Vector2(-r + 6, r - 4), GS.t("%.1f км") % (RANGE_WORLD * 0.001), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(neon.r, neon.g, neon.b, 0.7))

@@ -6,9 +6,11 @@ extends MeshInstance3D
 
 const Fx = preload("res://scripts/core/fx.gd")
 
-const GRAVITY := 32.0
+const GRAVITY := 9.81
 const DRAG := 0.25
 const INERTIA := 0.75
+## Wreckage does not fall faster than this (air drag).
+const TERMINAL := 75.0
 
 var game
 var vel := Vector3.ZERO
@@ -27,13 +29,13 @@ var _trail: CPUParticles3D
 static func predict(map, pos: Vector3, v: Vector3) -> Vector3:
 	var p := pos
 	var vv := v * INERTIA
-	var dt := 0.08
-	for i in 800:
-		vv.y -= GRAVITY * dt
+	var dt := 0.2
+	for i in 1500:
+		vv.y = maxf(vv.y - GRAVITY * dt, -TERMINAL)
 		vv.x *= 1.0 - DRAG * dt
 		vv.z *= 1.0 - DRAG * dt
 		p += vv * dt
-		if p.y <= 60.0 and p.y <= map.ground_height(p.x, p.z):
+		if p.y <= 420.0 and p.y <= map.ground_height(p.x, p.z):
 			return p
 		if p.y <= 0.0:
 			return p
@@ -76,7 +78,7 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	vel.y -= GRAVITY * delta
+	vel.y = maxf(vel.y - GRAVITY * delta, -TERMINAL)
 	vel.x *= 1.0 - DRAG * delta
 	vel.z *= 1.0 - DRAG * delta
 	position += vel * delta

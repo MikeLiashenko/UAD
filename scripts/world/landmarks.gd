@@ -11,8 +11,14 @@ const Shaders = preload("res://scripts/world/shaders.gd")
 const PUB := 2
 const IND := 1
 
-## Height of the rail deck on a railway bridge (the trains run on it).
-const RAIL_DECK := 8.6
+## Height of the rail deck on a railway bridge (the trains run on it) and of a road bridge, and
+## the length of a road bridge's approach ramp.
+const RAIL_DECK := 14.6
+const ROAD_DECK := 15.0
+const RAMP := 130.0
+## A small river gets a low bridge: the road surface this high, short ramps.
+const LOW_DECK := 3.4
+const LOW_RAMP := 44.0
 
 static var root: Node3D
 static var _gold: ShaderMaterial
@@ -22,6 +28,23 @@ static func begin(map) -> void:
 	root = Node3D.new()
 	root.name = "Landmarks"
 	map.add_child(root)
+
+
+## Every part of a landmark is drawn only as far as its size can be seen: a spire for many
+## kilometres, a railing for a few hundred metres.
+static func finish() -> void:
+	_set_ranges(root)
+
+
+static func _set_ranges(n: Node) -> void:
+	for ch in n.get_children():
+		if ch is MeshInstance3D:
+			var mi := ch as MeshInstance3D
+			if mi.mesh != null and mi.visibility_range_end <= 0.0:
+				var size := (mi.global_transform.basis * mi.mesh.get_aabb().size).abs()
+				var big := maxf(size.x, maxf(size.y, size.z))
+				mi.visibility_range_end = clampf(big * 320.0, 900.0, 60000.0)
+		_set_ranges(ch)
 
 
 # --- Materials & primitives -------------------------------------------------------------------
@@ -125,7 +148,7 @@ static func block(map, g: Node3D, local: Vector3, half: Vector2, h: float, style
 
 
 # --- Generic church (the city generator puts these into historic districts) ---------------------------
-static func small_church(map, pos: Vector3, rot: float, rng: RandomNumberGenerator) -> void:
+static func small_church(map, pos: Vector3, rot: float, rng: RandomNumberGenerator, register := true) -> void:
 	var g := group(pos, -rad_to_deg(rot))
 	var walls: Array = [Color(0.95, 0.95, 0.9), Color(0.95, 0.88, 0.6), Color(0.6, 0.8, 0.9), Color(0.92, 0.8, 0.8)]
 	var wall := lit(walls[rng.randi() % walls.size()], 0.15)
@@ -139,7 +162,8 @@ static func small_church(map, pos: Vector3, rot: float, rng: RandomNumberGenerat
 	# bell tower
 	box(g, Vector3(6, 16, 6), Vector3(0, 8, -12), wall)
 	onion(g, Vector3(0, 16, -12), 1.8, dome)
-	fp(map, g, Vector3(0, 0, -3), Vector2(9, 15), 16.0, "церковь")
+	if register:
+		fp(map, g, Vector3(0, 0, -3), Vector2(9, 15), 16.0, "церковь")
 
 
 ## A big cross-domed cathedral: a main drum, `domes` smaller ones around it and an optional
@@ -219,7 +243,7 @@ static func tower(map, c: Vector2, half: Vector2, rot_deg: float, h: float, styl
 ## A bridge from a to b (world xz, bank to bank plus the approaches). Styles: girder, cable (one tall
 ## pylon), cable_a (A-shaped pylon), arch, metro (two decks), truss, pedestrian, rail (a railway deck).
 ## Returns {"a", "b", "deck", "style", "fp"} for the traffic and the trains.
-static func bridge(map, a: Vector2, b: Vector2, style: String, bname: String, is_target := false) -> Dictionary:
+static func bridge(map, a: Vector2, b: Vector2, style: String, bname: String, is_target := false, road_w := 12.0, low := false) -> Dictionary:
 	# bridges are lit at night: the piers and girders softly, the pylons and cables brighter
 	var concrete := flood(Color(0.5, 0.5, 0.52), 0.85, 0.0, 0.25)
 	var steel := flood(Color(0.62, 0.66, 0.7), 0.5, 0.6, 0.55)
@@ -232,198 +256,257 @@ static func bridge(map, a: Vector2, b: Vector2, style: String, bname: String, is
 	var g := group(Vector3(mid.x, 0, mid.y), rad_to_deg(ang))
 	var ped := style == "pedestrian"
 	var rail := style == "rail"
-	var deck_y := 10.0 if ped else (RAIL_DECK - 0.6 if rail else 8.0)
-	var width := 6.0 if ped else (8.0 if rail else 17.0)
+	var deck_y := ROAD_DECK if not ped and not rail else (12.0 if ped else RAIL_DECK - 0.7)
+	if low and not ped:
+		# a plain slab just above the water, whatever the style asked for
+		deck_y = LOW_DECK - (0.7 if rail else 1.15)
+		if not rail:
+			style = "low"
+	var width := 6.0 if ped else (9.0 if rail else road_w * 2.0 + 4.0)
 	var deck_mat: Material = Fx.solid(Color(0.9, 0.9, 0.92), 0.5) if ped else concrete
-	box(g, Vector3(length, 2.0 if not rail else 1.2, width), Vector3(0, deck_y, 0), deck_mat)
+	box(g, Vector3(length, 2.2 if not rail else 1.4, width), Vector3(0, deck_y, 0), deck_mat)
 	if not rail:
-		box(g, Vector3(length, 0.08, width - 2.0), Vector3(0, deck_y + 1.02, 0), Fx.solid(Color(0.08, 0.08, 0.09), 0.9))
-	var wa: Vector3 = g.transform * Vector3(-half - 4.0, 0, 0)
-	var wb: Vector3 = g.transform * Vector3(half + 4.0, 0, 0)
-	map.reserve(wa.x, wa.z, 16.0)
-	map.reserve(wb.x, wb.z, 16.0)
-	# piers stand in the water
-	var k := -half + 14.0
-	while k < half - 8.0:
-		var pw: Vector3 = g.transform * Vector3(k, 0, 0)
-		if map.water_dist(pw.x, pw.z) < 4.0:
-			map.add_cyl(pw, 2.2 if not rail else 1.8, deck_y - 1.0, Color(0.46, 0.46, 0.48))
-		k += 30.0
-	# approaches: the deck ramps down to the road on both banks
-	if not ped:
-		var ramp := 60.0
-		var tilt := rad_to_deg(atan2(deck_y, ramp))
+		box(g, Vector3(length, 0.08, width - 3.0), Vector3(0, deck_y + 1.12, 0), Fx.solid(Color(0.08, 0.08, 0.09), 0.9))
+		# kerb rails along both edges
 		for s in [-1.0, 1.0]:
-			box(g, Vector3(ramp + 1.0, 1.2, width), Vector3(s * (half + ramp * 0.5), deck_y * 0.5, 0), concrete, Vector3(0, 0, -s * tilt))
-			var rw: Vector3 = g.transform * Vector3(s * (half + ramp * 0.5), 0, 0)
-			map.reserve(rw.x, rw.z, 12.0)
+			box(g, Vector3(length, 1.1, 0.25), Vector3(0, deck_y + 1.65, s * (width * 0.5 - 0.2)), steel)
+	var wa: Vector3 = g.transform * Vector3(-half - 6.0, 0, 0)
+	var wb: Vector3 = g.transform * Vector3(half + 6.0, 0, 0)
+	map.reserve(wa.x, wa.z, width + 8.0)
+	map.reserve(wb.x, wb.z, width + 8.0)
+	# piers stand in the water
+	var k := -half + 30.0
+	while k < half - 20.0:
+		var pw: Vector3 = g.transform * Vector3(k, 0, 0)
+		if map.water_dist(pw.x, pw.z) < 6.0:
+			for s in ([-1.0, 1.0] if width > 14.0 else [0.0]):
+				var pp: Vector3 = g.transform * Vector3(k, 0, s * width * 0.28)
+				map.add_cyl(pp, 2.6 if not rail else 2.0, deck_y - 1.0, Color(0.46, 0.46, 0.48))
+		k += 60.0
+	# approaches: the deck ramps down to the road on both banks
+	if not ped and not rail:
+		var ramp := LOW_RAMP if low else RAMP
+		var tilt := rad_to_deg(atan2(deck_y + 1.0, ramp))
+		for s in [-1.0, 1.0]:
+			box(g, Vector3(ramp + 2.0, 1.6, width), Vector3(s * (half + ramp * 0.5), (deck_y + 1.0) * 0.5 - 0.6, 0), concrete, Vector3(0, 0, -s * tilt))
+			box(g, Vector3(ramp + 2.0, 0.08, width - 3.0), Vector3(s * (half + ramp * 0.5), (deck_y + 1.0) * 0.5 + 0.26, 0), Fx.solid(Color(0.08, 0.08, 0.09), 0.9), Vector3(0, 0, -s * tilt))
+			for q in 3:
+				var rw: Vector3 = g.transform * Vector3(s * (half + ramp * (0.2 + q * 0.3)), 0, 0)
+				map.reserve(rw.x, rw.z, width * 0.5 + 6.0)
 	# deck lamps (both sides) and car streams
 	var lamp_col := Color(0.55, 0.75, 1.0) if ped else Color(0.9, 0.93, 1.0)
-	var x := -half + 6.0
+	var x := -half + 10.0
 	while x < half:
 		for s in [-1.0, 1.0]:
-			light(map, g, Vector3(x, deck_y + (3.0 if rail else 5.0), s * (width * 0.5 - 0.5)), lamp_col, false, 0.9, 0.0022)
-		x += 16.0
+			light(map, g, Vector3(x, deck_y + (4.0 if rail else 9.0), s * (width * 0.5 - 0.8)), lamp_col, false, 1.1, 0.0022)
+			if not rail and not ped:
+				box(g, Vector3(0.3, 8.0, 0.3), Vector3(x, deck_y + 5.0, s * (width * 0.5 - 0.5)), steel)
+		x += 34.0
 	var ga: Vector3 = g.transform * Vector3(-half, 0, 0)
 	var gb: Vector3 = g.transform * Vector3(half, 0, 0)
 	if rail:
 		pass
 	elif not ped:
-		map.add_traffic(Vector2(ga.x, ga.z), Vector2(gb.x, gb.z), 1.2, deck_y + 1.0)
-		map.add_people(Vector2(ga.x, ga.z), Vector2(gb.x, gb.z), 7.3, deck_y + 1.0)
+		map.add_traffic(Vector2(ga.x, ga.z), Vector2(gb.x, gb.z), 1.2, deck_y + 1.15, road_w)
+		map.add_people(Vector2(ga.x, ga.z), Vector2(gb.x, gb.z), road_w + 0.6, deck_y + 1.15)
 	else:
-		map.add_people(Vector2(ga.x, ga.z), Vector2(gb.x, gb.z), 1.2, deck_y + 1.0)
-	var water_half := maxf(half - 34.0, 20.0)
+		map.add_people(Vector2(ga.x, ga.z), Vector2(gb.x, gb.z), 1.2, deck_y + 1.15)
+	var water_half := maxf(half - 60.0, 30.0)
 	match style:
 		"cable_a":
-			var px := half * 0.3
-			var top := deck_y + 62.0
+			var px := half * 0.25
+			var top := deck_y + 100.0
+			var hw := width * 0.5 + 3.0
 			for s in [-1.0, 1.0]:
-				beam(g, Vector3(px, 0, s * 12.0), Vector3(px, top, s * 1.5), 2.6, concrete)
-			box(g, Vector3(3, 8, 5), Vector3(px, top - 2.0, 0), concrete)
-			for i in 7:
-				var dd := 12.0 + i * 11.0
+				beam(g, Vector3(px, 0, s * hw), Vector3(px, top, s * 2.0), 4.0, concrete)
+			box(g, Vector3(4.5, 12, 7), Vector3(px, top - 3.0, 0), concrete)
+			var reach := minf(water_half * 0.85, 300.0)
+			for i in 12:
+				var dd := 20.0 + i * (reach - 20.0) / 11.0
 				for s in [-1.0, 1.0]:
-					beam(g, Vector3(px, top - 4.0 - i * 2.0, 0), Vector3(px + dd, deck_y + 1.0, s * 7.5), 0.3, cable_m)
-					beam(g, Vector3(px, top - 4.0 - i * 2.0, 0), Vector3(px - dd, deck_y + 1.0, s * 7.5), 0.3, cable_m)
-			light(map, g, Vector3(px, top + 2.0, 0))
-		"cable":
-			var px := -half * 0.15
-			var top := deck_y + 92.0
-			box(g, Vector3(6, top, 7), Vector3(px, top * 0.5, 0), concrete)
-			box(g, Vector3(7, 3, 22), Vector3(px, deck_y - 2.0, 0), concrete)
-			for i in 10:
-				var dd := 10.0 + i * 9.5
-				for s in [-1.0, 1.0]:
-					beam(g, Vector3(px, top - 3.0 - i * 3.2, 0), Vector3(px + s * dd, deck_y + 1.0, 0), 0.32, cable_m)
-			for hh in [top * 0.5, top + 1.5]:
+					beam(g, Vector3(px, top - 6.0 - i * 3.0, 0), Vector3(px + dd, deck_y + 1.0, s * (width * 0.5 - 0.6)), 0.4, cable_m)
+					beam(g, Vector3(px, top - 6.0 - i * 3.0, 0), Vector3(px - dd, deck_y + 1.0, s * (width * 0.5 - 0.6)), 0.4, cable_m)
+			for hh in [top * 0.5, top + 3.0]:
 				light(map, g, Vector3(px, hh, 0))
+			var pw2: Vector3 = g.transform * Vector3(px, 0, 0)
+			map.add_footprint(Vector2(pw2.x, pw2.z), Vector2(4.0, hw), -ang, top, PUB, bname)
+		"cable":
+			var px := -half * 0.12
+			var top := deck_y + 120.0
+			box(g, Vector3(8, top, 9), Vector3(px, top * 0.5, 0), concrete)
+			box(g, Vector3(10, 4, width + 4.0), Vector3(px, deck_y - 2.4, 0), concrete)
+			var reach := minf(water_half * 0.85, 300.0)
+			for i in 14:
+				var dd := 18.0 + i * (reach - 18.0) / 13.0
+				for s in [-1.0, 1.0]:
+					beam(g, Vector3(px, top - 4.0 - i * 4.4, 0), Vector3(px + s * dd, deck_y + 1.0, 0), 0.42, cable_m)
+			for hh in [top * 0.33, top * 0.66, top + 1.5]:
+				light(map, g, Vector3(px, hh, 0))
+			var pw3: Vector3 = g.transform * Vector3(px, 0, 0)
+			map.add_footprint(Vector2(pw3.x, pw3.z), Vector2(4.5, 5.0), -ang, top, PUB, bname)
 		"arch":
-			var span := water_half * 1.05
-			var rise := 46.0
-			for s in [-1.0, 1.0]:
-				var prev := Vector3(-span, deck_y, s * 8.0)
-				for i in range(1, 17):
-					var t := float(i) / 16.0
-					var ax := lerpf(-span, span, t)
-					var ay := deck_y + rise * (1.0 - pow(ax / span, 2.0))
-					var p := Vector3(ax, ay, s * 8.0)
-					beam(g, prev, p, 1.8, steel)
-					if i < 16 and i % 2 == 0:
-						beam(g, p, Vector3(ax, deck_y + 1.0, s * 8.0), 0.25, cable_m)
-					prev = p
-			light(map, g, Vector3(0, deck_y + rise + 1.5, 0))
+			var span := minf(water_half * 0.9, 240.0)
+			var rise := clampf(span * 0.32, 30.0, 70.0)
+			var n_arch := maxi(1, int(round(water_half / span)))
+			for ai in n_arch:
+				var cx0 := (ai - (n_arch - 1) * 0.5) * span * 2.0
+				for s in [-1.0, 1.0]:
+					var prev := Vector3(cx0 - span, deck_y, s * (width * 0.5 + 0.6))
+					for i in range(1, 21):
+						var t := float(i) / 20.0
+						var ax := lerpf(-span, span, t)
+						var ay := deck_y + rise * (1.0 - pow(ax / span, 2.0))
+						var p := Vector3(cx0 + ax, ay, s * (width * 0.5 + 0.6))
+						beam(g, prev, p, 2.6, steel)
+						if i < 20 and i % 2 == 0:
+							beam(g, p, Vector3(cx0 + ax, deck_y + 1.0, s * (width * 0.5 + 0.6)), 0.3, cable_m)
+						prev = p
+				light(map, g, Vector3(cx0, deck_y + rise + 2.0, 0))
 		"metro":
-			box(g, Vector3(length, 1.4, 8.0), Vector3(0, deck_y + 7.0, 0), concrete)
-			var xx := -half + 10.0
+			# the metro runs in the middle between the carriageways, on its own raised deck
+			box(g, Vector3(length, 1.4, 9.0), Vector3(0, deck_y + 7.0, 0), concrete)
+			var xx := -half + 12.0
 			while xx < half:
-				box(g, Vector3(1.2, 6.0, 1.2), Vector3(xx, deck_y + 4.0, -3.0), concrete)
-				box(g, Vector3(1.2, 6.0, 1.2), Vector3(xx, deck_y + 4.0, 3.0), concrete)
-				xx += 20.0
+				box(g, Vector3(1.4, 6.0, 1.4), Vector3(xx, deck_y + 4.0, -3.4), concrete)
+				box(g, Vector3(1.4, 6.0, 1.4), Vector3(xx, deck_y + 4.0, 3.4), concrete)
+				xx += 24.0
 		"girder":
 			for s in [-1.0, 1.0]:
-				box(g, Vector3(length, 3.0, 0.8), Vector3(0, deck_y - 1.5, s * (width * 0.5 - 0.4)), steel)
+				box(g, Vector3(length, 4.0, 1.0), Vector3(0, deck_y - 2.0, s * (width * 0.5 - 0.5)), steel)
 		"truss", "rail":
-			var segs := int(length / 18.0)
-			for s in [-width * 0.5 - 0.4, width * 0.5 + 0.4]:
-				beam(g, Vector3(-half, deck_y + 12.0, s), Vector3(half, deck_y + 12.0, s), 0.9, steel)
+			# (a low railway bridge is a plain plate girder: no truss over it)
+			var bay := 26.0
+			var segs := maxi(1, int(length / bay))
+			bay = length / segs
+			var th := 15.0
+			for s in ([-width * 0.5 - 0.5, width * 0.5 + 0.5] if not low else []):
+				beam(g, Vector3(-half, deck_y + th, s), Vector3(half, deck_y + th, s), 1.1, steel)
 				for i in segs:
-					var x0 := -half + i * 18.0
-					beam(g, Vector3(x0, deck_y + 0.5, s), Vector3(x0 + 18.0, deck_y + 12.0, s), 0.6, steel)
-					beam(g, Vector3(x0, deck_y + 12.0, s), Vector3(x0 + 18.0, deck_y + 0.5, s), 0.6, steel)
+					var x0 := -half + i * bay
+					beam(g, Vector3(x0, deck_y + 0.5, s), Vector3(x0 + bay, deck_y + th, s), 0.7, steel)
+					beam(g, Vector3(x0, deck_y + th, s), Vector3(x0 + bay, deck_y + 0.5, s), 0.7, steel)
 		"pedestrian":
 			for s in [-1.0, 1.0]:
-				box(g, Vector3(length, 1.2, 0.15), Vector3(0, deck_y + 1.6, s * 2.9), Fx.glow(Color(0.4, 0.7, 1.0), 0.6))
-	var fi: int = map.add_footprint(mid, Vector2(half, width * 0.5), -ang, deck_y + (0.6 if rail else 1.0), PUB, bname)
+				box(g, Vector3(length, 1.2, 0.15), Vector3(0, deck_y + 1.7, s * 2.9), Fx.glow(Color(0.4, 0.7, 1.0), 0.6))
+			# two slim pylons with hangers
+			for px in [-half * 0.35, half * 0.35]:
+				box(g, Vector3(1.6, 34.0, 1.6), Vector3(px, deck_y + 17.0, 0), Fx.solid(Color(0.9, 0.9, 0.92), 0.5))
+				for i in 5:
+					for s in [-1.0, 1.0]:
+						beam(g, Vector3(px, deck_y + 32.0 - i * 3.0, 0), Vector3(px + s * (16.0 + i * 14.0), deck_y + 1.5, 0), 0.18, cable_m)
+	var fi: int = map.add_footprint(mid, Vector2(half, width * 0.5), -ang, deck_y + (0.7 if rail else 1.15), PUB, bname)
 	if is_target:
 		target(map, Vector3(mid.x, deck_y, mid.y), bname, "bridge")
-	return {"a": a, "b": b, "deck": deck_y + (0.6 if rail else 1.0), "style": style, "fp": fi, "name": bname}
+	return {"a": a, "b": b, "deck": deck_y + (0.7 if rail else 1.15), "style": style, "fp": fi, "name": bname, "w": road_w}
 
 
 # --- Thermal power plants -------------------------------------------------------------------------
-static func power_plant(map, c: Vector3, rot_deg: float, pname: String, towers := 1, stacks := 2) -> void:
+static func power_plant(map, c: Vector3, rot_deg: float, pname: String, towers := 1, stacks := 2, stack_h := 180.0) -> void:
 	var brick := Fx.solid(Color(0.46, 0.33, 0.28), 0.9)
 	var conc := Fx.solid(Color(0.62, 0.62, 0.6), 0.9)
 	var white := Fx.solid(Color(0.86, 0.86, 0.84), 0.8)
 	var red := Fx.solid(Color(0.75, 0.14, 0.12), 0.8)
 	var winm := Fx.glow(Color(1.0, 0.8, 0.5), 1.2)
 	var g := group(c, rot_deg)
-	box(g, Vector3(48, 24, 26), Vector3(0, 12, 0), brick)
-	for i in 3:
-		box(g, Vector3(46, 1.2, 0.2), Vector3(0, 6 + i * 6, 13.05), winm)
-	box(g, Vector3(34, 14, 22), Vector3(-6, 7, 25), conc)
-	box(g, Vector3(20, 30, 16), Vector3(16, 15, -4), conc)
-	fp(map, g, Vector3(0, 0, 8), Vector2(26, 26), 24.0, pname, IND)
+	# the turbine hall, the boiler house and the control block (a real plant is 300 m long)
+	box(g, Vector3(180, 34, 46), Vector3(0, 17, 0), brick)
+	for i in 4:
+		box(g, Vector3(174, 1.6, 0.3), Vector3(0, 7 + i * 7, 23.1), winm)
+	box(g, Vector3(120, 22, 36), Vector3(-20, 11, 44), conc)
+	box(g, Vector3(60, 52, 40), Vector3(50, 26, -10), conc)
+	box(g, Vector3(30, 14, 22), Vector3(-80, 7, -36), conc)
+	fp(map, g, Vector3(0, 0, 14), Vector2(92, 50), 34.0, pname, IND)
+	fp(map, g, Vector3(50, 0, -10), Vector2(30, 20), 52.0, pname, IND)
 	for si in stacks:
-		var sx := -10.0 + si * 20.0 / maxf(stacks - 1, 1) if stacks > 1 else 0.0
-		var base := Vector3(sx, 0, -24)
-		for i in 6:
-			var h0 := i * 20.0
-			cyl(g, 3.2 - i * 0.18, 3.4 - i * 0.18, 20.0, base + Vector3(0, h0 + 10.0, 0), white if i % 2 == 0 else red, 12)
-		fp(map, g, base, Vector2(3.5, 3.5), 120.0, "дымовая труба ТЭЦ", IND)
-		for h in [40.0, 80.0, 121.0]:
-			light(map, g, base + Vector3(0, h, 0))
+		var sx := -40.0 + si * 80.0 / maxf(stacks - 1, 1) if stacks > 1 else 0.0
+		var base := Vector3(sx, 0, -52)
+		var bands := 8
+		var bh := stack_h / bands
+		for i in bands:
+			var r0 := lerpf(7.5, 3.6, float(i) / bands)
+			var r1 := lerpf(7.5, 3.6, float(i + 1) / bands)
+			cyl(g, r1, r0, bh, base + Vector3(0, (i + 0.5) * bh, 0), white if i % 2 == 0 else red, 16)
+		fp(map, g, base, Vector2(7.5, 7.5), stack_h, "дымовая труба ТЭЦ", IND)
+		for h in [stack_h * 0.33, stack_h * 0.66, stack_h + 1.5]:
+			light(map, g, base + Vector3(0, h, 0), Color(1.0, 0.08, 0.05), true, 1.8, 0.0055)
+		var sw: Vector3 = g.transform * (base + Vector3(0, stack_h + 2.0, 0))
+		map.add_smoke(sw, false)
 	# cooling towers (hyperboloid from two cones) with steam plumes
 	for ti in towers:
-		var ct := Vector3(42, 0, 8 - ti * 40.0)
-		cyl(g, 11.0, 18.0, 26.0, ct + Vector3(0, 13, 0), conc, 24)
-		cyl(g, 13.0, 11.0, 18.0, ct + Vector3(0, 35, 0), conc, 24)
-		fp(map, g, ct, Vector2(17, 17), 44.0, "градирня ТЭЦ", IND)
+		var ct := Vector3(140, 0, 20 - ti * 90.0)
+		cyl(g, 22.0, 34.0, 44.0, ct + Vector3(0, 22, 0), conc, 28)
+		cyl(g, 25.0, 22.0, 28.0, ct + Vector3(0, 58, 0), conc, 28)
+		fp(map, g, ct, Vector2(32, 32), 72.0, "градирня ТЭЦ", IND)
 		var steam := CPUParticles3D.new()
 		steam.mesh = Fx.sphere(1.0, 6)
 		steam.material_override = Fx.smoke_mat()
-		steam.amount = 24
-		steam.lifetime = 9.0
+		steam.amount = 28
+		steam.lifetime = 12.0
 		steam.direction = Vector3.UP
 		steam.spread = 12.0
-		steam.initial_velocity_min = 4.0
-		steam.initial_velocity_max = 7.0
-		steam.gravity = Vector3(1.2, 0.6, 0.4)
+		steam.initial_velocity_min = 5.0
+		steam.initial_velocity_max = 9.0
+		steam.gravity = Vector3(2.0, 0.8, 0.6)
 		steam.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-		steam.emission_sphere_radius = 8.0
-		steam.scale_amount_min = 7.0
-		steam.scale_amount_max = 14.0
+		steam.emission_sphere_radius = 16.0
+		steam.scale_amount_min = 14.0
+		steam.scale_amount_max = 28.0
 		var sg := Gradient.new()
 		sg.set_color(0, Color(0.75, 0.75, 0.78, 0.35))
 		sg.set_color(1, Color(0.6, 0.6, 0.65, 0.0))
 		steam.color_ramp = sg
-		steam.position = ct + Vector3(0, 44, 0)
+		steam.position = ct + Vector3(0, 74, 0)
+		steam.visibility_range_end = 9000.0
 		g.add_child(steam)
-	for i in 8:
-		light(map, g, Vector3(-24 + i * 7, 25, 13.5), Color(1.0, 0.7, 0.4), false, 1.0, 0.002)
-	map.reserve(c.x, c.z, 75.0 + (towers - 1) * 25.0)
-	target(map, c + Vector3(0, 14, 0), pname, "tpp")
+	for i in 12:
+		light(map, g, Vector3(-88 + i * 16, 35, 23.5), Color(1.0, 0.7, 0.4), false, 1.1, 0.002)
+	map.reserve(c.x, c.z, 150.0 + (towers - 1) * 50.0)
+	target(map, c + Vector3(0, 20, 0), pname, "tpp")
 
 
 # --- Towers --------------------------------------------------------------------------------------
-## Lattice TV tower (Kyiv, Kharkiv, Dnipro and Odesa all have one). top = height of the lattice part.
-static func lattice_tower(map, pos: Vector3, tname: String, top := 100.0, is_target := true, spread := 14.0) -> void:
+## Lattice TV tower (Kyiv, Kharkiv, Dnipro and Odesa all have one). `height` is the real height to
+## the tip of the antenna; the lattice body takes about two thirds of it.
+static func lattice_tower(map, pos: Vector3, tname: String, height := 385.0, is_target := true, spread := -1.0) -> void:
 	var g := group(pos, 0.0)
 	var steel := Fx.solid(Color(0.66, 0.66, 0.68), 0.45, 0.7)
+	var red := Fx.solid(Color(0.72, 0.16, 0.12), 0.5, 0.5)
+	if spread < 0.0:
+		spread = height * 0.12
+	var top := height * 0.5
+	var waist := spread * 0.22
 	var legs := [Vector3(-spread, 0, -spread), Vector3(spread, 0, -spread), Vector3(spread, 0, spread), Vector3(-spread, 0, spread)]
-	var tops := [Vector3(-3, top, -3), Vector3(3, top, -3), Vector3(3, top, 3), Vector3(-3, top, 3)]
+	var tops := [Vector3(-waist, top, -waist), Vector3(waist, top, -waist), Vector3(waist, top, waist), Vector3(-waist, top, waist)]
+	var bays := 8
 	for i in 4:
-		beam(g, legs[i], tops[i], 1.4, steel)
+		beam(g, legs[i], tops[i], height * 0.008 + 0.8, steel)
 		# lattice bracing between neighbouring legs
 		var j := (i + 1) % 4
-		for k in 5:
-			var t0 := k / 5.0
-			var t1 := (k + 1) / 5.0
-			var a: Vector3 = (legs[i] as Vector3).lerp(tops[i], t0)
-			var b: Vector3 = (legs[j] as Vector3).lerp(tops[j], t1)
-			beam(g, a, b, 0.35, steel)
-	cyl(g, 7.0, 7.0, 5.0, Vector3(0, top * 0.6, 0), steel, 16)
-	cyl(g, 5.5, 5.5, 6.0, Vector3(0, top + 3.0, 0), steel, 16)
-	cyl(g, 1.4, 2.6, 70.0, Vector3(0, top + 38.0, 0), steel, 8)
-	cyl(g, 0.3, 1.2, 40.0, Vector3(0, top + 93.0, 0), steel, 6)
-	for hgt in [top * 0.6, top + 3.0, top + 40.0, top + 72.0, top + 93.0]:
-		light(map, g, Vector3(0, hgt + 2.5, 0))
-		for s in [Vector3(-4, 0, 0), Vector3(4, 0, 0)]:
-			light(map, g, s + Vector3(0, hgt, 0))
-	fp(map, g, Vector3.ZERO, Vector2(spread + 1.0, spread + 1.0), top + 10.0, tname)
-	map.reserve(pos.x, pos.z, spread + 12.0)
+		for k in bays:
+			var t0 := float(k) / bays
+			var t1 := float(k + 1) / bays
+			beam(g, (legs[i] as Vector3).lerp(tops[i], t0), (legs[j] as Vector3).lerp(tops[j], t1), 0.5, steel)
+			beam(g, (legs[j] as Vector3).lerp(tops[j], t0), (legs[i] as Vector3).lerp(tops[i], t1), 0.5, steel)
+			beam(g, (legs[i] as Vector3).lerp(tops[i], t1), (legs[j] as Vector3).lerp(tops[j], t1), 0.4, steel)
+	# the equipment decks, the central lift shaft and the mast in red-and-white bands
+	cyl(g, waist * 1.9, waist * 1.9, height * 0.03, Vector3(0, top * 0.62, 0), steel, 16)
+	cyl(g, waist * 1.6, waist * 1.6, height * 0.035, Vector3(0, top + height * 0.02, 0), steel, 16)
+	cyl(g, height * 0.006 + 0.6, height * 0.006 + 0.6, top, Vector3(0, top * 0.5, 0), steel, 8)
+	var m0 := top + height * 0.04
+	var mh := height - m0
+	for b in 6:
+		var r0 := lerpf(waist * 0.7, 0.5, b / 6.0)
+		var r1 := lerpf(waist * 0.7, 0.5, (b + 1) / 6.0)
+		cyl(g, r1, r0, mh / 6.0, Vector3(0, m0 + (b + 0.5) * mh / 6.0, 0), red if b % 2 == 0 else steel, 8)
+	for hgt in [top * 0.62, top, m0 + mh * 0.33, m0 + mh * 0.66, height]:
+		light(map, g, Vector3(0, hgt + 2.0, 0), Color(1.0, 0.08, 0.05), true, 2.2, 0.006)
+		for s in [Vector3(-waist, 0, 0), Vector3(waist, 0, 0)]:
+			light(map, g, s + Vector3(0, hgt, 0), Color(1.0, 0.08, 0.05), true, 1.6, 0.005)
+	fp(map, g, Vector3.ZERO, Vector2(spread + 1.0, spread + 1.0), top * 0.6, tname)
+	fp(map, g, Vector3.ZERO, Vector2(waist * 2.0, waist * 2.0), height * 0.96, tname)
+	map.reserve(pos.x, pos.z, spread * 1.5 + 14.0)
 	if is_target:
-		target(map, pos + Vector3(0, 30, 0), tname, "tv")
+		target(map, pos + Vector3(0, top * 0.5, 0), tname, "tv")
 
 
 # --- Transport -----------------------------------------------------------------------------------------
@@ -431,63 +514,84 @@ static func lattice_tower(map, pos: Vector3, tname: String, top := 100.0, is_tar
 static func station(map, pos: Vector3, rot_deg: float, sname: String, col := Color(0.95, 0.86, 0.6), tower_h := 32.0) -> Node3D:
 	var g := group(pos, rot_deg)
 	var cream := lit(col, 0.18)
-	box(g, Vector3(76, 18, 22), Vector3(0, 9, 0), cream)
-	box(g, Vector3(26, tower_h, 24), Vector3(0, tower_h * 0.5, 0), cream)
-	box(g, Vector3(14, 20, 0.3), Vector3(0, 18, -12.2), Fx.glow(Color(1.0, 0.85, 0.55), 1.2))
-	cyl(g, 0.0, 2.0, 10.0, Vector3(0, tower_h + 5.0, 0), gold(), 8)
-	fp(map, g, Vector3.ZERO, Vector2(38, 12), tower_h, sname)
+	box(g, Vector3(150, 22, 34), Vector3(0, 11, 0), cream)
+	box(g, Vector3(46, tower_h, 38), Vector3(0, tower_h * 0.5, 0), cream)
+	box(g, Vector3(24, tower_h * 0.6, 0.3), Vector3(0, tower_h * 0.55, -19.2), Fx.glow(Color(1.0, 0.85, 0.55), 1.2))
+	cyl(g, 0.0, 3.0, 14.0, Vector3(0, tower_h + 7.0, 0), gold(), 8)
+	fp(map, g, Vector3.ZERO, Vector2(75, 17), 22.0, sname)
+	fp(map, g, Vector3.ZERO, Vector2(23, 19), tower_h, sname)
 	# platforms, canopies and tracks
-	for i in 6:
-		var z := 22.0 + i * 11.0
-		box(g, Vector3(200, 0.4, 3.0), Vector3(20, 0.2, z), Fx.solid(Color(0.14, 0.13, 0.12)))
-		box(g, Vector3(160, 0.6, 5.0), Vector3(20, 6.5, z + 5.5), Fx.solid(Color(0.4, 0.42, 0.45), 0.6, 0.4))
-		var x := -60.0
-		while x < 100.0:
-			light(map, g, Vector3(x, 6.0, z + 5.5), Color(0.95, 0.95, 1.0), false, 0.8, 0.0022)
-			x += 20.0
-	var tr := Meshes.metro_train(8)
-	tr.position = Vector3(-40, 0, 33)
-	tr.rotation.y = PI * 0.5
-	g.add_child(tr)
-	var cw: Vector3 = g.transform * Vector3(20, 0, 50)
-	map.reserve(pos.x, pos.z, 45.0)
-	map.reserve(cw.x, cw.z, 100.0)
+	for i in 7:
+		var z := 30.0 + i * 13.0
+		box(g, Vector3(460, 0.4, 3.2), Vector3(30, 0.2, z), Fx.solid(Color(0.14, 0.13, 0.12)))
+		box(g, Vector3(380, 0.6, 6.0), Vector3(30, 6.5, z + 6.5), Fx.solid(Color(0.4, 0.42, 0.45), 0.6, 0.4))
+		var x := -150.0
+		while x < 220.0:
+			light(map, g, Vector3(x, 6.0, z + 6.5), Color(0.95, 0.95, 1.0), false, 0.9, 0.0022)
+			x += 30.0
+	for k in 2:
+		var tr := Meshes.metro_train(10)
+		tr.position = Vector3(-90 + k * 60, 0, 36.5 + k * 39.0)
+		tr.rotation.y = PI * 0.5
+		g.add_child(tr)
+	var cw: Vector3 = g.transform * Vector3(30, 0, 70)
+	map.reserve(pos.x, pos.z, 90.0)
+	map.reserve(cw.x, cw.z, 235.0)
 	target(map, pos + Vector3(0, 10, 0), sname, "rail")
 	return g
 
 
-static func airport(map, pos: Vector3, rot_deg: float, aname: String, runway := 340.0) -> void:
+## An airport: the runway along local x (2–3 km in reality), a taxiway, the apron with the
+## terminal, the control tower and parked airliners on the +z side.
+static func airport(map, pos: Vector3, rot_deg: float, aname: String, runway := 2300.0) -> void:
 	var g := group(pos, rot_deg)
 	var strip := Fx.solid(Color(0.1, 0.1, 0.11), 0.9)
-	box(g, Vector3(runway, 0.3, 16), Vector3(0, 0.2, 0), strip)
-	box(g, Vector3(runway - 40.0, 0.3, 8), Vector3(0, 0.2, 34), strip)
-	var n := int(runway / 15.0)
+	box(g, Vector3(runway, 0.3, 45), Vector3(0, 0.2, 0), strip)
+	box(g, Vector3(runway * 0.9, 0.3, 22), Vector3(0, 0.2, 150), strip)
+	box(g, Vector3(360, 0.3, 180), Vector3(0, 0.2, 250), strip)
+	for s in [-1.0, 0.0, 1.0]:
+		box(g, Vector3(22, 0.3, 150), Vector3(s * runway * 0.4, 0.2, 75), strip)
+	# the centre line and the threshold bars
+	var paint := Fx.solid(Color(0.8, 0.8, 0.76), 0.8)
+	var cx := -runway * 0.5 + 60.0
+	while cx < runway * 0.5 - 60.0:
+		box(g, Vector3(30, 0.06, 0.9), Vector3(cx, 0.38, 0), paint)
+		cx += 60.0
+	var n := int(runway / 60.0)
 	for i in n:
-		var x := -runway * 0.5 + 5.0 + i * 15.0
-		for s in [-8.5, 8.5]:
-			light(map, g, Vector3(x, 0.8, s), Color(1.0, 0.95, 0.85), false, 0.8, 0.0024)
-		light(map, g, Vector3(x, 0.8, 38.5), Color(0.3, 0.5, 1.0), false, 0.7, 0.002)
+		var x := -runway * 0.5 + 30.0 + i * 60.0
+		for s in [-23.5, 23.5]:
+			light(map, g, Vector3(x, 0.8, s), Color(1.0, 0.95, 0.85), false, 0.9, 0.0024)
+		light(map, g, Vector3(x * 0.9, 0.8, 162.0), Color(0.3, 0.5, 1.0), false, 0.8, 0.002)
 	for s in [-1.0, 1.0]:
-		for k in 5:
-			light(map, g, Vector3(s * (runway * 0.5 + 8.0 + k * 6.0), 1.0, 0), Color(1.0, 0.15, 0.1) if s < 0 else Color(0.3, 1.0, 0.4), false, 1.0, 0.0028)
+		for k in 8:
+			light(map, g, Vector3(s * (runway * 0.5 + 30.0 + k * 30.0), 1.5, 0), Color(1.0, 0.15, 0.1) if s < 0 else Color(0.3, 1.0, 0.4), false, 1.3, 0.003)
 	# terminal, control tower, parked aircraft
-	block(map, g, Vector3(0, 0, 70), Vector2(40, 12), 14.0, 2, Color(0.4, 0.5, 0.6), aname)
-	cyl(g, 2.5, 3.0, 30.0, Vector3(70, 15, 64), Fx.solid(Color(0.85, 0.85, 0.85)), 10)
-	cyl(g, 5.0, 4.0, 5.0, Vector3(70, 32, 64), Fx.glow(Color(0.5, 0.9, 0.8), 0.9), 12)
-	light(map, g, Vector3(70, 36, 64))
+	block(map, g, Vector3(0, 0, 370), Vector2(110, 26), 18.0, 2, Color(0.4, 0.5, 0.6), aname)
+	block(map, g, Vector3(190, 0, 360), Vector2(45, 30), 16.0, 3, Color(0.6, 0.62, 0.64), aname, IND, 5.0, Color(0.4, 0.42, 0.45))
+	cyl(g, 3.5, 4.5, 40.0, Vector3(150, 20, 330), Fx.solid(Color(0.85, 0.85, 0.85)), 10)
+	cyl(g, 7.0, 5.5, 6.0, Vector3(150, 43, 330), Fx.glow(Color(0.5, 0.9, 0.8), 0.9), 12)
+	fp(map, g, Vector3(150, 0, 330), Vector2(6, 6), 46.0, aname)
+	light(map, g, Vector3(150, 48, 330))
 	var white := Fx.solid(Color(0.92, 0.93, 0.95), 0.4)
-	for p in [Vector3(-40, 0, 52), Vector3(-10, 0, 52)]:
+	for p in [Vector3(-120, 0, 280), Vector3(-60, 0, 280), Vector3(10, 0, 280), Vector3(80, 0, 280)]:
 		var a := group(p, 90.0, g)
-		cyl(a, 1.8, 1.8, 30.0, Vector3(0, 3, 0), white, 10).rotation_degrees = Vector3(90, 0, 0)
-		box(a, Vector3(30, 0.5, 5), Vector3(0, 2.6, 1), white)
-		box(a, Vector3(0.5, 6, 4), Vector3(0, 6, 13), Fx.solid(Color(0.1, 0.35, 0.7)))
-	var steps := int(runway / 80.0) + 1
+		cyl(a, 1.9, 1.9, 36.0, Vector3(0, 3.6, 0), white, 12).rotation_degrees = Vector3(90, 0, 0)
+		cyl(a, 0.0, 1.9, 4.0, Vector3(0, 3.6, -20.0), white, 12).rotation_degrees = Vector3(-90, 0, 0)
+		box(a, Vector3(34, 0.5, 5.5), Vector3(0, 3.0, 1.5), white)
+		box(a, Vector3(12, 0.4, 3.0), Vector3(0, 4.2, 16.5), white)
+		box(a, Vector3(0.5, 7, 5), Vector3(0, 8, 16), Fx.solid(Color(0.1, 0.35, 0.7)))
+		for sx in [-6.0, 6.0]:
+			cyl(a, 1.0, 1.0, 3.6, Vector3(sx, 2.0, -1.0), Fx.solid(Color(0.3, 0.32, 0.36), 0.4, 0.6), 10).rotation_degrees = Vector3(90, 0, 0)
+	for x in range(-150, 160, 60):
+		light(map, g, Vector3(x, 22.0, 340), Color(1.0, 0.9, 0.7), false, 1.6, 0.0022)
+	var steps := int(runway / 110.0) + 1
 	for i in steps:
-		var p: Vector3 = g.transform * Vector3(-runway * 0.5 + 10.0 + i * (runway - 20.0) / maxf(steps - 1, 1), 0, 0)
-		map.reserve(p.x, p.z, 44.0)
-	var tp: Vector3 = g.transform * Vector3(0, 0, 70)
-	map.reserve(tp.x, tp.z, 48.0)
-	target(map, g.transform * Vector3(0, 6, 60), aname, "airport")
+		var p: Vector3 = g.transform * Vector3(-runway * 0.5 + i * runway / maxf(steps - 1, 1), 0, 60)
+		map.reserve(p.x, p.z, 130.0)
+	var tp: Vector3 = g.transform * Vector3(0, 0, 290)
+	map.reserve(tp.x, tp.z, 240.0)
+	target(map, g.transform * Vector3(0, 8, 340), aname, "airport")
 
 
 ## Cargo port on a quay: gantry cranes along the water (local +z faces the water), warehouses behind.
@@ -515,27 +619,36 @@ static func port(map, pos: Vector3, rot_deg: float, pname: String, cranes := 4, 
 
 
 ## Stadium bowl with a lit roof ring and a green pitch.
-static func stadium(map, pos: Vector3, rot_deg: float, sname: String, rx := 46.0, rz := 34.0) -> void:
+## A stadium at its real size (rx × rz are the outer half-axes: 130 × 105 m for a 70 000 arena).
+static func stadium(map, pos: Vector3, rot_deg: float, sname: String, rx := 130.0, rz := 105.0, h := 38.0) -> void:
 	var st := group(pos, rot_deg)
 	var seats := Fx.solid(Color(0.75, 0.75, 0.78), 0.7)
-	var n := 40
+	var dark := Fx.solid(Color(0.3, 0.32, 0.36), 0.8)
+	var n := 56
+	var depth := minf(rx, rz) * 0.36
 	for i in n:
 		var a := TAU * i / n
-		var p := Vector3(cos(a) * rx, 0, sin(a) * rz)
-		var seg := box(st, Vector3(8.5 * rx / 46.0, 16.0, 12.0), p + Vector3(0, 8, 0), seats)
-		seg.rotation.y = -atan2(p.z / rz, p.x / rx)
+		for tier in 3:
+			# three tiers stepping down towards the pitch
+			var k := 1.0 - (tier + 0.5) * depth / 3.0 / minf(rx, rz)
+			var p := Vector3(cos(a) * rx * k, 0, sin(a) * rz * k)
+			var th := h * (1.0 - tier * 0.3)
+			var seg := box(st, Vector3(depth / 3.0 + 0.4, th, TAU * maxf(rx, rz) / n + 0.6), p + Vector3(0, th * 0.5, 0), seats if tier > 0 else dark)
+			seg.rotation.y = -atan2(sin(a) * rx, cos(a) * rz)
 	var ring := MeshInstance3D.new()
-	ring.mesh = Fx.ring_mesh(1.0, 0.16)
+	ring.mesh = Fx.ring_mesh(1.0, 0.1)
 	ring.material_override = Fx.glow(Color(0.85, 0.92, 1.0), 1.2)
-	ring.scale = Vector3(rx + 10.0, 30, rz + 8.0)
-	ring.position = Vector3(0, 19, 0)
+	ring.scale = Vector3(rx + 6.0, 60, rz + 6.0)
+	ring.position = Vector3(0, h + 3.0, 0)
 	st.add_child(ring)
 	var pitch := PlaneMesh.new()
-	pitch.size = Vector2(rx * 1.35, rz * 1.18)
+	pitch.size = Vector2(105.0, 68.0)
 	Meshes.part(st, pitch, Fx.glow(Color(0.2, 0.55, 0.25), 0.25), Vector3(0, 0.3, 0))
-	for p in [Vector3(-rx + 6.0, 0, 0), Vector3(rx - 6.0, 0, 0), Vector3(0, 0, -rz + 4.0), Vector3(0, 0, rz - 4.0)]:
-		fp(map, st, p, Vector2(14, 14) if absf(p.x) > 1.0 else Vector2(rx * 0.65, 8), 18.0, sname)
-	map.reserve(pos.x, pos.z, rx + 14.0)
+	for i in 8:
+		var a := TAU * i / 8.0
+		fp(map, st, Vector3(cos(a) * (rx - depth * 0.5), 0, sin(a) * (rz - depth * 0.5)), Vector2(depth * 0.9, depth * 0.9), h, sname)
+		light(map, st, Vector3(cos(a) * rx, h + 8.0, sin(a) * rz), Color(0.95, 0.97, 1.0), false, 2.4, 0.003)
+	map.reserve(pos.x, pos.z, maxf(rx, rz) + 24.0)
 
 
 # --- Industry & leisure -----------------------------------------------------------------------------------
@@ -569,19 +682,21 @@ static func factory(map, c: Vector3, rot_deg: float, fname: String, halls := 4, 
 	var g := group(c, rot_deg)
 	var cols := [Color(0.52, 0.5, 0.48), Color(0.58, 0.46, 0.4), Color(0.46, 0.48, 0.5)]
 	for i in halls:
-		var lz := (i - (halls - 1) * 0.5) * 22.0
-		block(map, g, Vector3(0, 0, lz), Vector2(45, 9), 14.0 + (i % 2) * 4.0, 3, cols[i % cols.size()], fname, IND, 4.0, Color(0.36, 0.38, 0.4))
+		var lz := (i - (halls - 1) * 0.5) * 52.0
+		block(map, g, Vector3(0, 0, lz), Vector2(110, 22), 16.0 + (i % 2) * 5.0, 3, cols[i % cols.size()], fname, IND, 5.0, Color(0.36, 0.38, 0.4))
 	for s in stacks:
-		var p := Vector3(56.0, 0, (s - (stacks - 1) * 0.5) * 18.0)
+		var p := Vector3(136.0, 0, (s - (stacks - 1) * 0.5) * 40.0)
 		var w: Vector3 = g.transform * p
-		var h := 60.0 + s * 12.0
-		map.add_cyl(w, 2.2, h, Color(0.62, 0.58, 0.55))
-		map.add_cyl(w + Vector3(0, h - 6.0, 0), 2.5, 3.0, Color(0.75, 0.15, 0.12))
-		map.add_footprint(Vector2(w.x, w.z), Vector2(2.5, 2.5), 0.0, h, IND, "заводская труба")
-		map.add_light(w + Vector3(0, h + 1.0, 0), Color(1.0, 0.08, 0.05), true, 1.2, 0.0045)
-	for i in 6:
-		light(map, g, Vector3(-45.0 + i * 18.0, 16.0, halls * 11.0 + 2.0), Color(1.0, 0.75, 0.45), false, 1.0, 0.002)
-	map.reserve(c.x, c.z, 50.0 + halls * 8.0)
+		var h := 90.0 + s * 20.0
+		map.add_cyl(w, 3.4, h, Color(0.62, 0.58, 0.55))
+		map.add_cyl(w + Vector3(0, h - 8.0, 0), 3.8, 4.0, Color(0.75, 0.15, 0.12))
+		map.add_footprint(Vector2(w.x, w.z), Vector2(3.8, 3.8), 0.0, h, IND, "заводская труба")
+		map.add_light(w + Vector3(0, h + 1.0, 0), Color(1.0, 0.08, 0.05), true, 1.5, 0.005)
+		if s == 0:
+			map.add_smoke(w + Vector3(0, h + 1.0, 0))
+	for i in 8:
+		light(map, g, Vector3(-105.0 + i * 30.0, 20.0, halls * 26.0 + 4.0), Color(1.0, 0.75, 0.45), false, 1.3, 0.002)
+	map.reserve(c.x, c.z, 130.0 + halls * 18.0)
 	if is_target:
 		target(map, c + Vector3(0, 10, 0), fname, "plant")
 	return g

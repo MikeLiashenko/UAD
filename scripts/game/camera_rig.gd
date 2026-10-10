@@ -11,13 +11,13 @@ var cam: Camera3D
 var target := Vector3.ZERO
 var yaw := 0.4
 var pitch := 0.5
-var dist := 380.0
-var bounds := 1150.0
+var dist := 2600.0
+var bounds := 16000.0
 
 var _t_target := Vector3.ZERO
 var _t_yaw := 0.4
 var _t_pitch := 0.5
-var _t_dist := 380.0
+var _t_dist := 2600.0
 var _left := false
 var _right := false
 var _moved := false
@@ -39,7 +39,7 @@ func focus(p: Vector3) -> void:
 
 
 func zoom(f: float) -> void:
-	_t_dist = clampf(_t_dist * f, 40.0, 1600.0)
+	_t_dist = clampf(_t_dist * f, 60.0, 70000.0)
 
 
 func shake(amount: float) -> void:
@@ -87,7 +87,7 @@ func _process(delta: float) -> void:
 	var shake_off := Vector3.ZERO
 	if _shake > 0.0:
 		_shake = maxf(0.0, _shake - delta * 2.5)
-		shake_off = Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)) * _shake * 4.0
+		shake_off = Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)) * _shake * dist * 0.008
 	cam.global_position = target + off + shake_off
 	cam.look_at(target + Vector3(0, dist * 0.18, 0) + shake_off, Vector3.UP)
 

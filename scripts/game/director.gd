@@ -57,13 +57,13 @@ func time_left() -> float:
 func start_day() -> void:
 	phase = Phase.DAY
 	phase_time = 0.0
-	phase_len = 40.0 if GS.day == 1 else 55.0
+	phase_len = 70.0 if GS.day == 1 else 95.0
 	SFX.play_music("day")
 	schedule.clear()
 	# a destroyed recon post sends no scouts, a damaged one fewer
 	var scouts := int(round((1 + GS.day / 3) * Strikes.output(game.map.city, "scout")))
 	for i in scouts:
-		schedule.append({"t": 4.0 + i * 11.0, "type": "scout", "count": 1})
+		schedule.append({"t": 5.0 + i * 18.0, "type": "scout", "count": 1})
 	game.hud.alert(GS.t("ДЕНЬ %d — разведка противника в воздухе") % GS.day, Color(0.5, 0.9, 1.0))
 	game.hud.log_event(GS.t("Утро дня %d. Ищите и сбивайте разведчиков!") % GS.day, Color(0.5, 0.9, 1.0))
 
@@ -119,17 +119,17 @@ func _strike_results() -> void:
 	GS.state_changed.emit()
 
 
-## Altitude layer for a wave (world units; ×5 = metres on the HUD).
+## Altitude layer for a wave, metres.
 func _layer(type: String) -> float:
 	var r := _rng.randf()
 	if type == "shahed":
 		if GS.day >= 4 and r < 0.16:
-			return _rng.randf_range(220.0, 320.0) # high: out of reach of machine guns
+			return _rng.randf_range(2000.0, 3200.0) # high: out of reach of machine guns
 		if r < 0.6:
-			return _rng.randf_range(90.0, 180.0)
-		return _rng.randf_range(35.0, 70.0) # low: between the tower blocks
+			return _rng.randf_range(450.0, 1300.0)
+		return _rng.randf_range(120.0, 320.0) # low: just over the tower blocks
 	if type == "cruise":
-		return _rng.randf_range(22.0, 45.0) if r < 0.6 else _rng.randf_range(55.0, 110.0)
+		return _rng.randf_range(50.0, 120.0) if r < 0.6 else _rng.randf_range(150.0, 400.0)
 	return -1.0
 
 
@@ -139,7 +139,8 @@ func start_night() -> void:
 	var d := GS.day
 	var m := GS.enemy_mult()
 	var final := d == GS.CAMPAIGN_NIGHTS and not GS.won
-	phase_len = minf(75.0 + 12.0 * d, 170.0) + (45.0 if final else 0.0)
+	# the raids take longer over a life-size city: a Shahed needs minutes to cross a district
+	phase_len = minf(140.0 + 16.0 * d, 300.0) + (60.0 if final else 0.0)
 	night_start_stats = GS.stats.duplicate()
 	schedule.clear()
 	_strike_results()
@@ -163,7 +164,7 @@ func start_night() -> void:
 		c = _left(w, c)
 		if c <= 0:
 			continue
-		schedule.append({"t": 5.0 + span * float(i) / waves + _rng.randf_range(0.0, 6.0), "type": w, "count": c, "alt": _layer("shahed") if GS.ENEMIES[w].alt_min < 100.0 and w != "molniya" else -1.0})
+		schedule.append({"t": 5.0 + span * float(i) / waves + _rng.randf_range(0.0, 6.0), "type": w, "count": c, "alt": _layer("shahed") if w != "molniya" else -1.0})
 	var cruise_from := int(city.raid_start.get("cruise", 3))
 	var ball_from := int(city.raid_start.get("ballistic", 5))
 	if d >= cruise_from:
@@ -176,7 +177,7 @@ func start_night() -> void:
 			var glide: bool = GS.ENEMIES[w].get("glide", false)
 			var cc := _left(w, maxi(1, total / salvos) + (1 if glide else 0))
 			if cc > 0:
-				schedule.append({"t": span * (0.3 + 0.4 * i) + _rng.randf_range(0.0, 8.0), "type": w, "count": cc, "alt": -1.0 if glide or GS.ENEMIES[w].alt_max < 30.0 else _layer("cruise")})
+				schedule.append({"t": span * (0.3 + 0.4 * i) + _rng.randf_range(0.0, 8.0), "type": w, "count": cc, "alt": -1.0 if glide or GS.ENEMIES[w].alt_max < 100.0 else _layer("cruise")})
 	if d >= ball_from or (d >= ball_from - 1 and GS.difficulty == 2):
 		var n := clampi(int(round((d - ball_from + 1) * 0.7 * m * boss)), 1, 3)
 		for i in n:
@@ -197,7 +198,7 @@ func start_night() -> void:
 		var bw := _weapon("cruise", maxi(d, cruise_from)) if d >= cruise_from else "cruise"
 		var bc := _left(bw, 1 if d < 4 else 2)
 		if bc > 0:
-			schedule.append({"t": span * 0.45, "type": bw, "count": bc, "base": true, "alt": 30.0})
+			schedule.append({"t": span * 0.45, "type": bw, "count": bc, "base": true, "alt": 80.0})
 		if d >= 5:
 			var bb := _weapon("ballistic", maxi(d, ball_from))
 			if _left(bb, 1) > 0:
@@ -235,7 +236,7 @@ func _process(delta: float) -> void:
 	var want := 0.0
 	match phase:
 		Phase.DAY:
-			want = clampf((phase_time - (phase_len - 12.0)) / 12.0, 0.0, 1.0)
+			want = clampf((phase_time - (phase_len - 14.0)) / 14.0, 0.0, 1.0)
 		Phase.NIGHT:
 			want = 1.0
 		Phase.MORNING:

@@ -86,7 +86,7 @@ func _floor_at(x: float, z: float) -> float:
 
 
 func _blocked_point(x: float, z: float, y: float) -> bool:
-	if absf(x) > 995.0 or absf(z) > 995.0:
+	if absf(x) > map.half - 5.0 or absf(z) > map.half - 5.0:
 		return true
 	var bi: int = map.building_at(x, z)
 	if bi >= 0:

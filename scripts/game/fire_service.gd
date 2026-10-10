@@ -10,12 +10,12 @@ const Fire = preload("res://scripts/game/fire.gd")
 
 ## Crews included with the city; the shop adds more on top.
 const BASE_CREWS := 3
-const DRIVE_SPEED := 34.0
+const DRIVE_SPEED := 38.0
 const WORK_RANGE := 16.0
 ## Share of a blaze one crew knocks down per second.
 const SUPPRESS_RATE := 0.22
 ## A crew that cannot reach its fire (across the river, behind a block) gives up after this long.
-const DRIVE_TIMEOUT := 60.0
+const DRIVE_TIMEOUT := 420.0
 ## Seconds to rebuild one collapsed building.
 const REPAIR_TIME := 20.0
 ## How much of the city bar one rebuilt building brings back.

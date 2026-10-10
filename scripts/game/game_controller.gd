@@ -145,6 +145,7 @@ func _ready() -> void:
 	rig = CameraRig.new()
 	rig.cam = cam
 	rig.target = GS.base_pos
+	rig.bounds = map.half * 1.05
 	add_child(rig)
 	rig.clicked.connect(_on_click)
 	base_view = BaseView.new()
@@ -386,7 +387,7 @@ func refresh_capture() -> void:
 
 ## Label3D markers are replaced by the sight / video overlay in the gunner and FPV views.
 func hide_markers() -> bool:
-	return view == "base" or view == "fpv"
+	return view == "base" or view == "fpv" or _photo_busy
 
 
 func zoom_view(f: float) -> void:
@@ -422,7 +423,7 @@ func slowmo() -> void:
 
 
 func _end_slowmo() -> void:
-	Engine.time_scale = _base_time_scale
+	Engine.time_scale = _base_time_scale * warp
 	_slowmo = false
 
 
@@ -434,7 +435,7 @@ func spawn_drone(pos: Vector3, dir: Vector3, tgt) -> void:
 	d.game = self
 	d.target = tgt
 	d.serial = _drone_seq
-	d.speed = 45.0
+	d.speed = 30.0
 	d.vel = (dir.normalized() + Vector3.UP * 0.35).normalized() * d.speed
 	d.position = pos
 	fx_root.add_child(d)
@@ -594,7 +595,7 @@ func select_weapon(id: String) -> void:
 	selected_weapon = id
 	weapon_group = group_of(id)
 	var r: float = weapons[id].effective_range()
-	range_ring.mesh = Fx.ring_mesh(r, 2.0 + r * 0.002)
+	range_ring.mesh = Fx.ring_mesh(r, maxf(8.0, r * 0.006))
 	range_ring.material_override = Fx.ghost(Color(0.2, 1.0, 0.6, 0.18), 1.0)
 	if view == "base":
 		base_view.on_weapon_changed(prev)
@@ -617,10 +618,10 @@ func find_auto_target(w):
 			# already lethally committed: another interceptor would be thrown away
 			continue
 		var d: float = w.global_position.distance_to(e.position)
-		if d > w.effective_range() * 1.02 or d >= best_d:
+		if d >= best_d or not w.in_range(e):
 			continue
 		var to_goal := Vector2(e.target_pos.x - e.position.x, e.target_pos.z - e.position.z).length()
-		var urgent: bool = e.type != "scout" and (to_goal < 260.0 or d < 90.0)
+		var urgent: bool = e.type != "scout" and (to_goal < 1500.0 or d < 450.0)
 		if not urgent and not predict_debris(e).safe:
 			continue
 		best_d = d
@@ -647,8 +648,8 @@ func spawn_missile(pos: Vector3, dir: Vector3, tgt, wid: String, carrier := Vect
 	m.game = self
 	m.target = tgt
 	m.weapon_id = wid
-	m.vel = dir.normalized() * 40.0 + carrier
-	m.speed = maxf(40.0, m.vel.length()) # off an aircraft's rail it starts at the aircraft's speed
+	m.vel = dir.normalized() * 60.0 + carrier
+	m.speed = maxf(60.0, m.vel.length()) # off an aircraft's rail it starts at the aircraft's speed
 	m.position = pos
 	fx_root.add_child(m)
 	_net_note_launch(pos, tgt, wid)
@@ -760,7 +761,7 @@ func play_video(day_n := 0) -> void:
 func _edge_dir(variant := "") -> Vector3:
 	var own: Array = map.city.raid_sectors.get(variant, [])
 	var b := Vector2(GS.base_pos.x, GS.base_pos.z)
-	if own.is_empty() and b.length() > 250.0 and _rng.randf() < 0.5:
+	if own.is_empty() and b.length() > 1500.0 and _rng.randf() < 0.5:
 		var ba := atan2(b.x, -b.y) + deg_to_rad(_rng.randf_range(-25.0, 25.0))
 		return Vector3(sin(ba), 0, -cos(ba))
 	var sectors: Array = own if not own.is_empty() else map.city.threat_sectors
@@ -774,7 +775,7 @@ func _pick_target() -> Dictionary:
 	var total := 0.0
 	for t in map.targets:
 		var d := Vector2(t.pos.x - GS.base_pos.x, t.pos.z - GS.base_pos.z).length()
-		var w := exp(-d / 450.0) + 0.04
+		var w := exp(-d / 3500.0) + 0.04
 		weights.append(w)
 		total += w
 	var roll := _rng.randf() * total
@@ -831,30 +832,37 @@ func launch(type: String, count: int, at_base: bool, alt := -1.0, aim := "") -> 
 	var side := Vector3(-dir.z, 0, dir.x)
 	var glide: bool = def.get("glide", false)
 	var corridor := not at_base and not glide and ((kind == "shahed" and _rng.randf() < 0.8) or (kind == "cruise" and _rng.randf() < 0.6))
-	var via_center := GS.base_pos + Vector3(_rng.randf_range(-1, 1), 0, _rng.randf_range(-1, 1)).normalized() * _rng.randf_range(20.0, 110.0)
+	var via_center := GS.base_pos + Vector3(_rng.randf_range(-1, 1), 0, _rng.randf_range(-1, 1)).normalized() * _rng.randf_range(150.0, 700.0)
+	# where the radars pick the raid up: drones a few minutes out from their target, missiles further
+	var out := clampf(float(def.speed) * 150.0, 6000.0, 14000.0) if kind == "shahed" else 24000.0
 	for i in count:
 		var start: Vector3
 		var ealt := alt * _rng.randf_range(0.85, 1.15) if alt > 0.0 else -1.0
 		if def.has("mirv"):
 			# a re-entry body falls almost straight down on its target
-			start = tgt_pos + dir * 260.0 + side * _rng.randf_range(-60, 60) + Vector3(0, 2300.0, 0)
+			start = tgt_pos + dir * 9000.0 + side * _rng.randf_range(-600, 600) + Vector3(0, 60000.0, 0)
 		elif kind == "ballistic":
-			var la: Array = def.get("launch_alt", [300.0, 520.0])
-			start = dir * float(def.get("launch_dist", 1700.0)) + side * _rng.randf_range(-200, 200) + Vector3(0, _rng.randf_range(float(la[0]), float(la[1])), 0)
+			var la: Array = def.get("launch_alt", [36000.0, 44000.0])
+			start = tgt_pos + dir * float(def.get("launch_dist", 62000.0)) + side * _rng.randf_range(-2500, 2500)
+			start.y = _rng.randf_range(float(la[0]), float(la[1]))
 		elif glide:
-			start = dir * float(def.get("launch_dist", 1350.0)) + side * ((i - count * 0.5) * 70.0 + _rng.randf_range(-20, 20))
+			start = tgt_pos + dir * float(def.get("launch_dist", 45000.0)) + side * ((i - count * 0.5) * 600.0 + _rng.randf_range(-150, 150))
+			start.y = _rng.randf_range(float(def.alt_min), float(def.alt_max))
+		elif type == "scout":
+			# the recon drone is already over the sector when it is noticed
+			start = GS.base_pos + dir * _rng.randf_range(5000.0, 6500.0)
 			start.y = _rng.randf_range(float(def.alt_min), float(def.alt_max))
 		else:
 			var row := i / 4
 			var col := i % 4
-			start = dir * (1150.0 + row * 45.0) + side * ((col - 1.5) * 40.0 + _rng.randf_range(-10, 10))
+			start = tgt_pos + dir * (out + row * 350.0) + side * ((col - 1.5) * 280.0 + _rng.randf_range(-60, 60))
 			start.y = ealt if ealt > 0.0 else _rng.randf_range(float(def.alt_min), float(def.alt_max))
 		var e := Enemy.new()
 		var jitter := Vector3.ZERO
 		if (kind == "shahed" or glide) and not at_base:
-			jitter = Vector3(_rng.randf_range(-60, 60), 0, _rng.randf_range(-60, 60))
+			jitter = Vector3(_rng.randf_range(-250, 250), 0, _rng.randf_range(-250, 250))
 		elif def.has("mirv"):
-			jitter = Vector3(_rng.randf_range(-70, 70), 0, _rng.randf_range(-70, 70))
+			jitter = Vector3(_rng.randf_range(-400, 400), 0, _rng.randf_range(-400, 400))
 		e.setup(self, type, start, tgt_pos + jitter, tgt_name, ealt)
 		e.strike_base = at_base
 		_net_seq += 1
@@ -863,7 +871,7 @@ func launch(type: String, count: int, at_base: bool, alt := -1.0, aim := "") -> 
 		e.net_base_owner = base_owner
 		if corridor:
 			e.has_via = true
-			e.via = via_center + Vector3(_rng.randf_range(-25, 25), 0, _rng.randf_range(-25, 25))
+			e.via = via_center + Vector3(_rng.randf_range(-150, 150), 0, _rng.randf_range(-150, 150))
 		enemy_root.add_child(e)
 		enemies.append(e)
 	if type == "scout":
@@ -874,7 +882,7 @@ func launch(type: String, count: int, at_base: bool, alt := -1.0, aim := "") -> 
 		label += " ×%d" % count
 	var alt_txt := ""
 	if alt > 0.0:
-		alt_txt = GS.t(" · высота ~%d м") % int(alt * 5.0)
+		alt_txt = GS.t(" · высота ~%d м") % (int(alt / 10.0) * 10)
 	hud.alert(GS.t("⚠ ТРЕВОГА: ПУСК %s!") % label, Color(1.0, 0.25, 0.25))
 	hud.log_event(GS.t("Пуск: %s → %s%s") % [label, tgt_name, alt_txt], Color(1.0, 0.45, 0.35))
 	SFX.play("alert", -4.0)
@@ -922,21 +930,21 @@ func enemy_destroyed(e) -> void:
 		if not bool(info.safe):
 			txt += GS.t("\nобломки летят на дома!")
 		hud.reticle.kill(txt, Color(0.3, 1.0, 0.5) if bool(info.safe) else Color(1.0, 0.7, 0.2))
-		if dist < 500.0:
-			hud.flash(clampf(0.5 - dist / 1200.0, 0.08, 0.45))
-		shake(clampf(1.0 - dist / 900.0, 0.1, 0.8))
+		if dist < 2500.0:
+			hud.flash(clampf(0.5 - dist / 6000.0, 0.08, 0.45))
+		shake(clampf(1.0 - dist / 4500.0, 0.04, 0.8))
 		if e.type == "cruise" or e.type == "ballistic" or e == base_view.candidate:
 			slowmo()
 	_remove_enemy(e)
 
 
 ## An interceptor detonated without a lethal hit — told to the player so that spent
-## missiles are never a mystery (`dist` is in world units, 1 unit ≈ 5 m).
+## missiles are never a mystery (`dist` in metres).
 func missile_missed(m, dist: float) -> void:
 	GS.stats.misses = int(GS.stats.get("misses", 0)) + 1
 	var short: String = GS.t(String(m.def.short))
 	Fx.float_text(fx_root, m.position, GS.t("ПРОМАХ"), Color(1.0, 0.55, 0.25))
-	hud.log_event(GS.t("Промах: ракета %s прошла в %d м от цели") % [short, int(dist * 5.0)], Color(1.0, 0.55, 0.25))
+	hud.log_event(GS.t("Промах: ракета %s прошла в %d м от цели") % [short, int(dist)], Color(1.0, 0.55, 0.25))
 	if view == "base":
 		hud.reticle.kill(GS.t("ПРОМАХ"), Color(1.0, 0.6, 0.3))
 
@@ -1007,12 +1015,12 @@ func enemy_impact(e) -> void:
 	strike_damage(p, String(e.type), float(e.def.get("crush", 1.0)), 2.0)
 	for k in int(e.def.get("mirv", 0)) - 1:
 		# kinetic submunitions: a spray of hits around the aim point
-		var q := p + Vector3(_rng.randf_range(-45, 45), 0, _rng.randf_range(-45, 45))
+		var q := p + Vector3(_rng.randf_range(-250, 250), 0, _rng.randf_range(-250, 250))
 		q.y = map.ground_height(q.x, q.z)
 		Fx.explosion(fx_root, q, 1.0, Color(1.0, 0.7, 0.3), false)
 		strike_damage(q, String(e.type), float(e.def.get("crush", 1.0)) * 0.5, 1.2)
 	play_boom("explosion", p, 6.0)
-	shake(clampf(1.0 - cam.global_position.distance_to(p) / 1200.0, 0.2, 1.0))
+	shake(clampf(1.0 - cam.global_position.distance_to(p) / 6000.0, 0.04, 1.0))
 	if friend_base:
 		# a friend's battery: they take the damage on their side, the repair bill goes with it
 		_bank(e.net_base_owner, "p", int(float(e.def.hit_cost) * 0.5 * GS.penalty_mult()))
@@ -1054,8 +1062,8 @@ func enemy_impact(e) -> void:
 		hud.alert(GS.t("ПОПАДАНИЕ: %s  −%s") % [GS.t(e.target_name), GS.fmt_money(cost)], Color(1, 0.25, 0.2))
 		hud.log_event(GS.t("Прилёт по объекту «%s»") % GS.t(e.target_name), Color(1, 0.3, 0.2))
 		for t in map.targets:
-			if String(t.get("kind", "")) == "tpp" and Vector2(t.pos.x - p.x, t.pos.z - p.z).length() < 90.0:
-				map.add_blackout(t.pos, 420.0)
+			if String(t.get("kind", "")) == "tpp" and Vector2(t.pos.x - p.x, t.pos.z - p.z).length() < 260.0:
+				map.add_blackout(t.pos, 3500.0)
 				hud.alert(GS.t("БЛЭКАУТ: %s повреждена — район без света") % GS.t(String(t.name)), Color(1.0, 0.8, 0.3))
 				hud.log_event(GS.t("Блэкаут вокруг «%s»") % GS.t(String(t.name)), Color(1.0, 0.8, 0.3))
 	GS.state_changed.emit()
@@ -1116,7 +1124,7 @@ func debris_landed(d, gh: float) -> void:
 		mfg.on_blast(p, 1.0)
 		Fx.explosion(fx_root, p + Vector3(0, 2, 0), 1.3, Color(1.0, 0.5, 0.12), true)
 		play_boom("explosion", p, 2.0)
-		shake(clampf(1.0 - cam.global_position.distance_to(p) / 900.0, 0.1, 0.7))
+		shake(clampf(1.0 - cam.global_position.distance_to(p) / 4500.0, 0.03, 0.7))
 	var bi: int = map.building_at(p.x, p.z)
 	if d.cosmetic:
 		# a guest's copy of the host's wreck: the roof, the fine and the fire come with the host's map
@@ -1287,6 +1295,10 @@ func _unhandled_input(event: InputEvent) -> void:
 				toggle_fighter()
 		"strikes":
 			hud.open_strikes()
+		"warp":
+			cycle_warp()
+		"photo":
+			take_photo()
 		"feed":
 			hud.open_feed()
 		"pause":
@@ -1354,7 +1366,8 @@ func _process(delta: float) -> void:
 		predict_marker.visible = true
 		predict_marker.position = predict_info.pos + Vector3(0, 1.0, 0)
 		predict_marker.material_override = Fx.ghost(predict_info.color, 1.6)
-		var s := 1.0 + 0.12 * sin(_t * 8.0)
+		# the mark keeps its size on the screen from any height of the map camera
+		var s := (1.0 + 0.12 * sin(_t * 8.0)) * maxf(1.0, cam.global_position.distance_to(predict_marker.position) / 450.0)
 		predict_marker.scale = Vector3(s, 1, s)
 	else:
 		predict_info = {}
@@ -1373,17 +1386,85 @@ func _process(delta: float) -> void:
 		else:
 			pivot.rotation = Vector3(0.55 + 0.25 * sin(_t * 0.23 + i * 2.0), sin(_t * 0.3 + i * 1.7) * 1.2 + i * PI, 0)
 	camo_node.visible = GS.camo
+	_warp_t -= delta / maxf(Engine.time_scale, 0.001)
+	if warp > 1 and _warp_t <= 0.0:
+		_warp_t = 0.4
+		_warp_guard()
+
+
+# --- Time and photos -----------------------------------------------------------------------------
+## The clock runs ×1 / ×2 / ×4 / ×8: over a life-size city a Shahed takes minutes to arrive. It
+## drops back to ×1 by itself when a threat comes within reach of the battery.
+const WARPS := [1, 2, 4, 8]
+var warp := 1
+var _warp_t := 0.0
+var _photo_busy := false
+
+
+func cycle_warp() -> void:
+	if Net.is_online():
+		hud.alert(GS.t("В сетевой игре время идёт для всех одинаково"), Color(1.0, 0.7, 0.3))
+		return
+	set_warp(WARPS[(WARPS.find(warp) + 1) % WARPS.size()])
+
+
+func set_warp(w: int) -> void:
+	if w == warp:
+		return
+	warp = w
+	if not _slowmo:
+		Engine.time_scale = _base_time_scale * warp
+	hud.alert(GS.t("ВРЕМЯ ×%d") % warp, Color(0.6, 0.9, 1.0))
+
+
+## A threat close enough to shoot at: the clock goes back to normal.
+func _warp_guard() -> void:
+	var reach := 2500.0
+	for id in weapons:
+		reach = maxf(reach, minf(weapons[id].effective_range() * 1.15, 9000.0))
+	for e in enemies:
+		if not e.dead and e.position.distance_to(GS.base_pos) < reach:
+			set_warp(1)
+			return
+
+
+## A picture of the city as it is on the screen, without the interface, into Pictures/UAD.
+func take_photo() -> void:
+	if _photo_busy:
+		return
+	_photo_busy = true
+	hud.visible = false
+	# a photo gets the whole camera: grain, soft corners, the lens
+	var main := get_tree().current_scene
+	if main != null and main.has_method("set_post_amount"):
+		main.set_post_amount(1.0)
+	await RenderingServer.frame_post_draw
+	await RenderingServer.frame_post_draw
+	var img := get_viewport().get_texture().get_image()
+	if main != null and main.has_method("set_post_amount"):
+		main.set_post_amount(0.45)
+	hud.visible = true
+	_photo_busy = false
+	var dir := OS.get_system_dir(OS.SYSTEM_DIR_PICTURES).path_join("UAD")
+	DirAccess.make_dir_recursive_absolute(dir)
+	var t := Time.get_datetime_dict_from_system()
+	var path := dir.path_join("uad_%04d%02d%02d_%02d%02d%02d.jpg" % [t.year, t.month, t.day, t.hour, t.minute, t.second])
+	if img != null and img.save_jpg(path, 0.9) == OK:
+		hud.log_event(GS.t("Фото сохранено: %s") % path, Color(0.6, 0.9, 1.0))
+		SFX.play("click", -4.0, 1.4)
+	else:
+		hud.alert(GS.t("Не удалось сохранить фото"), Color(1.0, 0.6, 0.3))
 
 
 func play_3d(sound: String, pos: Vector3, vol := 0.0, min_gap := 0.0) -> void:
 	var d := cam.global_position.distance_to(pos)
-	var att := clampf(1.0 - d / 2200.0, 0.05, 1.0)
+	var att := clampf(700.0 / maxf(d, 700.0), 0.03, 1.0)
 	SFX.play(sound, vol + linear_to_db(att), 1.0, min_gap)
 
 
 ## Explosions are heard after they are seen (sound travels ~340 m/s; capped for gameplay).
 func play_boom(sound: String, pos: Vector3, vol := 0.0) -> void:
-	var delay := minf(cam.global_position.distance_to(pos) / 340.0, 2.5)
+	var delay := minf(cam.global_position.distance_to(pos) / 340.0, 9.0)
 	if delay < 0.05:
 		play_3d(sound, pos, vol)
 		return
@@ -1739,7 +1820,7 @@ func _net_impact(key: String, im: Array) -> void:
 	else:
 		Fx.explosion(fx_root, p, 2.2, Color(1.0, 0.45, 0.1), true)
 		play_boom("explosion", p, 6.0)
-		shake(clampf(1.0 - cam.global_position.distance_to(p) / 1200.0, 0.2, 1.0))
+		shake(clampf(1.0 - cam.global_position.distance_to(p) / 6000.0, 0.04, 1.0))
 		var gy: float = map.ground_height(p.x, p.z)
 		fire_service.start_fire(Vector3(p.x, gy, p.z), map.building_at(p.x, p.z), 2.0)
 		if flags & 2:

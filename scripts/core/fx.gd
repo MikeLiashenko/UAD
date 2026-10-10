@@ -6,6 +6,7 @@ const Shaders = preload("res://scripts/world/shaders.gd")
 static var _mats := {}
 static var _meshes := {}
 static var _glare_shader: Shader
+static var _paint_shader: Shader
 
 
 static func glow(c: Color, energy := 2.5) -> StandardMaterial3D:
@@ -29,6 +30,25 @@ static func solid(c: Color, rough := 0.8, metal := 0.0) -> StandardMaterial3D:
 	m.albedo_color = c
 	m.roughness = rough
 	m.metallic = metal
+	_mats[key] = m
+	return m
+
+
+## Paint of a vehicle or an airframe (Shaders.PAINT): the given colour, from Ultra up with
+## camouflage (`camo` 0 = none), plate seams, wear and mud.
+static func paint(c: Color, rough := 0.8, metal := 0.1, camo := 0.6) -> ShaderMaterial:
+	var key := "p%s_%.2f_%.2f_%.2f" % [c.to_html(), rough, metal, camo]
+	if _mats.has(key):
+		return _mats[key]
+	if _paint_shader == null:
+		_paint_shader = Shader.new()
+		_paint_shader.code = Shaders.PAINT
+	var m := ShaderMaterial.new()
+	m.shader = _paint_shader
+	m.set_shader_parameter("base", c)
+	m.set_shader_parameter("rough", rough)
+	m.set_shader_parameter("metal", metal)
+	m.set_shader_parameter("camo", camo)
 	_mats[key] = m
 	return m
 

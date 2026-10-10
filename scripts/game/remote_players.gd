@@ -117,7 +117,7 @@ func _update(n: Dictionary, pl: Dictionary, delta: float) -> void:
 	var age := clampf(float(Net.server_now() - int(pl.get("cam_t", 0))) / 1000.0, 0.0, 0.5)
 	var want: Vector3 = target.origin + vel * age
 	var cur: Transform3D = n.cam
-	if not bool(n.placed) or cur.origin.distance_to(want) > 400.0:
+	if not bool(n.placed) or cur.origin.distance_to(want) > 3000.0:
 		cur = Transform3D(target.basis, want)
 		n.placed = true
 	else:

@@ -112,7 +112,7 @@ func _rebuild() -> void:
 			if String(def.get("group", "manual")) != String(spec[0]):
 				continue
 			var owned: bool = GS.unlocked.get(id, false)
-			var desc := GS.t("%s\nДальность %.1f км · %s") % [GS.t(String(def.desc)), float(def.range) * 0.005, _eff_text(def)]
+			var desc := GS.t("%s\nДальность %.1f км · %s") % [GS.t(String(def.desc)), float(def.range) * 0.001, _eff_text(def)]
 			if owned:
 				_row(def.name, desc, GS.t("В строю"), [])
 			else:

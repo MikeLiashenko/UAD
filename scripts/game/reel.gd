@@ -616,10 +616,12 @@ func _onboard_eye(delta: float) -> Vector3:
 func _card_camera(delta: float) -> void:
 	_orbit += delta * 0.045
 	var k: float = clampf(t / maxf(clip_len(), 0.001), 0.0, 1.0)
-	var r: float = 560.0 if phase == "intro" else 700.0
-	var h: float = lerpf(250.0, 200.0, k) if phase == "intro" else lerpf(180.0, 330.0, k)
-	cam.global_position = Vector3(cos(_orbit) * r, h, sin(_orbit) * r)
-	cam.look_at(Vector3(0, 70, 0), Vector3.UP)
+	var r: float = 1900.0 if phase == "intro" else 2400.0
+	var h: float = lerpf(620.0, 480.0, k) if phase == "intro" else lerpf(420.0, 760.0, k)
+	# round the heart of the city (its real size now: the old circle would hang over one block)
+	var c: Vector3 = game.map.city.map_focus
+	cam.global_position = c + Vector3(cos(_orbit) * r, h, sin(_orbit) * r)
+	cam.look_at(c + Vector3(0, 90, 0), Vector3.UP)
 	cam.fov = lerpf(cam.fov, 52.0, clampf(delta * 2.0, 0.0, 1.0))
 
 

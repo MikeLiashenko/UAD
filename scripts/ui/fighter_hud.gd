@@ -69,7 +69,7 @@ func _draw() -> void:
 			var r := 22.0 if fg.locked else 30.0 - 8.0 * clampf(fg.lock_t / fg.LOCK_TIME, 0.0, 1.0)
 			draw_rect(Rect2(sp - Vector2(r, r), Vector2(r * 2, r * 2)), col, false, 2.2)
 			var k := 0
-			var lines := [GS.t("ЗАХВАТ") if fg.locked else GS.t("захват…"), "%s · %.1f км" % [GS.t(String(e.def.name)), dist * 0.005]]
+			var lines := [GS.t("ЗАХВАТ") if fg.locked else GS.t("захват…"), "%s · %.1f км" % [GS.t(String(e.def.name)), dist * 0.001]]
 			for kind in ["aim9", "aim120"]:
 				var ok: bool = fg.can_hit(e, kind) and int(fg.loaded[kind]) > 0
 				lines.append("%s %s" % [GS.t(String(GS.WEAPONS[kind].short)), "✔" if ok else "✖"])
@@ -86,7 +86,7 @@ func _draw() -> void:
 		else:
 			var d := PackedVector2Array([sp + Vector2(0, -7), sp + Vector2(7, 0), sp + Vector2(0, 7), sp + Vector2(-7, 0), sp + Vector2(0, -7)])
 			draw_polyline(d, col, 1.5)
-			_txt(sp + Vector2(10, 4), "%s %.1f" % [GS.t(String(e.def.abbr)), dist * 0.005], 11, col)
+			_txt(sp + Vector2(10, 4), "%s %.1f" % [GS.t(String(e.def.abbr)), dist * 0.001], 11, col)
 	# the nearest (or locked) threat when it is off the screen
 	var show = lk
 	if show == null:
@@ -96,7 +96,7 @@ func _draw() -> void:
 				bd = fg.pos.distance_to(e.position)
 				show = e
 	if show != null and is_instance_valid(show):
-		_edge_arrow(cam, show.position, AMBER, "%.1f км" % (fg.pos.distance_to(show.position) * 0.005), sz)
+		_edge_arrow(cam, show.position, AMBER, "%.1f км" % (fg.pos.distance_to(show.position) * 0.001), sz)
 	# the gun's lead point: put the pipper on it and hold the trigger
 	if fg.gun_target != null and is_instance_valid(fg.gun_target) and not cam.is_position_behind(fg.gun_lead):
 		var lp := cam.unproject_position(fg.gun_lead)
@@ -107,9 +107,9 @@ func _draw() -> void:
 	# --- left: speed, altitude, throttle
 	var l := Vector2(40, c.y - 95)
 	_txt(l, GS.t("СКОРОСТЬ"), 12, Color(HUD.r, HUD.g, HUD.b, 0.7))
-	_txt(l + Vector2(0, 28), GS.t("%d км/ч") % int(fg.speed * 5.2), 24, HUD)
+	_txt(l + Vector2(0, 28), GS.t("%d км/ч") % int(fg.speed * 3.6), 24, HUD)
 	_txt(l + Vector2(0, 62), GS.t("ВЫСОТА"), 12, Color(HUD.r, HUD.g, HUD.b, 0.7))
-	_txt(l + Vector2(0, 90), GS.t("%d м") % int(fg.pos.y * 5.0), 24, RED if fg.pull_up else HUD)
+	_txt(l + Vector2(0, 90), GS.t("%d м") % int(fg.pos.y), 24, RED if fg.pull_up else HUD)
 	draw_rect(Rect2(l + Vector2(0, 108), Vector2(140, 8)), Color(0, 0, 0, 0.4))
 	draw_rect(Rect2(l + Vector2(0, 108), Vector2(140 * fg.throttle, 8)), HUD)
 	_txt(l + Vector2(0, 134), GS.t("ФОРСАЖ") if fg.burner else GS.t("ТЯГА %d%%") % int(fg.throttle * 100.0), 13, AMBER if fg.burner else HUD)
@@ -165,7 +165,7 @@ func _prompt(c: Vector2, t: float) -> void:
 	else:
 		# a threat ahead, but too far for the missiles on the rails (or they are gone)
 		var k := "aim120" if int(fg.loaded.aim120) > 0 else ("aim9" if int(fg.loaded.aim9) > 0 else "")
-		var s := GS.t("Ракеты кончились — сближайся для пушки") if k == "" else GS.t("Сближайся: %s бьёт с %.1f км") % [String(GS.WEAPONS[k].short), fg.range_of(k) * 0.005]
+		var s := GS.t("Ракеты кончились — сближайся для пушки") if k == "" else GS.t("Сближайся: %s бьёт с %.1f км") % [String(GS.WEAPONS[k].short), fg.range_of(k) * 0.001]
 		_txt(p, s, 18, AMBER, HORIZONTAL_ALIGNMENT_CENTER, 700)
 
 
@@ -186,7 +186,7 @@ func _controls_card(c: Vector2, touch: bool) -> void:
 			[GS.t("Мышь"), GS.t("куда лететь (белое кольцо)")],
 			[GS.t("ЛКМ (держать)"), GS.t("пушка; красный круг — куда целиться")],
 			[GS.t("ПКМ или R"), GS.t("ракета по цели перед носом, тип выберется сам")],
-			["E / Q", GS.t("AIM-9X (до 4,5 км) / AIM-120 (до 11 км)")],
+			["E / Q", GS.t("AIM-9X (до 18 км) / AIM-120 (до 50 км)")],
 			["W / S · Shift", GS.t("тяга · форсаж (жжёт топливо)")],
 			[GS.key_label("fighter"), GS.t("на аэродром")],
 		]

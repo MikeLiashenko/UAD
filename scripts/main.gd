@@ -36,6 +36,7 @@ extends Node
 
 const CityMap = preload("res://scripts/world/city_map.gd")
 const Cities = preload("res://scripts/world/cities.gd")
+const Shaders = preload("res://scripts/world/shaders.gd")
 const UiKit = preload("res://scripts/ui/ui_kit.gd")
 const MainMenu = preload("res://scripts/ui/main_menu.gd")
 const SettingsMenu = preload("res://scripts/ui/settings_menu.gd")
@@ -87,7 +88,7 @@ func _ready() -> void:
 	_build_map(GS.city_id)
 	pending_world = {"name": GS.ctext("defense"), "difficulty": 1, "city": GS.city_id}
 	cam = Camera3D.new()
-	cam.far = 9000.0
+	cam.far = 170000.0
 	cam.near = 0.5
 	cam.fov = 62.0
 	add_child(cam)
@@ -95,13 +96,14 @@ func _ready() -> void:
 	ui = CanvasLayer.new()
 	ui.layer = 10
 	add_child(ui)
+	_setup_post()
 	if _args.has("offscreen"):
 		_setup_offscreen()
 	Net.main = self
 	Net.session_ended.connect(_on_session_ended)
 	if _args.has("plan"):
 		# --plan=file.png [--plan-at=x,z,size] (a close-up of one part of the city)
-		var pa := String(_args.get("plan-at", "0,0,2000")).split(",")
+		var pa := String(_args.get("plan-at", "0,0,0")).split(",")
 		map.dump_plan(String(_args.plan), float(pa[0]), float(pa[1]), float(pa[2]))
 	if _args.has("mptest"):
 		_mp_unit_selftest()
@@ -154,6 +156,49 @@ func _ready() -> void:
 			show_menu()
 
 
+## The camera layer (Shaders.CAMERA) over the 3D picture and under the interface: Max / UltraMax
+## on the Forward+ renderer, when the player has not switched it off.
+var _post: ColorRect
+var _post_shot: ColorRect
+
+
+func _setup_post() -> void:
+	var layer := CanvasLayer.new()
+	layer.layer = 1
+	add_child(layer)
+	_post = _post_rect()
+	layer.add_child(_post)
+	GS.state_changed.connect(_update_post)
+	_update_post()
+
+
+func _post_rect() -> ColorRect:
+	var r := ColorRect.new()
+	r.set_anchors_preset(Control.PRESET_FULL_RECT)
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var m := ShaderMaterial.new()
+	var sh := Shader.new()
+	sh.code = Shaders.CAMERA
+	m.shader = sh
+	r.material = m
+	return r
+
+
+func _update_post() -> void:
+	var on: bool = int(GS.settings.quality) >= 3 and bool(GS.settings.get("film", true)) and RenderingServer.get_current_rendering_method() == "forward_plus"
+	if _post != null:
+		_post.visible = on
+	if _post_shot != null:
+		_post_shot.visible = on
+
+
+## How much of the camera shows: 0.45 in play, 1 for a photo.
+func set_post_amount(a: float) -> void:
+	for r in [_post, _post_shot]:
+		if r != null:
+			((r as ColorRect).material as ShaderMaterial).set_shader_parameter("amount", a)
+
+
 func _parse_args() -> void:
 	for a in OS.get_cmdline_user_args():
 		var s := String(a).trim_prefix("--")
@@ -163,6 +208,9 @@ func _parse_args() -> void:
 		Engine.time_scale = float(_args.speed)
 	if _args.has("nomarkers"):
 		GS.settings.markers = false
+	if _args.has("quality"):
+		# test hook: the graphics level of this run only (the settings file is not touched)
+		GS.settings.quality = int(_args.quality)
 	if _args.has("lang"):
 		GS.set_language(String(_args.lang))
 	if _args.has("bind"):
@@ -403,7 +451,7 @@ func _process(delta: float) -> void:
 	if _args.has("follow") and game and is_instance_valid(game) and not game.enemies.is_empty():
 		var near = _nearest_enemy()
 		game.rig.focus(near.position)
-		game.rig._t_dist = 300.0
+		game.rig._t_dist = 1500.0
 		game.rig._t_pitch = 0.1
 		game.locked = near
 	if _args.has("aimbot") and game and is_instance_valid(game) and game.view == "base" and not game.enemies.is_empty():
@@ -490,8 +538,10 @@ func _process(delta: float) -> void:
 			_open_screen(what)
 	if (_mode == "menu" or _mode == "settings") and _shots.is_empty():
 		_orbit += delta * 0.05
-		cam.global_position = Vector3(cos(_orbit) * 950.0, 300.0, sin(_orbit) * 950.0)
-		cam.look_at(Vector3(0, 90, 0), Vector3.UP)
+		# the menu camera circles the heart of the city
+		var mf: Vector3 = map.city.map_focus
+		cam.global_position = mf + Vector3(cos(_orbit) * 2400.0, 620.0, sin(_orbit) * 2400.0)
+		cam.look_at(mf + Vector3(0, 120, 0), Vector3.UP)
 	_clock += delta / maxf(Engine.time_scale, 0.001)
 	_shot_list_step()
 	if _shot_cam != null:
@@ -571,21 +621,21 @@ func _fighter_pilot(delta: float) -> void:
 			bd = f.pos.distance_to(e.position)
 			best = e
 	f.trigger = false
-	var want: Vector3 = Vector3(-f.pos.x, 250.0 - f.pos.y, -f.pos.z).normalized()
+	var want: Vector3 = Vector3(GS.base_pos.x - f.pos.x, 1500.0 - f.pos.y, GS.base_pos.z - f.pos.z).normalized()
 	if best != null:
-		want = (Bullet.lead(f.pos, best.position, best.vel, 900.0 + f.speed) - f.pos).normalized()
-		f.burner = bd > 1600.0
+		want = (Bullet.lead(f.pos, best.position, best.vel, 1050.0 + f.speed) - f.pos).normalized()
+		f.burner = bd > 9000.0
 		f.throttle = 0.85
 		if f.locked and f.lock == best and float(best.inbound) < float(best.hp):
-			if bd > 950.0 and int(f.loaded.aim120) > 0 and bd < f.range_of("aim120"):
+			if bd > 16000.0 and int(f.loaded.aim120) > 0 and bd < f.range_of("aim120"):
 				f.fire("aim120")
-			elif bd <= f.range_of("aim9") and bd > 320.0 and int(f.loaded.aim9) > 0:
+			elif bd <= f.range_of("aim9") and bd > 1200.0 and int(f.loaded.aim9) > 0:
 				f.fire("aim9")
-		f.trigger = bd < 330.0 and f.dir.angle_to(want) < 0.05
+		f.trigger = bd < 1000.0 and f.dir.angle_to(want) < 0.05
 	# the test pilot keeps above the roofs: missiles do the low work
-	if f.pos.y + want.y * 400.0 < 130.0:
-		want = Vector3(want.x, maxf(want.y, (130.0 - f.pos.y) / 400.0), want.z).normalized()
-	if f.pull_up or f.pos.y < 90.0:
+	if f.pos.y + want.y * 1500.0 < 450.0:
+		want = Vector3(want.x, maxf(want.y, (450.0 - f.pos.y) / 1500.0), want.z).normalized()
+	if f.pull_up or f.pos.y < 300.0:
 		want = (want + Vector3(0, 1.5, 0)).normalized()
 		f.aim = want # a pilot pulls hard when the warning sounds
 	var off: float = f.aim.angle_to(want)
@@ -613,7 +663,7 @@ func _f16_input(delta: float) -> void:
 		if d < bd:
 			bd = d
 			best = e
-	var want: Vector3 = Vector3(-f.pos.x, 300.0 - f.pos.y, -f.pos.z).normalized()
+	var want: Vector3 = Vector3(GS.base_pos.x - f.pos.x, 1500.0 - f.pos.y, GS.base_pos.z - f.pos.z).normalized()
 	if best != null:
 		want = (best.position - f.pos).normalized()
 		if String(best.variant) == "kab":
@@ -754,16 +804,17 @@ func _start_autotest() -> void:
 	var pos := Vector3.ZERO
 	var found := false
 	var r := 0.0
-	while r < 950.0 and not found:
+	var mf: Vector3 = map.city.map_focus
+	while r < map.half * 0.9 and not found:
 		var a := 0.0
 		while a < TAU:
-			var p := Vector3(cos(a) * r, 0, sin(a) * r)
+			var p := mf + Vector3(cos(a) * r, 0, sin(a) * r)
 			if map.location_at(p.x, p.z) == loc_want:
 				pos = p
 				found = true
 				break
 			a += 0.2
-		r += 40.0
+		r += 150.0
 	GS.new_world("autotest", 1, pos, loc_want, map.city_id)
 	GS.world_id = "" # never written to disk
 	_start_session()
@@ -1011,7 +1062,7 @@ func _mp_unit_selftest() -> void:
 ## their markings and the water from the ground a kilometre away, and the map flickered.
 func _fit_near() -> void:
 	var high: bool = game == null or not is_instance_valid(game) or String(game.view) == "top"
-	cam.near = clampf(cam.global_position.y * 0.03, 0.5, 12.0) if high else 0.5
+	cam.near = clampf(cam.global_position.y * 0.03, 0.5, 60.0) if high else 0.3
 
 
 ## --strikedemo: every site known, one damaged, one destroyed, strikes in flight, money to spend.
@@ -1256,7 +1307,7 @@ func _mp_session_selftest() -> void:
 		Net.set_offline() # every write fails quietly, no stream reaches the network
 		Net.open_world()
 		var p := Net._player("Мыкола", 1)
-		p.base = GS.base_pos + Vector3(220, 0, 90)
+		p.base = GS.base_pos + Vector3(1100, 0, 450)
 		p.has_base = true
 		p.loc = GS.base_loc
 		p.cam = Transform3D(Basis.looking_at(Vector3(0, -0.3, -1)), p.base + Vector3(0, 12, 0))
@@ -1267,7 +1318,7 @@ func _mp_session_selftest() -> void:
 	elif _mp_stage == 1 and _clock >= 2.0:
 		_mp_stage = 2
 		var node: Dictionary = game.remote._p.get(_MP_FAKE, {})
-		var base_ok: bool = not node.is_empty() and (node.base as Node3D).visible and (node.base as Node3D).position.distance_to(Net.players[_MP_FAKE].base) < 30.0
+		var base_ok: bool = not node.is_empty() and (node.base as Node3D).visible and (node.base as Node3D).position.distance_to(Net.players[_MP_FAKE].base) < 60.0
 		print("UAD MPTEST friend base shown=%s eye=%s" % [base_ok, not node.is_empty() and (node.eye as Node3D).visible])
 		game.watch(_MP_FAKE)
 	elif _mp_stage == 2 and _clock >= 3.0:
@@ -1303,6 +1354,7 @@ var _shot_cam: Camera3D
 var _shots: Array = []
 var _shot_i := 0
 var _shot_t := -1.0
+var _shot_settle := 0
 
 
 func _setup_offscreen() -> void:
@@ -1316,7 +1368,7 @@ func _setup_offscreen() -> void:
 		screens.append(sr)
 		if sr.intersects(wr):
 			visible_somewhere = true
-	print("UAD OFFSCREEN window %s on screens %s visible=%s" % [wr, screens, visible_somewhere])
+	print("UAD OFFSCREEN window %s on screens %s visible=%s renderer=%s quality=%d" % [wr, screens, visible_somewhere, RenderingServer.get_current_rendering_method(), int(GS.settings.quality)])
 	if visible_somewhere:
 		# never flash a window on the player's screen: better no picture at all
 		print("UAD OFFSCREEN window would be visible — aborting")
@@ -1330,11 +1382,18 @@ func _setup_offscreen() -> void:
 	_shot_vp.size = size
 	_shot_vp.world_3d = get_viewport().find_world_3d()
 	_shot_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	_shot_vp.msaa_3d = Viewport.MSAA_4X
+	_shot_vp.msaa_3d = Viewport.MSAA_8X if int(GS.settings.quality) >= 4 else Viewport.MSAA_4X
+	_shot_vp.positional_shadow_atlas_size = 8192 if int(GS.settings.quality) >= 4 else 4096
 	add_child(_shot_vp)
 	_shot_cam = Camera3D.new()
 	_shot_vp.add_child(_shot_cam)
 	_shot_cam.current = true
+	_post_shot = _post_rect()
+	_post_shot.size = Vector2(size)
+	_shot_vp.add_child(_post_shot)
+	_update_post()
+	if _args.has("photo"):
+		set_post_amount(1.0)
 	get_tree().create_timer(1.0, true, false, true).timeout.connect(func() -> void:
 		print("UAD OFFSCREEN after 1 s: focused=%s window=%s" % [DisplayServer.window_is_focused(), Rect2i(DisplayServer.window_get_position(), DisplayServer.window_get_size())]))
 	if _args.has("shotlist"):
@@ -1362,8 +1421,10 @@ func _shot_list_step() -> void:
 		game.rig.set_process(false) # the camera belongs to the shot list now
 	var pos: Array = s.get("pos", [900, 300, 900])
 	var look: Array = s.get("look", [0, 60, 0])
-	cam.global_position = Vector3(float(pos[0]), float(pos[1]), float(pos[2]))
-	cam.look_at(Vector3(float(look[0]), float(look[1]), float(look[2])), Vector3.UP)
+	# "base": true — both points are offsets from the battery's position
+	var origin := GS.base_pos if bool(s.get("base", false)) else Vector3.ZERO
+	cam.global_position = origin + Vector3(float(pos[0]), float(pos[1]), float(pos[2]))
+	cam.look_at(origin + Vector3(float(look[0]), float(look[1]), float(look[2])), Vector3.UP)
 	cam.fov = float(s.get("fov", 62.0))
 	if s.has("night") and (game == null or not is_instance_valid(game)):
 		map.set_night(float(s.night))
@@ -1374,6 +1435,13 @@ func _shot_list_step() -> void:
 		return
 	if _clock - _shot_t < float(s.get("hold", 0.6)):
 		return
+	# the streets around the camera are still being made
+	if map.stream.busy() and _clock - _shot_t < 25.0:
+		return
+	if _shot_settle < 3:
+		_shot_settle += 1
+		return
+	_shot_settle = 0
 	var file := String(s.get("file", "shot_%d.png" % _shot_i))
 	var img := _frame_image()
 	if file.ends_with(".jpg"):
@@ -1441,7 +1509,7 @@ func _mp_live_step() -> void:
 		if Net.role == "guest" and not _mp_live.picked and screen != null and is_instance_valid(screen) and screen.get_script() == MapSelect:
 			_mp_live.picked = true
 			var hb: Array = Net.world.get("base", [0.0, 0.0])
-			var spot: Vector3 = map.nearest_base_spot(Vector3(float(hb[0]) + 140.0, 0, float(hb[1])), GS.Loc.FIELD)
+			var spot: Vector3 = map.nearest_base_spot(Vector3(float(hb[0]) + 700.0, 0, float(hb[1])), GS.Loc.FIELD)
 			var loc: int = map.location_at(spot.x, spot.z)
 			print("UAD MPLIVE guest: base at %.0f,%.0f (host at %.0f,%.0f) at %.1f s" % [spot.x, spot.z, float(hb[0]), float(hb[1]), _clock])
 			create_world(spot, loc if loc >= 0 else GS.Loc.FIELD)
@@ -1473,7 +1541,7 @@ func _mp_live_report() -> void:
 	else:
 		var err := "-"
 		if g_ok and game.net_err_n > 0:
-			err = "avg %.1f m · max %.1f m (%d updates)" % [game.net_err_sum / game.net_err_n * 5.0, game.net_err_max * 5.0, game.net_err_n]
+			err = "avg %.1f m · max %.1f m (%d updates)" % [game.net_err_sum / game.net_err_n, game.net_err_max, game.net_err_n]
 		print("UAD MPLIVE guest t=%.0f: role=%s puppets=%d raid=%.1f/s lag=%dms rtt=%dms kills=%d money=%d phase=%s correction=%s" % [
 			_clock, Net.role, game.net_enemies.size() if g_ok else -1, q.hz, q.lag, q.rtt, int(GS.stats.get("kills", 0)), GS.money,
 			game.director.phase_name() if g_ok else "-", err])

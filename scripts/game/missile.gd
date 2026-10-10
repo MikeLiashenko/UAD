@@ -4,13 +4,14 @@ extends Node3D
 const Fx = preload("res://scripts/core/fx.gd")
 const Meshes = preload("res://scripts/core/meshes.gd")
 const Bullet = preload("res://scripts/game/bullet.gd")
+const Trail = preload("res://scripts/game/trail.gd")
 
 var game
 var target
 var weapon_id := "iris"
 var def: Dictionary
 var vel := Vector3.UP
-var speed := 40.0
+var speed := 60.0
 var max_speed := 300.0
 var turn := 3.0
 var life := 14.0
@@ -27,6 +28,8 @@ func _ready() -> void:
 	def = GS.WEAPONS[weapon_id]
 	max_speed = float(def.speed)
 	turn = float(def.turn)
+	# enough fuel and battery to fly out to the edge of its zone, and a little more
+	life = float(def.range) / max_speed * 1.7 + 6.0
 	add_child(Meshes.interceptor(weapon_id == "patriot"))
 	_trail = CPUParticles3D.new()
 	_trail.mesh = Fx.sphere(1.0, 6)
@@ -54,6 +57,11 @@ func _ready() -> void:
 	l.omni_range = 40.0
 	l.position = Vector3(0, 0, 3.5)
 	add_child(l)
+	# the long streak across the sky
+	var ribbon := Trail.new()
+	ribbon.follow = self
+	ribbon.life = 11.0 if max_speed > 800.0 else 8.0
+	game.fx_root.add_child(ribbon)
 	_orient()
 	if cosmetic:
 		return
@@ -96,18 +104,23 @@ func _process(delta: float) -> void:
 	position += vel * delta
 	_orient()
 	if _target_ok():
-		var r: float = target.radius + 8.0
-		if Bullet.seg_dist(p0, position, target.position) < r:
+		# the proximity fuse works on the closest approach inside the frame: at these closing
+		# speeds the two cross tens of metres between two frames
+		var r: float = target.radius + 12.0
+		var rel0: Vector3 = p0 - target.position
+		var rel1: Vector3 = rel0 + (vel - target.vel) * delta
+		if Bullet.seg_dist(rel0, rel1, Vector3.ZERO) < r:
+			position = target.position
 			_detonate(true)
 			return
-	if life <= 0.0 or position.y < 0.5:
+	if life <= 0.0 or position.y < 0.5 or (position.y < 400.0 and position.y < game.map.ground_height(position.x, position.z)):
 		_detonate(false)
 
 
-## The nearest threat within 35° of the nose and 1200 units that is not already taken care of.
+## The nearest threat within 35° of the nose and 15 km that is not already taken care of.
 func _retarget(dir: Vector3) -> bool:
 	var best = null
-	var bd := 1200.0
+	var bd := 15000.0
 	for e in game.enemies:
 		if e.dead or GS.eff(weapon_id, e) <= 0.0 or e.inbound >= e.hp:
 			continue
@@ -124,7 +137,7 @@ func _retarget(dir: Vector3) -> bool:
 
 
 ## Fragments still reach a target this close to the burst point.
-const FRAG_RADIUS := 34.0
+const FRAG_RADIUS := 45.0
 
 
 func _detonate(hit: bool) -> void:

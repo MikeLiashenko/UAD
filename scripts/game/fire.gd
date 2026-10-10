@@ -7,7 +7,7 @@ const Fx = preload("res://scripts/core/fx.gd")
 
 ## A fire nobody attends dies down on its own after this many seconds — the building is left
 ## gutted (and stays collapsed until the repair crews get to it).
-const BURN_OUT := 210.0
+const BURN_OUT := 480.0
 
 var game
 ## Building this fire sits on, or -1 for a fire on open ground.

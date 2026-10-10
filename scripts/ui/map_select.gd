@@ -10,8 +10,8 @@ var main
 var map
 var cam: Camera3D
 var focus := Vector3(60, 0, 0)
-var height := 1500.0
-var _t_height := 1500.0
+var height := 9000.0
+var _t_height := 9000.0
 
 var chosen := Vector3.ZERO
 var chosen_loc := -1
@@ -226,9 +226,9 @@ func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_WHEEL_UP and mb.pressed:
-			_t_height = clampf(_t_height * 0.88, 250.0, 2200.0)
+			_t_height = clampf(_t_height * 0.88, 500.0, 45000.0)
 		elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN and mb.pressed:
-			_t_height = clampf(_t_height * 1.14, 250.0, 2200.0)
+			_t_height = clampf(_t_height * 1.14, 500.0, 45000.0)
 		elif mb.button_index == MOUSE_BUTTON_LEFT:
 			if mb.pressed:
 				_left = true
@@ -245,7 +245,7 @@ func _gui_input(event: InputEvent) -> void:
 		if _moved:
 			focus -= Vector3(mm.relative.x, 0, mm.relative.y) * height * 0.0016
 	elif event is InputEventMagnifyGesture:
-		_t_height = clampf(_t_height / (event as InputEventMagnifyGesture).factor, 250.0, 2200.0)
+		_t_height = clampf(_t_height / (event as InputEventMagnifyGesture).factor, 500.0, 45000.0)
 
 
 func _pick(screen: Vector2) -> void:

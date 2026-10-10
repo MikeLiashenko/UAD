@@ -25,8 +25,8 @@ const STEER := 1.8
 const HALF_W := 1.3
 const HALF_L := 2.6
 ## The radio calls only what the gun can reach: drones below this height (world units).
-const MAX_ALT := 330.0
-const RADIO_RANGE := 1300.0
+const MAX_ALT := 1400.0
+const RADIO_RANGE := 6000.0
 ## Barrel heat per second of fire and cooling per second.
 const HEAT := 0.55
 const COOL := 0.4
@@ -274,7 +274,7 @@ func _floor_at(x: float, z: float) -> float:
 
 
 func _blocked_point(x: float, z: float, y: float) -> bool:
-	if absf(x) > 990.0 or absf(z) > 990.0:
+	if absf(x) > map.half - 10.0 or absf(z) > map.half - 10.0:
 		return true
 	var bi: int = map.building_at(x, z)
 	if bi >= 0:
@@ -396,7 +396,7 @@ func _gun(delta: float) -> void:
 	if at_gun:
 		var dir := aim_dir()
 		unit.manual_dir = dir
-		unit.manual_point = cam.global_position + dir * 400.0
+		unit.manual_point = cam.global_position + dir * 1200.0
 	var firing := at_gun and fire_held and not overheated and not get_tree().paused
 	unit.trigger = firing
 	if firing:
@@ -451,7 +451,7 @@ func _radio(delta: float) -> void:
 			if d2.length() > RADIO_RANGE:
 				continue
 			var v := Vector2(e.vel.x, e.vel.z)
-			var t := clampf(-d2.dot(v) / maxf(v.length_squared(), 0.01), 0.0, 90.0)
+			var t := clampf(-d2.dot(v) / maxf(v.length_squared(), 0.01), 0.0, 240.0)
 			var p := Vector2(e.position.x, e.position.z) + v * t
 			var reach := p.distance_to(Vector2(pos.x, pos.z)) / (MAX_SPEED * 0.8)
 			# catchable ones first (we get there before it passes), then the soonest
@@ -464,7 +464,7 @@ func _radio(delta: float) -> void:
 	elif tip != null:
 		var v := Vector2(tip.vel.x, tip.vel.z)
 		var d2 := Vector2(tip.position.x - pos.x, tip.position.z - pos.z)
-		tip_eta = clampf(-d2.dot(v) / maxf(v.length_squared(), 0.01), 0.0, 90.0)
+		tip_eta = clampf(-d2.dot(v) / maxf(v.length_squared(), 0.01), 0.0, 240.0)
 		var p := Vector2(tip.position.x, tip.position.z) + v * tip_eta
 		if Vector2(tip_point.x, tip_point.z).distance_to(p) > 30.0:
 			tip_point = _drivable_near(Vector3(p.x, 0.0, p.y))

@@ -11,6 +11,7 @@ config/description="Night air-defense duty over Kyiv. 3D, fully procedural."
 config/version="1.0"
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
+config/project_settings_override="user://renderer.cfg"
 config/icon="res://icon.png"
 config/windows_native_icon="res://icon.ico"
 boot_splash/bg_color=Color(0.01, 0.03, 0.03, 1)
@@ -39,6 +40,10 @@ night={
 gfx={
 "type": "float",
 "value": 2.0
+}
+lamp_real={
+"type": "vec4",
+"value": Vector4(0, 0, -1, -1)
 }
 
 [internationalization]

@@ -27,9 +27,9 @@ static func lead(from: Vector3, tp: Vector3, tv: Vector3, speed: float) -> Vecto
 
 
 func _ready() -> void:
-	mesh = Fx.cube(Vector3(0.3, 0.3, 7.0) if not manual else Vector3(0.22, 0.22, 5.0))
+	mesh = Fx.cube(Vector3(0.34, 0.34, 13.0) if not manual else Vector3(0.26, 0.26, 9.0))
 	material_override = Fx.glow(color, 6.0)
-	extra_cull_margin = 8.0
+	extra_cull_margin = 16.0
 	cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_orient()
 

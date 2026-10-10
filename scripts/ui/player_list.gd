@@ -82,7 +82,7 @@ func _row(c: String, p: Dictionary, mine: bool) -> Control:
 	var doing := RemotePlayers.view_name(String(p.view)) if bool(p.has_cam) else GS.t("выбирает позицию")
 	var where := ""
 	if bool(p.has_base):
-		var d := Vector2(float(p.base.x) - GS.base_pos.x, float(p.base.z) - GS.base_pos.z).length() * 0.005
+		var d := Vector2(float(p.base.x) - GS.base_pos.x, float(p.base.z) - GS.base_pos.z).length() * 0.001
 		where = GS.loc_name(int(p.loc)) + (GS.t(" · %.1f км от вас") % d if not mine else "")
 	col.add_child(UiKit.label(doing + (" · " + where if where != "" else ""), 13, Color(0.65, 0.9, 0.8)))
 	var pb := PingBars.new()

@@ -42,9 +42,9 @@ func _draw() -> void:
 	var tip = mg.tip
 	if tip != null and is_instance_valid(tip) and not tip.dead:
 		var d: float = Vector2(tip.position.x - mg.pos.x, tip.position.z - mg.pos.z).length()
-		var line := GS.t("📻 РАДИО: %s · %.1f км · выс. %d м · пролёт через %d с") % [GS.t(String(tip.def.name)), d * 0.005, int(tip.position.y * 5.0), int(mg.tip_eta)]
+		var line := GS.t("📻 РАДИО: %s · %.1f км · выс. %d м · пролёт через %d с") % [GS.t(String(tip.def.name)), d * 0.001, int(tip.position.y), int(mg.tip_eta)]
 		if mg.tip_eta < 1.0 and mg.pos.distance_to(mg.tip_point) > 40.0:
-			line = GS.t("📻 РАДИО: %s · %.1f км · уходит — ищите следующую цель") % [GS.t(String(tip.def.name)), d * 0.005]
+			line = GS.t("📻 РАДИО: %s · %.1f км · уходит — ищите следующую цель") % [GS.t(String(tip.def.name)), d * 0.001]
 		_txt(Vector2(c.x - 500, 118), line, 17, AMBER, HORIZONTAL_ALIGNMENT_CENTER, 1000)
 		if mg.seat == "drive":
 			var to_beacon: float = mg.pos.distance_to(mg.tip_point)
@@ -52,7 +52,7 @@ func _draw() -> void:
 			_txt(Vector2(c.x - 500, 142), hint, 15, NEON if to_beacon <= 25.0 else Color(0.8, 1.0, 0.9), HORIZONTAL_ALIGNMENT_CENTER, 1000)
 			_edge_arrow(cam, mg.tip_point + Vector3(0, 3, 0), AMBER, "%d м" % int(to_beacon), sz)
 		else:
-			_edge_arrow(cam, tip.position, RED, "%.1f км" % (cam.global_position.distance_to(tip.position) * 0.005), sz)
+			_edge_arrow(cam, tip.position, RED, "%.1f км" % (cam.global_position.distance_to(tip.position) * 0.001), sz)
 	else:
 		_txt(Vector2(c.x - 500, 118), GS.t("📻 РАДИО: на вашем участке тихо — ждите целей"), 16, Color(0.6, 0.9, 0.75), HORIZONTAL_ALIGNMENT_CENTER, 1000)
 	# --- at the gun: crosshair and the threats in reach
@@ -73,7 +73,7 @@ func _draw() -> void:
 			var in_reach := dist < float(GS.WEAPONS.mg.range)
 			var ec := RED if in_reach else AMBER
 			draw_rect(Rect2(sp - Vector2(r, r), Vector2(r * 2.0, r * 2.0)), ec, false, 1.5)
-			_txt(sp + Vector2(r + 5, 4), "%s · %d м" % [GS.t(String(e.def.abbr)), int(dist * 5.0)], 12, ec)
+			_txt(sp + Vector2(r + 5, 4), "%s · %d м" % [GS.t(String(e.def.abbr)), int(dist)], 12, ec)
 		if mg.overheated:
 			_txt(Vector2(c.x - 200, c.y + 70), GS.t("СТВОЛ ПЕРЕГРЕТ"), 22, RED, HORIZONTAL_ALIGNMENT_CENTER, 400)
 	# --- the truck, bottom left

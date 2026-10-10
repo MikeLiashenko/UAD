@@ -11,9 +11,12 @@ extends Node3D
 
 const Meshes = preload("res://scripts/core/meshes.gd")
 const Fx = preload("res://scripts/core/fx.gd")
+const Trail = preload("res://scripts/game/trail.gd")
 
-const B_GRAVITY := 26.0
+const B_GRAVITY := 9.81
 const DETECT_TIME := 14.0
+## A scout sees the base from this far (horizontally).
+const DETECT_RADIUS := 600.0
 ## Chance that a weapon is thrown off course by jamming and lands away from its target.
 const MISS_CHANCE := {"shahed": 0.24, "cruise": 0.18, "ballistic": 0.16}
 
@@ -70,7 +73,7 @@ var _flash := 0.0
 var _p0 := Vector3.ZERO
 var _v0 := Vector3.ZERO
 var _flight := 15.0
-var _life := 85.0
+var _life := 110.0
 var _leaving := false
 var _alt_amp := 0.0
 var _alt_freq := 0.1
@@ -116,6 +119,17 @@ func _ready() -> void:
 	marker.pixel_size = 0.0011
 	marker.render_priority = 10
 	add_child(marker)
+	if type == "ballistic":
+		# a warhead coming down from the stratosphere draws a burning line
+		var tr := Trail.new()
+		tr.follow = self
+		tr.life = 7.0
+		tr.hot_time = 2.6
+		tr.w0 = 2.2
+		tr.w1 = 9.0
+		tr.hot = Color(3.4, 1.9, 0.9, 0.95)
+		tr.smoke = Color(0.7, 0.55, 0.45, 0.3)
+		game.fx_root.add_child(tr)
 	if puppet:
 		_update_marker()
 		return
@@ -123,8 +137,8 @@ func _ready() -> void:
 	# harder to throw off than a Shahed, but when it happens they stray much further.
 	if not strike_base and not def.has("mirv") and _rng.randf() < float(MISS_CHANCE.get(type, 0.0)):
 		missed = true
-		var spread := 170.0 if type == "shahed" else (260.0 if type == "cruise" else 420.0)
-		var off := Vector2.from_angle(_rng.randf() * TAU) * _rng.randf_range(60.0, spread)
+		var spread := 800.0 if type == "shahed" else (1300.0 if type == "cruise" else 2000.0)
+		var off := Vector2.from_angle(_rng.randf() * TAU) * _rng.randf_range(250.0, spread)
 		var mx := target_pos.x + off.x
 		var mz := target_pos.z + off.y
 		target_pos = Vector3(mx, game.map.ground_height(mx, mz), mz)
@@ -147,7 +161,7 @@ func _ready() -> void:
 			var side := (to - from).orthogonal().normalized()
 			var fracs := [0.4] if has_via else [0.35, 0.65]
 			for f in fracs:
-				var p := from.lerp(to, f) + side * _rng.randf_range(-300.0, 300.0)
+				var p := from.lerp(to, f) + side * _rng.randf_range(-2500.0, 2500.0)
 				waypoints.append(Vector3(p.x, cruise_alt, p.y))
 			if has_via:
 				waypoints.append(Vector3(via.x, cruise_alt, via.z))
@@ -210,29 +224,32 @@ func _steer(aim: Vector3, turn: float, delta: float) -> void:
 ## Desired cruise altitude right now: slow climbs/descents, and never below the rooftops ahead.
 func _alt_here() -> float:
 	var a := cruise_alt + _alt_amp * sin(age * _alt_freq * TAU + _alt_phase)
-	var fwd := Vector3(vel.x, 0, vel.z).normalized() * maxf(speed * 1.3, 40.0)
+	var fwd := Vector3(vel.x, 0, vel.z).normalized() * maxf(speed * 1.5, 150.0)
 	var ahead := position + fwd
 	var ceil_h: float = maxf(game.map.ceiling(ahead.x, ahead.z), game.map.ceiling(position.x, position.z))
-	return maxf(a, ceil_h + 14.0)
+	return maxf(a, ceil_h + 40.0)
 
 
 func _fly_direct(delta: float) -> void:
 	var wp: Vector3 = waypoints[0]
 	var final := waypoints.size() == 1
 	var hd := Vector2(wp.x - position.x, wp.z - position.z).length()
-	var dive := 170.0 if type == "shahed" else 120.0
+	# the dive begins as far out as the weapon is high: a Shahed from 2 km tips over 2.5 km short
+	var dive := maxf(600.0, (position.y - wp.y) * 1.25) if type == "shahed" else 900.0
 	var aim := Vector3(wp.x, _alt_here(), wp.z)
-	if final and type == "cruise" and hd < 380.0 and hd > dive:
-		aim.y = _alt_here() + 60.0 # terminal pop-up before diving onto the target
+	if final and type == "cruise" and hd < 3000.0 and hd > dive:
+		aim.y = _alt_here() + 250.0 # terminal pop-up before diving onto the target
 	if final and (hd < dive or crippled):
 		aim = wp
-	var turn := 1.0 if type == "shahed" else 1.6 * maxf(1.0, speed / 115.0)
+	var turn := 0.55 if type == "shahed" else 0.6 * maxf(1.0, speed / 200.0)
+	if final and hd < dive:
+		turn *= 3.0 # the terminal guidance is the tightest part of the flight
 	if crippled:
-		turn = 0.6
+		turn = 0.35
 	_steer(aim, turn, delta)
-	if not final and hd < 45.0:
+	if not final and hd < maxf(350.0, speed * 1.5):
 		waypoints.pop_front()
-	if final and (position.distance_to(wp) < 7.0 or (hd < 25.0 and position.y <= wp.y + 2.0)):
+	if final and (position.distance_to(wp) < maxf(12.0, speed * delta * 1.5) or (hd < 40.0 and position.y <= wp.y + 3.0)):
 		game.enemy_impact(self)
 	elif position.y <= game.map.ground_height(position.x, position.z):
 		game.enemy_impact(self)
@@ -266,11 +283,12 @@ func _pick_scout_waypoint() -> void:
 		var d := Vector3(position.x, 0, position.z).normalized()
 		if d == Vector3.ZERO:
 			d = Vector3.FORWARD
-		p = d * 1400.0
+		p = position + (position - GS.base_pos).normalized() * 9000.0
 	elif _rng.randf() < 0.4:
-		p = GS.base_pos + Vector3(_rng.randf_range(-350, 350), 0, _rng.randf_range(-350, 350))
+		p = GS.base_pos + Vector3(_rng.randf_range(-1800, 1800), 0, _rng.randf_range(-1800, 1800))
 	else:
-		p = Vector3(_rng.randf_range(-850, 850), 0, _rng.randf_range(-850, 850))
+		# the scout combs the sector the battery covers, not the whole city
+		p = GS.base_pos + Vector3(_rng.randf_range(-5500, 5500), 0, _rng.randf_range(-5500, 5500))
 	waypoints.clear()
 	waypoints.append(Vector3(p.x, cruise_alt, p.z))
 
@@ -282,14 +300,14 @@ func _fly_scout(delta: float) -> void:
 		_pick_scout_waypoint()
 	var wp: Vector3 = waypoints[0]
 	_steer(Vector3(wp.x, _alt_here(), wp.z), 0.7, delta)
-	if Vector2(wp.x - position.x, wp.z - position.z).length() < 40.0:
+	if Vector2(wp.x - position.x, wp.z - position.z).length() < 200.0:
 		_pick_scout_waypoint()
-	if _leaving and Vector2(position.x, position.z).length() > 1300.0:
+	if _leaving and Vector2(position.x - GS.base_pos.x, position.z - GS.base_pos.z).length() > 9000.0:
 		game.enemy_left(self)
 		return
 	if not GS.base_found:
 		var hd := Vector2(GS.base_pos.x - position.x, GS.base_pos.z - position.z).length()
-		if hd < 320.0:
+		if hd < DETECT_RADIUS:
 			GS.detection += delta * GS.detect_multiplier()
 			if GS.detection >= DETECT_TIME:
 				game.base_detected(self)
@@ -339,7 +357,7 @@ func _net_follow(delta: float) -> void:
 	# dead reckoning: move on with the velocity, then ease out whatever error is left
 	position += v * delta
 	var err := _predicted() - position
-	if err.length() > 120.0:
+	if err.length() > 900.0:
 		position += err
 	else:
 		position += err * (1.0 - exp(-delta * 5.0))
@@ -352,8 +370,8 @@ func evade() -> void:
 		return
 	var fwd := Vector3(vel.x, 0, vel.z).normalized()
 	var side := Vector3(-fwd.z, 0, fwd.x) * (1.0 if _rng.randf() < 0.5 else -1.0)
-	var j := position + fwd * 260.0 + side * 180.0
-	waypoints.push_front(Vector3(j.x, cruise_alt + _rng.randf_range(-15.0, 40.0), j.z))
+	var j := position + fwd * 1500.0 + side * 900.0
+	waypoints.push_front(Vector3(j.x, cruise_alt + _rng.randf_range(-30.0, 150.0), j.z))
 
 
 ## `by` is the id of the system that landed the hit — the nightly highlight reel credits it.
@@ -385,7 +403,7 @@ func _lose_control() -> void:
 	strike_base = false
 	var fwd := Vector3(vel.x, 0, vel.z).normalized()
 	var side := Vector3(-fwd.z, 0, fwd.x)
-	var p := position + fwd * _rng.randf_range(90.0, 240.0) + side * _rng.randf_range(-60.0, 60.0)
+	var p := position + fwd * maxf(_rng.randf_range(500.0, 1500.0), position.y * 1.2) + side * _rng.randf_range(-350.0, 350.0)
 	target_pos = Vector3(p.x, game.map.ground_height(p.x, p.z), p.z)
 	waypoints.clear()
 	waypoints.append(target_pos)

@@ -582,7 +582,7 @@ func refresh() -> void:
 		var status: String = w.status_text() if w != null else ""
 		var r: float = w.effective_range() if w != null else float(def.range)
 		var key := "%d · " % (i + 1) if i < 9 else ""
-		b.text = GS.t("%s%s\n%s · %d м\n%s") % [key, GS.t(String(def.short)), ammo, int(r * 5.0), status]
+		b.text = GS.t("%s%s\n%s · %d м\n%s") % [key, GS.t(String(def.short)), ammo, int(r), status]
 		b.tooltip_text = GS.t(String(def.name))
 		var sel: bool = id == game.selected_weapon
 		b.add_theme_stylebox_override("normal", _style_sel if sel else _style_norm)
@@ -656,6 +656,9 @@ func _process(delta: float) -> void:
 		phase_lbl.text = GS.t("ДЕНЬ %d · %s · %d:%02d") % [GS.day, d.phase_name(), secs / 60, secs % 60]
 		if d.is_night() and d.time_left() <= 0.0:
 			phase_lbl.text = GS.t("ДЕНЬ %d · НОЧЬ · добейте цели: %d") % [GS.day, game.enemies.size()]
+		# the time warp stays on the clock for as long as it runs
+		if int(game.warp) > 1:
+			phase_lbl.text += "  ▶▶ ×%d" % int(game.warp)
 	if GS.base_found:
 		detect_lbl.text = GS.t("⚠ БАЗА ОБНАРУЖЕНА — ожидайте удар")
 		detect_lbl.add_theme_color_override("font_color", Color(1, 0.3, 0.2, 0.5 + 0.5 * absf(sin(_t * 5.0))))
@@ -700,7 +703,7 @@ func _update_target_info() -> void:
 			in_r = GS.t(" · %s НЕ ПОРАЖАЕТ") % GS.t(String(w.def.short))
 		else:
 			in_r = GS.t(" · В ЗОНЕ ПОРАЖЕНИЯ") if w.in_range(e) else GS.t(" · вне зоны")
-	target_lbl.text = GS.t("ЦЕЛЬ: %s → %s\nДальность %.1f км · высота %d м · %d%%%s") % [GS.t(String(e.def.name)), GS.t(e.target_name), dist * 0.005, int(e.position.y * 5.0), int(100.0 * e.hp / e.max_hp), in_r]
+	target_lbl.text = GS.t("ЦЕЛЬ: %s → %s\nДальность %.1f км · высота %d м · %d%%%s") % [GS.t(String(e.def.name)), GS.t(e.target_name), dist * 0.001, int(e.position.y), int(100.0 * e.hp / e.max_hp), in_r]
 	predict_lbl.text = GS.t("Падение обломков: ") + String(info.text)
 	predict_lbl.add_theme_color_override("font_color", info.color)
 

@@ -47,112 +47,112 @@ const LOCATIONS := {
 const WEAPONS := {
 	"mg": {
 		"name": "Пикап с пулемётом", "short": "ПИКАП", "kind": "gun", "class": "gun", "group": "manual", "unlock": 0, "fcs": false,
-		"range": 400.0, "rate": 0.07, "damage": 8.0, "spread": 0.012, "speed": 560.0, "eye": 4.2,
+		"range": 1800.0, "ceil": 1500.0, "rate": 0.085, "damage": 8.0, "spread": 0.0045, "speed": 850.0, "eye": 4.2,
 		"eff": {"scout": 1.0, "shahed": 1.0, "cruise": 0.3, "ballistic": 0.0},
-		"desc": "Мобильная огневая группа. Дёшево, эффективно против шахедов. Прицел без СУО — упреждение на глаз.",
+		"desc": "Мобильная огневая группа с ДШК. Дёшево, эффективно против шахедов до 1,8 км. Прицел без СУО — упреждение на глаз.",
 	},
 	"zu23": {
 		"name": "ЗУ-23-2 (23 мм)", "short": "ЗУ-23", "kind": "gun", "class": "gun", "group": "manual", "unlock": 3500, "fcs": false,
-		"range": 450.0, "rate": 0.055, "damage": 11.0, "spread": 0.011, "speed": 620.0, "eye": 3.6,
+		"range": 2500.0, "ceil": 1500.0, "rate": 0.055, "damage": 11.0, "spread": 0.004, "speed": 970.0, "eye": 3.6,
 		"eff": {"scout": 1.0, "shahed": 1.0, "cruise": 0.45, "ballistic": 0.0},
-		"desc": "Буксируемая спарка на позиции. Плотный огонь по шахедам, наводится вручную — упреждение на глаз.",
+		"desc": "Буксируемая спарка на позиции. Плотный огонь по шахедам до 2,5 км, наводится вручную — упреждение на глаз.",
 	},
 	"shilka": {
 		"name": "ЗСУ-23-4 «Шилка»", "short": "ШИЛКА", "kind": "gun", "class": "gun", "group": "auto", "unlock": 12000, "fcs": true,
-		"range": 520.0, "rate": 0.04, "damage": 12.0, "spread": 0.0075, "speed": 660.0, "eye": 4.6,
+		"range": 2500.0, "ceil": 1500.0, "rate": 0.04, "damage": 12.0, "spread": 0.003, "speed": 970.0, "eye": 4.6,
 		"eff": {"scout": 1.0, "shahed": 1.0, "cruise": 0.7, "ballistic": 0.0},
-		"desc": "Четыре ствола и радар: сплошная стена трассеров на малой высоте. Быстро съедает цель, если та в зоне.",
+		"desc": "Четыре ствола и радар: сплошная стена трассеров на малой высоте, до 2,5 км. Быстро съедает цель, если та в зоне.",
 	},
 	"gepard": {
 		"name": "Gepard 35 мм", "short": "GEPARD", "kind": "gun", "class": "gun", "group": "auto", "unlock": 9000, "fcs": true,
-		"range": 500.0, "rate": 0.085, "damage": 16.0, "spread": 0.008, "speed": 760.0, "eye": 5.2,
+		"range": 4000.0, "ceil": 3000.0, "rate": 0.085, "damage": 16.0, "spread": 0.0028, "speed": 1175.0, "eye": 5.2,
 		"eff": {"scout": 1.0, "shahed": 1.0, "cruise": 0.85, "ballistic": 0.0},
-		"desc": "Спаренная зенитка с радаром и вычислителем: прицел показывает точку упреждения.",
+		"desc": "Спаренная 35-мм зенитка с радаром и вычислителем: бьёт до 4 км, прицел показывает точку упреждения.",
 	},
 	"igla": {
 		"name": "ПЗРК «Игла» (расчёт)", "short": "ИГЛА", "kind": "missile", "class": "short", "group": "manual", "unlock": 5000, "fcs": true,
-		"range": 600.0, "rate": 2.2, "damage": 90.0, "speed": 320.0, "turn": 3.8, "eye": 2.2,
+		"range": 5200.0, "ceil": 3500.0, "rate": 2.2, "damage": 90.0, "speed": 570.0, "turn": 3.8, "eye": 2.2,
 		"missile_price": 500, "start_ammo": 8,
 		"eff": {"scout": 1.0, "shahed": 1.0, "cruise": 0.7, "ballistic": 0.0},
-		"desc": "Переносной комплекс на позиции: дешёвые ракеты с тепловой головкой. Долгая перезарядка между пусками.",
+		"desc": "Переносной комплекс на позиции: дешёвые ракеты с тепловой головкой, до 5,2 км. Долгая перезарядка между пусками.",
 	},
 	"avenger": {
 		"name": "Avenger (Stinger)", "short": "AVENGER", "kind": "missile", "class": "short", "group": "auto", "unlock": 13000, "fcs": true,
-		"range": 700.0, "rate": 1.0, "damage": 115.0, "speed": 360.0, "turn": 4.0, "eye": 4.0,
+		"range": 4800.0, "ceil": 3800.0, "rate": 1.0, "damage": 115.0, "speed": 700.0, "turn": 4.0, "eye": 4.0,
 		"missile_price": 800, "start_ammo": 8,
 		"eff": {"scout": 1.0, "shahed": 1.0, "cruise": 0.85, "ballistic": 0.0},
-		"desc": "Восемь «Стингеров» на вездеходе: быстрый пуск, дешёвая ракета. Рабочая лошадка против шахедов и крылатых.",
+		"desc": "Восемь «Стингеров» на вездеходе: быстрый пуск, дешёвая ракета, до 4,8 км. Рабочая лошадка против шахедов и крылатых.",
 	},
 	"drone": {
 		"name": "Дрон-перехватчик «Шершень»", "short": "ШЕРШЕНЬ", "kind": "drone", "class": "short", "group": "auto", "unlock": 16000, "fcs": true,
-		"range": 950.0, "rate": 0.85, "damage": 130.0, "speed": 175.0, "turn": 2.8, "eye": 3.4,
-		"missile_price": 700, "start_ammo": 12, "link": 1500.0, "battery": 46.0,
+		"range": 12000.0, "ceil": 4000.0, "rate": 0.85, "damage": 130.0, "speed": 90.0, "turn": 2.8, "eye": 3.4,
+		"missile_price": 700, "start_ammo": 12, "link": 20000.0, "battery": 420.0,
 		"eff": {"scout": 1.0, "shahed": 1.0, "cruise": 0.4, "ballistic": 0.0},
-		"desc": "Рой дешёвых дронов-камикадзе против «Шахедов». Сами догоняют цель и таранят её; неизрасходованные возвращаются на базу и снова идут в бой. [C] — сесть за пульт FPV и вести дрон вручную.",
+		"desc": "Рой дешёвых дронов-камикадзе против «Шахедов»: 320 км/ч, до 12 км от базы. Сами догоняют цель и таранят её; неизрасходованные возвращаются на базу и снова идут в бой. [C] — сесть за пульт FPV и вести дрон вручную.",
 	},
 	"osa": {
 		"name": "ЗРК «Оса-АКМ»", "short": "ОСА", "kind": "missile", "class": "medium", "group": "missile", "unlock": 19000, "fcs": true,
-		"range": 850.0, "rate": 1.3, "damage": 165.0, "speed": 380.0, "turn": 3.4, "eye": 5.0,
+		"range": 10000.0, "range_bm": 5000.0, "ceil": 5000.0, "rate": 1.3, "damage": 165.0, "speed": 500.0, "turn": 3.4, "eye": 5.0,
 		"missile_price": 1200, "start_ammo": 8,
 		"eff": {"scout": 1.0, "shahed": 1.0, "cruise": 0.9, "ballistic": 0.15},
-		"desc": "Советский комплекс малой-средней дальности с собственным радаром. Дешёвые ракеты, но по баллистике почти бесполезен.",
+		"desc": "Советский комплекс малой дальности с собственным радаром: до 10 км. Дешёвые ракеты, но по баллистике почти бесполезен.",
 	},
 	"iris": {
 		"name": "IRIS-T SLM", "short": "IRIS-T", "kind": "missile", "class": "medium", "group": "missile", "unlock": 22000, "fcs": true,
-		"range": 1000.0, "rate": 1.1, "damage": 220.0, "speed": 300.0, "turn": 3.2, "eye": 5.5,
+		"range": 40000.0, "range_bm": 15000.0, "ceil": 20000.0, "rate": 1.1, "damage": 220.0, "speed": 1000.0, "turn": 3.2, "eye": 5.5,
 		"missile_price": 1800, "start_ammo": 8,
 		"eff": {"scout": 1.0, "shahed": 1.0, "cruise": 1.0, "ballistic": 0.35},
-		"desc": "ЗРК средней дальности. Любые аэродинамические цели, по баллистике — две-три ракеты.",
+		"desc": "ЗРК средней дальности: до 40 км по любым аэродинамическим целям, по баллистике — две-три ракеты вблизи.",
 	},
 	"nasams": {
 		"name": "NASAMS (AMRAAM)", "short": "NASAMS", "kind": "missile", "class": "medium", "group": "missile", "unlock": 27000, "fcs": true,
-		"range": 1150.0, "rate": 1.2, "damage": 240.0, "speed": 340.0, "turn": 3.0, "eye": 4.4,
+		"range": 25000.0, "range_bm": 12000.0, "ceil": 15000.0, "rate": 1.2, "damage": 240.0, "speed": 900.0, "turn": 3.0, "eye": 4.4,
 		"missile_price": 2000, "start_ammo": 6,
 		"eff": {"scout": 1.0, "shahed": 1.0, "cruise": 1.0, "ballistic": 0.3},
-		"desc": "Батарея пусковых контейнеров с ракетами AMRAAM. Большая зона и надёжность по крылатым ракетам.",
+		"desc": "Батарея пусковых контейнеров с ракетами AMRAAM: до 25 км. Большая зона и надёжность по крылатым ракетам.",
 	},
 	"buk": {
 		"name": "«Бук-М1» (ЗРК)", "short": "БУК", "kind": "missile", "class": "long", "group": "missile", "unlock": 34000, "fcs": true,
-		"range": 1250.0, "rate": 1.5, "damage": 300.0, "speed": 430.0, "turn": 3.6, "eye": 5.6,
+		"range": 35000.0, "range_bm": 20000.0, "ceil": 22000.0, "rate": 1.5, "damage": 300.0, "speed": 850.0, "turn": 3.6, "eye": 5.6,
 		"missile_price": 2800, "start_ammo": 6,
 		"eff": {"scout": 1.0, "shahed": 1.0, "cruise": 1.0, "ballistic": 0.55},
-		"desc": "Самоходная установка с четырьмя тяжёлыми ракетами. Достаёт далеко, по баллистике нужна пара пусков.",
+		"desc": "Самоходная установка с четырьмя тяжёлыми ракетами: до 35 км, по баллистике нужна пара пусков с 20 км.",
 	},
 	"s300": {
 		"name": "С-300ПС", "short": "С-300", "kind": "missile", "class": "long", "group": "missile", "unlock": 45000, "fcs": true,
-		"range": 1500.0, "rate": 1.7, "damage": 360.0, "speed": 500.0, "turn": 4.0, "eye": 6.2,
+		"range": 75000.0, "range_bm": 30000.0, "ceil": 27000.0, "rate": 1.7, "damage": 360.0, "speed": 1700.0, "turn": 4.0, "eye": 6.2,
 		"missile_price": 4200, "start_ammo": 5,
 		"eff": {"scout": 1.0, "shahed": 1.0, "cruise": 1.0, "ballistic": 0.8},
-		"desc": "Дальний рубеж: четыре вертикальные пусковые. Держит крылатые на подходе и достаёт баллистику — но не так надёжно, как Patriot.",
+		"desc": "Дальний рубеж: до 75 км по самолётам и ракетам, до 30 км по баллистике — но не так надёжно, как Patriot. Низколетящие цели видит только из-за радиогоризонта.",
 	},
 	"patriot": {
 		"name": "Patriot PAC-3", "short": "PATRIOT", "kind": "missile", "class": "long", "group": "patriot", "unlock": 55000, "fcs": true,
-		"range": 1500.0, "rate": 1.6, "damage": 450.0, "speed": 520.0, "turn": 4.5, "eye": 6.0,
+		"range": 60000.0, "range_bm": 35000.0, "ceil": 24000.0, "rate": 1.6, "damage": 450.0, "speed": 1500.0, "turn": 4.5, "eye": 6.0,
 		"missile_price": 6000, "start_ammo": 6,
 		"eff": {"scout": 1.0, "shahed": 1.0, "cruise": 1.0, "ballistic": 1.0},
-		"desc": "Самое надёжное средство против баллистики: одна ракета — одна цель.",
+		"desc": "Самое надёжное средство против баллистики: одна ракета — одна цель, до 35 км (по аэродинамическим целям до 60 км).",
 	},
 	# --- the F-16's own weapons (scripts/game/fighter.gd): not systems of the battery, so they are
 	# in neither WEAPON_ORDER nor AMMO_ORDER; the missiles are bought in the shop's aviation section
 	"f16gun": {
 		"name": "Пушка M61 Vulcan", "short": "M61", "kind": "gun", "class": "air", "group": "air", "unlock": 0, "fcs": false,
-		"range": 300.0, "rate": 0.03, "damage": 7.0, "spread": 0.006, "speed": 900.0, "eye": 0.0,
+		"range": 1100.0, "ceil": 99999.0, "rate": 0.03, "damage": 7.0, "spread": 0.004, "speed": 1050.0, "eye": 0.0,
 		"eff": {"scout": 1.0, "shahed": 1.0, "cruise": 0.8, "ballistic": 0.0},
-		"desc": "20-мм шестиствольная пушка: 510 снарядов, бить с 1–1.5 км.",
+		"desc": "20-мм шестиствольная пушка: 510 снарядов, бить с 500–900 м.",
 	},
 	"aim9": {
 		"name": "AIM-9X Sidewinder", "short": "AIM-9X", "kind": "missile", "class": "air", "group": "air", "unlock": 0, "fcs": true,
-		"range": 900.0, "rate": 0.8, "damage": 220.0, "speed": 430.0, "turn": 7.0, "eye": 0.0,
+		"range": 18000.0, "ceil": 99999.0, "rate": 0.8, "damage": 220.0, "speed": 850.0, "turn": 7.0, "eye": 0.0,
 		"missile_price": 2500, "start_ammo": 0,
 		"eff": {"scout": 1.0, "shahed": 1.0, "cruise": 1.0, "ballistic": 0.0},
-		"desc": "Тепловая ракета ближнего боя: захват в конусе перед носом, до 4.5 км.",
+		"desc": "Тепловая ракета ближнего боя: захват в конусе перед носом, до 18 км.",
 	},
 	"aim120": {
 		"name": "AIM-120 AMRAAM", "short": "AIM-120", "kind": "missile", "class": "air", "group": "air", "unlock": 0, "fcs": true,
-		"range": 2200.0, "rate": 1.2, "damage": 260.0, "speed": 520.0, "turn": 4.5, "eye": 0.0,
+		"range": 50000.0, "ceil": 99999.0, "rate": 1.2, "damage": 260.0, "speed": 1300.0, "turn": 4.5, "eye": 0.0,
 		"missile_price": 4500, "start_ammo": 0,
 		"eff": {"scout": 1.0, "shahed": 1.0, "cruise": 1.0, "ballistic": 0.0},
-		"desc": "Ракета средней дальности с радиолокационным наведением: до 11 км.",
+		"desc": "Ракета средней дальности с радиолокационным наведением: до 50 км.",
 	},
 }
 ## An F-16 flight for interceptor sorties over the city (scripts/game/fighter.gd).
@@ -177,33 +177,35 @@ const WEAPON_CLASSES := [
 ]
 
 # --- Threats -----------------------------------------------------------------
-# alt_min/alt_max: flight altitude band in world units (1 unit ≈ 5 m on the HUD).
+# Everything is in real units: speed in m/s, alt_min / alt_max = the flight altitude band in metres.
 # "kind" is the flight model and the column of the weapons' "eff" table (scout / shahed / cruise /
 # ballistic); the rest are the real weapons each city is attacked with (CityDef.raid):
-#   flight = [min, max] seconds of a ballistic arc, launch_dist / launch_alt = where it starts,
+#   flight = [min, max] seconds of the last, visible leg of a ballistic arc; launch_dist /
+#   launch_alt = where the radar picks it up (metres from the target and above the ground),
 #   glide = a glide bomb falling straight at its target, decoy = no warhead,
 #   crush = how much of a house the warhead takes down (× the kind's), mirv = splits on impact,
 #   eff_mult = per weapon (or "*") multiplier of the weapons' efficiency against it.
 const ENEMIES := {
 	"scout": {
-		"name": "Разведчик «Орлан»", "plural": "РАЗВЕДЧИК", "abbr": "Р", "hp": 24.0, "speed": 30.0,
-		"alt_min": 110.0, "alt_max": 260.0,
+		"name": "Разведчик «Орлан»", "plural": "РАЗВЕДЧИК", "abbr": "Р", "hp": 24.0, "speed": 33.0,
+		"alt_min": 500.0, "alt_max": 1300.0,
 		"reward": 2000, "debris": 4, "debris_penalty": 350, "hit_damage": 0.0, "hit_cost": 0,
 		"radius": 4.5, "color": Color(0.35, 0.9, 1.0),
 	},
 	"shahed": {
-		"name": "Шахед", "plural": "ШАХЕДЫ", "abbr": "Ш", "hp": 28.0, "speed": 40.0,
-		"alt_min": 35.0, "alt_max": 320.0,
+		"name": "Шахед", "plural": "ШАХЕДЫ", "abbr": "Ш", "hp": 28.0, "speed": 51.0,
+		"alt_min": 120.0, "alt_max": 3000.0,
 		"reward": 1300, "debris": 5, "debris_penalty": 500, "hit_damage": 2.5, "hit_cost": 2200,
 		"radius": 4.0, "color": Color(1.0, 0.8, 0.2),
 	},
 	"cruise": {
-		"name": "Крылатая ракета Х-101", "plural": "КРЫЛАТЫЕ РАКЕТЫ Х-101", "abbr": "КР", "hp": 60.0, "speed": 115.0,
-		"alt_min": 22.0, "alt_max": 110.0,
+		"name": "Крылатая ракета Х-101", "plural": "КРЫЛАТЫЕ РАКЕТЫ Х-101", "abbr": "КР", "hp": 60.0, "speed": 200.0,
+		"alt_min": 50.0, "alt_max": 400.0,
 		"reward": 5000, "debris": 7, "debris_penalty": 1000, "hit_damage": 4.0, "hit_cost": 6000,
 		"radius": 4.5, "color": Color(1.0, 0.45, 0.15),
 	},
 	"ballistic": {
+		"kind": "ballistic", "flight": [42.0, 52.0], "launch_dist": 62000.0, "launch_alt": [36000.0, 44000.0],
 		"name": "Баллистическая ракета", "plural": "БАЛЛИСТИКА «ИСКАНДЕР-М»", "abbr": "БР", "hp": 90.0, "speed": 0.0,
 		"alt_min": 0.0, "alt_max": 0.0,
 		"reward": 11000, "debris": 8, "debris_penalty": 1400, "hit_damage": 6.0, "hit_cost": 11000,
@@ -212,67 +214,67 @@ const ENEMIES := {
 	# --- drones -------------------------------------------------------------------
 	"gerbera": {
 		"kind": "shahed", "decoy": true,
-		"name": "Ложная цель «Гербера»", "plural": "ЛОЖНЫЕ ЦЕЛИ «ГЕРБЕРА»", "abbr": "Л", "hp": 12.0, "speed": 42.0,
-		"alt_min": 60.0, "alt_max": 300.0,
+		"name": "Ложная цель «Гербера»", "plural": "ЛОЖНЫЕ ЦЕЛИ «ГЕРБЕРА»", "abbr": "Л", "hp": 12.0, "speed": 44.0,
+		"alt_min": 300.0, "alt_max": 2500.0,
 		"reward": 400, "debris": 2, "debris_penalty": 150, "hit_damage": 0.2, "hit_cost": 300,
 		"radius": 3.5, "color": Color(0.85, 0.85, 0.6),
 	},
 	"geran3": {
 		"kind": "shahed",
-		"name": "Реактивный шахед «Герань-3»", "plural": "РЕАКТИВНЫЕ «ГЕРАНЬ-3»", "abbr": "Ш3", "hp": 32.0, "speed": 92.0,
-		"alt_min": 50.0, "alt_max": 260.0,
+		"name": "Реактивный шахед «Герань-3»", "plural": "РЕАКТИВНЫЕ «ГЕРАНЬ-3»", "abbr": "Ш3", "hp": 32.0, "speed": 155.0,
+		"alt_min": 300.0, "alt_max": 2500.0,
 		"reward": 2600, "debris": 5, "debris_penalty": 600, "hit_damage": 3.0, "hit_cost": 3000,
 		"radius": 4.0, "color": Color(1.0, 0.6, 0.1),
 	},
 	"molniya": {
 		"kind": "shahed", "crush": 0.5,
 		"name": "Дрон «Молния»", "plural": "ДРОНЫ «МОЛНИЯ»", "abbr": "М", "hp": 10.0, "speed": 30.0,
-		"alt_min": 20.0, "alt_max": 70.0,
+		"alt_min": 80.0, "alt_max": 350.0,
 		"reward": 450, "debris": 2, "debris_penalty": 200, "hit_damage": 0.8, "hit_cost": 800,
 		"radius": 3.0, "color": Color(0.9, 0.9, 0.3),
 	},
 	# --- cruise missiles and glide bombs ----------------------------------------------------
 	"kalibr": {
 		"kind": "cruise",
-		"name": "Крылатая ракета «Калибр»", "plural": "КРЫЛАТЫЕ РАКЕТЫ «КАЛИБР»", "abbr": "К", "hp": 55.0, "speed": 120.0,
-		"alt_min": 18.0, "alt_max": 90.0,
+		"name": "Крылатая ракета «Калибр»", "plural": "КРЫЛАТЫЕ РАКЕТЫ «КАЛИБР»", "abbr": "К", "hp": 55.0, "speed": 240.0,
+		"alt_min": 40.0, "alt_max": 300.0,
 		"reward": 5000, "debris": 7, "debris_penalty": 1000, "hit_damage": 4.0, "hit_cost": 6000,
 		"radius": 4.5, "color": Color(1.0, 0.5, 0.2),
 	},
 	"oniks": {
 		"kind": "cruise", "crush": 1.2,
-		"name": "Противокорабельная ракета «Оникс»", "plural": "ПКР «ОНИКС»", "abbr": "О", "hp": 55.0, "speed": 230.0,
-		"alt_min": 10.0, "alt_max": 24.0,
+		"name": "Противокорабельная ракета «Оникс»", "plural": "ПКР «ОНИКС»", "abbr": "О", "hp": 55.0, "speed": 680.0,
+		"alt_min": 20.0, "alt_max": 60.0,
 		"reward": 8000, "debris": 7, "debris_penalty": 1100, "hit_damage": 4.5, "hit_cost": 7000,
 		"radius": 5.0, "color": Color(1.0, 0.35, 0.6),
 		"eff_mult": {"mg": 0.2, "zu23": 0.3, "gepard": 0.5, "shilka": 0.5, "igla": 0.4, "drone": 0.0},
 	},
 	"kh31p": {
 		"kind": "cruise",
-		"name": "Противорадарная ракета Х-31П", "plural": "ПРОТИВОРАДАРНЫЕ Х-31П", "abbr": "31П", "hp": 40.0, "speed": 190.0,
-		"alt_min": 60.0, "alt_max": 120.0,
+		"name": "Противорадарная ракета Х-31П", "plural": "ПРОТИВОРАДАРНЫЕ Х-31П", "abbr": "31П", "hp": 40.0, "speed": 600.0,
+		"alt_min": 200.0, "alt_max": 1500.0,
 		"reward": 6000, "debris": 5, "debris_penalty": 800, "hit_damage": 3.0, "hit_cost": 5000,
 		"radius": 4.0, "color": Color(0.9, 0.4, 1.0),
 		"eff_mult": {"drone": 0.0, "mg": 0.3},
 	},
 	"kab": {
-		"kind": "cruise", "glide": true, "launch_dist": 1350.0, "crush": 1.4,
-		"name": "Управляемая авиабомба КАБ", "plural": "КАБ С УМПК", "abbr": "КАБ", "hp": 110.0, "speed": 58.0,
-		"alt_min": 560.0, "alt_max": 700.0,
+		"kind": "cruise", "glide": true, "launch_dist": 45000.0, "crush": 1.4,
+		"name": "Управляемая авиабомба КАБ", "plural": "КАБ С УМПК", "abbr": "КАБ", "hp": 110.0, "speed": 240.0,
+		"alt_min": 9500.0, "alt_max": 11500.0,
 		"reward": 7000, "debris": 6, "debris_penalty": 1200, "hit_damage": 6.5, "hit_cost": 9000,
 		"radius": 5.0, "color": Color(1.0, 0.25, 0.1),
 		"eff_mult": {"mg": 0.05, "zu23": 0.1, "gepard": 0.25, "shilka": 0.25, "igla": 0.3, "avenger": 0.4, "drone": 0.0, "*": 0.8},
 	},
 	# --- ballistic and aeroballistic ------------------------------------------------------------
 	"s300": {
-		"kind": "ballistic", "flight": [8.0, 10.0], "launch_dist": 1250.0, "launch_alt": [150.0, 260.0],
+		"kind": "ballistic", "flight": [38.0, 46.0], "launch_dist": 38000.0, "launch_alt": [14000.0, 20000.0],
 		"name": "Ракета С-300 по земле", "plural": "С-300 ПО НАЗЕМНЫМ ЦЕЛЯМ", "abbr": "С3", "hp": 60.0, "speed": 0.0,
 		"alt_min": 0.0, "alt_max": 0.0,
 		"reward": 8000, "debris": 7, "debris_penalty": 1100, "hit_damage": 4.5, "hit_cost": 8000,
 		"radius": 6.0, "color": Color(1.0, 0.3, 0.3),
 	},
 	"kinzhal": {
-		"kind": "ballistic", "flight": [9.0, 11.0], "launch_dist": 1900.0, "launch_alt": [700.0, 900.0],
+		"kind": "ballistic", "flight": [30.0, 36.0], "launch_dist": 80000.0, "launch_alt": [40000.0, 50000.0],
 		"name": "Аэробаллистическая «Кинжал»", "plural": "«КИНЖАЛ» Х-47М2", "abbr": "КН", "hp": 100.0, "speed": 0.0,
 		"alt_min": 0.0, "alt_max": 0.0,
 		"reward": 16000, "debris": 8, "debris_penalty": 1500, "hit_damage": 7.0, "hit_cost": 13000,
@@ -280,7 +282,7 @@ const ENEMIES := {
 		"eff_mult": {"patriot": 1.0, "s300": 0.35, "*": 0.15},
 	},
 	"kh22": {
-		"kind": "ballistic", "flight": [12.0, 15.0], "launch_dist": 1900.0, "launch_alt": [800.0, 1000.0], "crush": 1.3,
+		"kind": "ballistic", "flight": [48.0, 58.0], "launch_dist": 55000.0, "launch_alt": [21000.0, 24000.0], "crush": 1.3,
 		"name": "Ракета Х-22", "plural": "Х-22 С ТУ-22М3", "abbr": "Х22", "hp": 95.0, "speed": 0.0,
 		"alt_min": 0.0, "alt_max": 0.0,
 		"reward": 13000, "debris": 9, "debris_penalty": 1500, "hit_damage": 8.0, "hit_cost": 14000,
@@ -288,7 +290,7 @@ const ENEMIES := {
 		"eff_mult": {"patriot": 1.0, "*": 0.6},
 	},
 	"oreshnik": {
-		"kind": "ballistic", "flight": [5.5, 6.5], "mirv": 6, "crush": 0.6,
+		"kind": "ballistic", "flight": [20.0, 24.0], "mirv": 6, "crush": 0.6,
 		"name": "Боевой блок «Орешника»", "plural": "БАЛЛИСТИКА СРЕДНЕЙ ДАЛЬНОСТИ «ОРЕШНИК»", "abbr": "ОР", "hp": 200.0, "speed": 0.0,
 		"alt_min": 0.0, "alt_max": 0.0,
 		"reward": 0, "debris": 3, "debris_penalty": 500, "hit_damage": 1.5, "hit_cost": 4000,
@@ -307,6 +309,22 @@ func eff(wid: String, e) -> float:
 	var base := float(WEAPONS[wid].eff.get(kind, 0.0))
 	var m: Dictionary = ed.get("eff_mult", {})
 	return base * float(m.get(wid, m.get("*", 1.0)))
+
+
+## Height of a battery's radar above the ground, for the radio horizon.
+const RADAR_MAST := 12.0
+
+
+## How far a system reaches a threat (an enemy node), metres: its range for aerodynamic targets or
+## the shorter one for ballistic missiles; the long-range complexes are also held by the radio
+## horizon — a cruise missile at 50 m shows up only from about 40 km.
+func reach(wid: String, e) -> float:
+	var wd: Dictionary = WEAPONS[wid]
+	var ballistic: bool = String(e.type) == "ballistic"
+	var r := float(wd.get("range_bm", wd.range)) if ballistic else float(wd.range)
+	if not ballistic and String(wd.kind) == "missile" and r > 12000.0:
+		r = minf(r, 4120.0 * (sqrt(RADAR_MAST) + sqrt(maxf(float(e.position.y), 0.0))))
+	return r
 
 
 ## Flight model of a threat id (scout / shahed / cruise / ballistic).
@@ -384,6 +402,8 @@ const KEY_ACTIONS := [
 	["strikes", "Удары по точкам пуска", KEY_K],
 	["mfg", "Мобильная огневая группа (пикап)", KEY_M],
 	["fighter", "Вылет истребителя F-16", KEY_J],
+	["warp", "Ускорение времени ×1 / ×2 / ×4 / ×8", KEY_BRACKETRIGHT],
+	["photo", "Фото без интерфейса", KEY_F12],
 ]
 
 
@@ -436,7 +456,7 @@ func key_label(action: String) -> String:
 
 # --- Settings ------------------------------------------------------------------
 var settings := {
-	"lang": "en", "volume": 0.8, "music": 0.6, "fullscreen": false, "quality": 2 if OS.has_feature("pc") else 1, "gfx_v2": false,
+	"lang": "en", "volume": 0.8, "music": 0.6, "fullscreen": false, "quality": 2 if OS.has_feature("pc") else 1, "gfx_v2": false, "photo": true, "film": true,
 	"markers": true, "sens": 1.0, "invert_y": false, "slowmo": true, "keys": {},
 	# Multiplayer (Net): switched on once used, friend code, the name friends see, friends [{code, name}],
 	# the signed-in account (Account: uid, email, refresh token, nick, code, friends — never the password).
@@ -752,6 +772,9 @@ func load_world(id: String) -> bool:
 	crews = clampi(int(d.get("crews", 0)), 0, CREW_MAX)
 	var bp: Array = d.get("base_pos", [0, 0])
 	base_pos = Vector3(float(bp[0]), 0, float(bp[1]))
+	if not same_map and int(d.get("map_ver", 1)) < 3:
+		# a world from before the cities were made life-size: the old map was ±1000
+		base_pos *= float(city_def().half) / 1000.0
 	base_loc = int(d.get("base_loc", Loc.FIELD))
 	won = bool(d.get("won", false))
 	stats = {"kills": 0, "roofs": 0, "impacts": 0, "penalties": 0, "earned": 0, "splash": 0, "homes": 0, "misses": 0, "drones": 0, "rams": 0, "fires_out": 0, "rebuilt": 0}
@@ -789,6 +812,52 @@ func delete_world(id: String) -> void:
 	DirAccess.remove_absolute(_world_path(id))
 
 
+# --- Graphics levels ------------------------------------------------------------
+## 0 low, 1 high, 2 ultra, 3 max, 4 ultramax. Max and UltraMax need the Forward+ renderer (real
+## lamp light, ambient occlusion, reflections on wet asphalt, volumetric haze); the engine picks
+## its renderer when it starts, so the choice is written to RENDERER_PATH (the project reads it
+## as a settings override) and the game restarts.
+const QUALITY_MAX := 3
+const RENDERER_PATH := "user://renderer.cfg"
+
+
+## Highest level this device can run (phones and the web stay on the compatibility renderer).
+func quality_cap() -> int:
+	return 4 if OS.has_feature("pc") else 2
+
+
+func renderer_now() -> String:
+	return RenderingServer.get_current_rendering_method()
+
+
+## Renderer the chosen graphics level asks for.
+func renderer_wanted() -> String:
+	return "forward_plus" if int(settings.quality) >= QUALITY_MAX and OS.has_feature("pc") else "gl_compatibility"
+
+
+## The chosen level only shows in full after a restart.
+func needs_restart() -> bool:
+	return renderer_wanted() == "forward_plus" and renderer_now() != "forward_plus"
+
+
+## Writes (or removes) the renderer override the engine reads at the next start.
+func store_renderer() -> void:
+	if renderer_wanted() == "forward_plus":
+		var f := FileAccess.open(RENDERER_PATH, FileAccess.WRITE)
+		if f != null:
+			f.store_string("[rendering]\n\nrenderer/rendering_method=\"forward_plus\"\n")
+	elif FileAccess.file_exists(RENDERER_PATH):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(RENDERER_PATH))
+
+
+## Starts the game again (with the same command line) so the new renderer takes over.
+func restart_game() -> void:
+	save_settings()
+	store_renderer()
+	OS.set_restart_on_exit(true, OS.get_cmdline_args())
+	get_tree().quit()
+
+
 # --- Settings persistence ------------------------------------------------------
 func load_settings() -> void:
 	var cfg := ConfigFile.new()
@@ -801,6 +870,7 @@ func load_settings() -> void:
 	if OS.has_feature("pc") and not bool(settings.get("gfx_v2", false)):
 		settings["gfx_v2"] = true
 		settings["quality"] = 2
+	settings["quality"] = clampi(int(settings.quality), 0, quality_cap())
 
 
 func save_settings() -> void:

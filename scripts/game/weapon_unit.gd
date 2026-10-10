@@ -78,8 +78,18 @@ func can_engage(e) -> bool:
 	return GS.eff(id, e) > 0.0
 
 
+## How far this unit reaches the given threat (see GS.reach), with the position's gun bonus.
+func range_for(e) -> float:
+	var r: float = GS.reach(id, e)
+	if def.kind == "gun":
+		r *= float(GS.loc_def().gun_range)
+	return r
+
+
 func in_range(e) -> bool:
-	return global_position.distance_to(e.position) <= effective_range()
+	if e.position.y - global_position.y > float(def.get("ceil", 1.0e9)):
+		return false # above its ceiling
+	return global_position.distance_to(e.position) <= range_for(e)
 
 
 ## Gunner's eye point for the sight camera.
@@ -139,7 +149,7 @@ func _process(delta: float) -> void:
 		aim = Bullet.lead(mp, target.position, target.vel, float(def.speed))
 	elif def.kind == "drone":
 		# the rail throws the drone up at a fixed angle; it climbs out and then hunts
-		aim = target.position + Vector3(0, 60.0, 0)
+		aim = target.position + Vector3(0, 200.0, 0)
 	else:
 		aim = target.position + Vector3(0, global_position.distance_to(target.position) * 0.3, 0)
 	_aim_dir(aim - turret.global_position, delta)

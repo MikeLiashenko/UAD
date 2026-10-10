@@ -135,7 +135,7 @@ func _draw() -> void:
 		if GS.settings.markers:
 			var mc: Color = e.def.color
 			draw_arc(sp, 6.0, 0, TAU, 12, mc, 1.5)
-			_txt(sp + Vector2(10, -6), GS.t("%s %.1f км") % [GS.t(String(e.def.abbr)), cam.global_position.distance_to(e.position) * 0.005], 12, mc)
+			_txt(sp + Vector2(10, -6), GS.t("%s %.1f км") % [GS.t(String(e.def.abbr)), cam.global_position.distance_to(e.position) * 0.001], 12, mc)
 		if is_cand:
 			var locked_ready: bool = bv.lock == e and bv.lock_ready
 			var bc := RED if locked_ready else Color(1, 1, 1, 0.9)
@@ -160,7 +160,7 @@ func _draw() -> void:
 	var reload := ""
 	if kind != "gun" and w.cooldown > 0.0:
 		reload = GS.t(" · ПЕРЕЗАРЯДКА")
-	_txt(Vector2(c.x - 250, info_y), GS.t("%s  %s  · дальность %.1f км%s") % [GS.t(String(w.def.short)), ammo, w.effective_range() * 0.005, reload], 16, col, HORIZONTAL_ALIGNMENT_CENTER, 500)
+	_txt(Vector2(c.x - 250, info_y), GS.t("%s  %s  · дальность %.1f км%s") % [GS.t(String(w.def.short)), ammo, w.effective_range() * 0.001, reload], 16, col, HORIZONTAL_ALIGNMENT_CENTER, 500)
 	if not fcs:
 		_txt(Vector2(c.x - 250, info_y + 20), GS.t("без СУО — берите упреждение по меткам прицела"), 12, Color(col.r, col.g, col.b, 0.7), HORIZONTAL_ALIGNMENT_CENTER, 500)
 	elif kind == "drone":
@@ -170,7 +170,7 @@ func _draw() -> void:
 	if cand != null and is_instance_valid(cand) and not cand.dead:
 		var info: Dictionary = game.predict_debris(cand)
 		var dist := cam.global_position.distance_to(cand.position)
-		_txt(Vector2(c.x - 250, info_y + 42), GS.t("%s · Д %.1f км · В %d м · %d%%") % [GS.t(String(cand.def.name)), dist * 0.005, int(cand.position.y * 5.0), int(100.0 * cand.hp / cand.max_hp)], 15, Color(1, 1, 1), HORIZONTAL_ALIGNMENT_CENTER, 500)
+		_txt(Vector2(c.x - 250, info_y + 42), GS.t("%s · Д %.1f км · В %d м · %d%%") % [GS.t(String(cand.def.name)), dist * 0.001, int(cand.position.y), int(100.0 * cand.hp / cand.max_hp)], 15, Color(1, 1, 1), HORIZONTAL_ALIGNMENT_CENTER, 500)
 		_txt(Vector2(c.x - 250, info_y + 64), GS.t("Обломки: ") + String(info.text), 16, info.color, HORIZONTAL_ALIGNMENT_CENTER, 500)
 		if not w.can_engage(cand):
 			_txt(Vector2(c.x - 250, info_y + 86), GS.t("%s НЕ ПОРАЖАЕТ ЭТУ ЦЕЛЬ") % GS.t(String(w.def.short)), 15, RED, HORIZONTAL_ALIGNMENT_CENTER, 500)

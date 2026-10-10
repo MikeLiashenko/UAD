@@ -10,6 +10,8 @@ signal closed
 ## Action waiting for a new key ("" = not rebinding right now).
 var _capturing := ""
 var _key_rows := {}
+## The note and the button shown while the chosen graphics level waits for a restart.
+var _restart_box: Control
 
 
 func _ready() -> void:
@@ -62,9 +64,22 @@ func _build() -> void:
 	q.add_item(GS.t("Низкое (без теней, свечения и трафика)"))
 	q.add_item(GS.t("Высокое"))
 	q.add_item(GS.t("Ультра (облака, интерьеры окон, отражения в воде)"))
-	q.selected = int(GS.settings.quality)
-	q.item_selected.connect(_set_setting.bind("quality"))
+	if GS.quality_cap() >= 4:
+		q.add_item(GS.t("Макс (свет фонарей, мокрый асфальт, затенение)"))
+		q.add_item(GS.t("УльтраМакс (всё на пределе, как на фото)"))
+	q.selected = mini(int(GS.settings.quality), q.item_count - 1)
+	q.item_selected.connect(_set_quality)
 	_row(v, GS.t("Качество графики"), q)
+	_restart_box = UiKit.vbox(6)
+	var rn := UiKit.label(GS.t("«Макс» и «УльтраМакс» работают на рендерере Forward+ (нужна видеокарта с Vulkan). Он включится после перезапуска игры."), 12, UiKit.AMBER)
+	rn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	rn.custom_minimum_size = Vector2(560, 0)
+	_restart_box.add_child(rn)
+	_restart_box.add_child(UiKit.button(GS.t("Перезапустить сейчас"), GS.restart_game, 300, 18))
+	v.add_child(_restart_box)
+	_restart_box.visible = GS.needs_restart()
+	if GS.quality_cap() >= 4:
+		_row(v, GS.t("Эффект камеры на «Макс» (зерно, виньетка)"), _check(bool(GS.settings.film), "film"))
 
 	v.add_child(UiKit.label(GS.t("ЦЕЛИ"), 15, UiKit.AMBER))
 	_row(v, GS.t("Метки целей (Ш, КР, БР, Р)"), _check(bool(GS.settings.markers), "markers"))
@@ -148,6 +163,15 @@ func _check(on: bool, key: String) -> CheckButton:
 	c.button_pressed = on
 	c.toggled.connect(_set_setting.bind(key))
 	return c
+
+
+## The graphics level: Max and UltraMax also choose the renderer for the next start.
+func _set_quality(idx: int) -> void:
+	GS.settings["quality"] = idx
+	GS.apply_settings()
+	GS.store_renderer()
+	if _restart_box != null and is_instance_valid(_restart_box):
+		_restart_box.visible = GS.needs_restart()
 
 
 func _set_setting(value: Variant, key: String) -> void:

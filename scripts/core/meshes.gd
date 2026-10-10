@@ -38,10 +38,16 @@ static func node(parent: Node3D, pos := Vector3.ZERO) -> Node3D:
 
 
 static func _wheels(root: Node3D, xs: float, zs: Array, r := 0.75) -> void:
-	var tire := Fx.solid(Color(0.06, 0.06, 0.06), 0.9)
+	var tire := Fx.solid(Color(0.05, 0.05, 0.055), 0.95)
+	var hub := Fx.solid(Color(0.26, 0.28, 0.24), 0.6, 0.4)
 	for z in zs:
 		for sx in [-1.0, 1.0]:
-			cyl(root, r, r, 0.6, Vector3(xs * sx, r, float(z)), tire, Vector3(0, 0, 90), 10)
+			var c := Vector3(xs * sx, r, float(z))
+			cyl(root, r, r, 0.6, c, tire, Vector3(0, 0, 90), 16)
+			# the rim with its hub, a mudguard over the tyre
+			cyl(root, r * 0.56, r * 0.56, 0.64, c, hub, Vector3(0, 0, 90), 10)
+			cyl(root, r * 0.2, r * 0.2, 0.72, c, tire, Vector3(0, 0, 90), 6)
+			box(root, Vector3(0.66, 0.07, r * 2.3), c + Vector3(0, r + 0.14, 0), tire)
 
 
 static func _weapon_rig(root: Node3D, turret_pos: Vector3, pitch_y: float) -> Array:
@@ -55,62 +61,123 @@ static func _weapon_rig(root: Node3D, turret_pos: Vector3, pitch_y: float) -> Ar
 # --- Air-defense units -------------------------------------------------------------
 static func pickup() -> Node3D:
 	var root := Node3D.new()
-	var paint := Fx.solid(Color(0.52, 0.48, 0.34), 0.7)
-	var dark := Fx.solid(Color(0.12, 0.12, 0.12), 0.6)
-	var glass := Fx.solid(Color(0.1, 0.18, 0.22), 0.1, 0.4)
-	box(root, Vector3(3.2, 0.9, 7.0), Vector3(0, 1.3, 0), paint)
-	box(root, Vector3(3.0, 1.4, 2.8), Vector3(0, 2.45, -1.4), paint)
-	box(root, Vector3(2.8, 0.9, 0.1), Vector3(0, 2.55, -2.83), glass, Vector3(-18, 0, 0))
-	box(root, Vector3(0.12, 0.6, 3.6), Vector3(1.55, 2.05, 1.6), paint)
-	box(root, Vector3(0.12, 0.6, 3.6), Vector3(-1.55, 2.05, 1.6), paint)
+	var paint := Fx.paint(Color(0.52, 0.48, 0.34), 0.7, 0.2, 0.35)
+	var dark := Fx.solid(Color(0.1, 0.1, 0.1), 0.6, 0.3)
+	var glass := Fx.solid(Color(0.05, 0.08, 0.1), 0.08, 0.3)
+	# the frame, the bonnet, the cab with its glass and the load bed
+	box(root, Vector3(3.1, 0.5, 7.0), Vector3(0, 1.0, 0), dark)
+	box(root, Vector3(3.2, 0.75, 2.1), Vector3(0, 1.6, -2.45), paint)
+	box(root, Vector3(3.2, 0.2, 0.55), Vector3(0, 1.92, -1.5), paint, Vector3(-28, 0, 0))
+	box(root, Vector3(3.15, 0.75, 2.5), Vector3(0, 1.6, -0.2), paint)
+	box(root, Vector3(2.9, 0.85, 2.0), Vector3(0, 2.4, -0.15), paint)
+	box(root, Vector3(2.7, 0.75, 0.08), Vector3(0, 2.38, -1.22), glass, Vector3(-22, 0, 0))
+	box(root, Vector3(2.7, 0.6, 0.06), Vector3(0, 2.42, 0.86), glass)
+	for sx in [-1.0, 1.0]:
+		box(root, Vector3(0.06, 0.6, 1.5), Vector3(1.46 * sx, 2.42, -0.2), glass)
+		box(root, Vector3(0.12, 0.7, 3.4), Vector3(1.54 * sx, 1.75, 2.6), paint)
+		box(root, Vector3(0.5, 0.22, 0.12), Vector3(1.15 * sx, 1.72, -3.52), Fx.glow(Color(1.0, 0.95, 0.8), 0.6))
+		box(root, Vector3(0.3, 0.2, 0.1), Vector3(1.3 * sx, 1.6, 4.32), Fx.glow(Color(0.9, 0.1, 0.05), 0.5))
+		box(root, Vector3(0.14, 0.12, 0.3), Vector3(1.7 * sx, 2.25, -1.1), dark)
+		box(root, Vector3(0.1, 1.2, 0.1), Vector3(1.3 * sx, 2.2, 0.95), dark)
+	box(root, Vector3(3.1, 0.7, 0.12), Vector3(0, 1.75, 4.3), paint)
+	box(root, Vector3(3.0, 0.1, 3.4), Vector3(0, 1.42, 2.6), dark)
+	box(root, Vector3(3.3, 0.3, 0.25), Vector3(0, 1.05, -3.55), dark)
+	box(root, Vector3(1.9, 0.4, 0.08), Vector3(0, 1.6, -3.52), dark)
+	box(root, Vector3(2.7, 0.1, 0.1), Vector3(0, 2.82, 0.95), dark)
 	_wheels(root, 1.6, [-2.3, 2.3])
 	var rig := _weapon_rig(root, Vector3(0, 1.8, 1.8), 1.35)
 	var turret: Node3D = rig[0]
 	var pitch: Node3D = rig[1]
+	# the heavy machine gun on its pedestal: receiver, barrel with a flash hider, an ammunition
+	# box on the left, spade grips and a shield
 	cyl(turret, 0.18, 0.25, 1.3, Vector3(0, 0.65, 0), dark)
-	box(turret, Vector3(1.5, 0.9, 0.1), Vector3(0, 1.3, -0.7), dark)
-	box(pitch, Vector3(0.35, 0.35, 1.0), Vector3(0, 0, 0), dark)
-	cyl(pitch, 0.09, 0.09, 2.4, Vector3(0, 0, -1.4), dark, Vector3(90, 0, 0), 6)
+	box(turret, Vector3(0.6, 0.1, 0.6), Vector3(0, 0.05, 0), dark)
+	box(turret, Vector3(1.5, 0.9, 0.08), Vector3(0, 1.3, -0.7), paint)
+	box(pitch, Vector3(0.3, 0.32, 1.1), Vector3(0, 0, 0), dark)
+	cyl(pitch, 0.07, 0.08, 2.2, Vector3(0, 0, -1.6), dark, Vector3(90, 0, 0), 8)
+	cyl(pitch, 0.11, 0.11, 0.3, Vector3(0, 0, -2.6), dark, Vector3(90, 0, 0), 8)
+	cyl(pitch, 0.1, 0.1, 0.9, Vector3(0, 0, -0.95), Fx.solid(Color(0.2, 0.2, 0.2), 0.5, 0.5), Vector3(90, 0, 0), 8)
+	box(pitch, Vector3(0.36, 0.34, 0.5), Vector3(-0.36, -0.05, 0.1), Fx.paint(Color(0.3, 0.33, 0.22), 0.8, 0.2, 0.0))
+	for sx in [-1.0, 1.0]:
+		box(pitch, Vector3(0.05, 0.3, 0.05), Vector3(0.12 * sx, 0, 0.7), dark)
 	root.set_meta("muzzle", node(pitch, Vector3(0, 0, -2.7)))
 	return root
 
 
 static func gepard() -> Node3D:
 	var root := Node3D.new()
-	var olive := Fx.solid(Color(0.3, 0.34, 0.2), 0.8)
+	var olive := Fx.paint(Color(0.3, 0.34, 0.2), 0.8, 0.15, 0.7)
 	var dark := Fx.solid(Color(0.1, 0.1, 0.1), 0.7)
-	box(root, Vector3(3.6, 1.4, 7.6), Vector3(0, 1.4, 0), olive)
-	box(root, Vector3(0.9, 1.2, 7.9), Vector3(2.15, 0.7, 0), dark)
-	box(root, Vector3(0.9, 1.2, 7.9), Vector3(-2.15, 0.7, 0), dark)
+	var steel := Fx.solid(Color(0.36, 0.38, 0.36), 0.5, 0.6)
+	_tracks(root, 4.3, 7.9)
+	# the hull of the Leopard: a sloped glacis, the engine deck with its grilles, tool boxes
+	box(root, Vector3(3.6, 1.1, 7.2), Vector3(0, 1.55, 0.2), olive)
+	box(root, Vector3(3.6, 0.7, 1.6), Vector3(0, 1.6, -3.9), olive, Vector3(-32, 0, 0))
+	for sx in [-1.0, 1.0]:
+		box(root, Vector3(0.5, 0.35, 2.2), Vector3(1.5 * sx, 2.25, 2.4), olive)
+		box(root, Vector3(0.3, 0.16, 0.1), Vector3(1.2 * sx, 1.9, -4.35), Fx.glow(Color(1.0, 0.95, 0.8), 0.5))
+		box(root, Vector3(1.0, 0.06, 1.6), Vector3(0.8 * sx, 2.13, 2.9), dark)
 	var rig := _weapon_rig(root, Vector3(0, 2.1, 0.4), 0.8)
 	var turret: Node3D = rig[0]
 	var pitch: Node3D = rig[1]
-	box(turret, Vector3(2.6, 1.4, 3.0), Vector3(0, 0.7, 0), olive)
-	var spin := node(turret, Vector3(0, 1.9, 1.3))
-	box(spin, Vector3(2.4, 0.8, 0.12), Vector3.ZERO, dark)
-	root.set_meta("spin", spin)
-	cyl(turret, 0.5, 0.5, 0.6, Vector3(0, 0.9, -1.7), dark, Vector3(90, 0, 0), 12)
+	# the tall slab-sided turret, hatches, smoke dischargers
+	box(turret, Vector3(2.6, 1.5, 3.2), Vector3(0, 0.75, 0), olive)
+	box(turret, Vector3(2.2, 0.3, 2.6), Vector3(0, 1.62, 0.1), olive)
+	cyl(turret, 0.42, 0.42, 0.12, Vector3(0.6, 1.82, -0.3), dark, Vector3.ZERO, 12)
+	cyl(turret, 0.42, 0.42, 0.12, Vector3(-0.6, 1.82, -0.3), dark, Vector3.ZERO, 12)
 	for sx in [-1.0, 1.0]:
-		box(pitch, Vector3(0.5, 0.6, 1.6), Vector3(1.55 * sx, 0, 0), olive)
-		cyl(pitch, 0.12, 0.12, 4.0, Vector3(1.55 * sx, 0, -2.4), dark, Vector3(90, 0, 0), 8)
-	root.set_meta("muzzle", node(pitch, Vector3(0, 0, -4.4)))
+		for k in 4:
+			cyl(turret, 0.07, 0.07, 0.4, Vector3(1.36 * sx, 1.1, 0.5 + k * 0.22), steel, Vector3(-40, 0, 0), 6)
+	# the search radar turning on its arm at the back
+	var spin := node(turret, Vector3(0, 2.2, 1.5))
+	box(spin, Vector3(2.5, 0.75, 0.14), Vector3(0, 0.2, 0), steel)
+	box(spin, Vector3(0.2, 0.5, 0.3), Vector3(0, -0.25, 0.1), dark)
+	root.set_meta("spin", spin)
+	cyl(turret, 0.08, 0.1, 0.7, Vector3(0, 1.9, 1.5), dark, Vector3.ZERO, 6)
+	# the tracking radar on the turret front: a dish under its dome
+	cyl(turret, 0.6, 0.6, 0.5, Vector3(0, 1.0, -1.8), steel, Vector3(90, 0, 0), 16)
+	part(turret, Fx.sphere(0.6, 12), steel, Vector3(0, 1.0, -2.0))
+	# the two 35 mm guns in their cradles on the sides of the turret
+	for sx in [-1.0, 1.0]:
+		box(pitch, Vector3(0.5, 0.7, 2.2), Vector3(1.55 * sx, 0, -0.2), olive)
+		cyl(pitch, 0.16, 0.18, 1.2, Vector3(1.55 * sx, 0, -1.8), dark, Vector3(90, 0, 0), 10)
+		cyl(pitch, 0.09, 0.1, 3.0, Vector3(1.55 * sx, 0, -3.6), dark, Vector3(90, 0, 0), 8)
+		cyl(pitch, 0.13, 0.13, 0.5, Vector3(1.55 * sx, 0, -5.0), steel, Vector3(90, 0, 0), 8)
+	root.set_meta("muzzle", node(pitch, Vector3(0, 0, -5.2)))
 	return root
 
 
 static func iris() -> Node3D:
 	var root := Node3D.new()
-	var sand := Fx.solid(Color(0.38, 0.4, 0.3), 0.8)
+	var sand := Fx.paint(Color(0.38, 0.4, 0.3), 0.8, 0.15, 0.5)
 	var dark := Fx.solid(Color(0.08, 0.08, 0.08), 0.6)
-	box(root, Vector3(3.0, 1.0, 9.5), Vector3(0, 1.4, 0), sand)
-	box(root, Vector3(3.0, 1.9, 2.4), Vector3(0, 2.6, -3.6), sand)
-	box(root, Vector3(2.8, 0.8, 0.1), Vector3(0, 2.9, -4.82), Fx.solid(Color(0.1, 0.16, 0.2), 0.1, 0.4))
+	var glass := Fx.solid(Color(0.05, 0.08, 0.1), 0.08, 0.3)
+	# the truck: frame, cab with its windows, a generator behind it
+	box(root, Vector3(2.8, 0.5, 9.5), Vector3(0, 1.25, 0), dark)
+	box(root, Vector3(3.0, 1.1, 2.4), Vector3(0, 2.0, -3.6), sand)
+	box(root, Vector3(3.0, 1.0, 2.2), Vector3(0, 3.0, -3.5), sand)
+	box(root, Vector3(2.7, 0.8, 0.08), Vector3(0, 3.05, -4.64), glass, Vector3(-8, 0, 0))
+	for sx in [-1.0, 1.0]:
+		box(root, Vector3(0.06, 0.7, 1.3), Vector3(1.51 * sx, 3.05, -3.7), glass)
+		box(root, Vector3(0.45, 0.2, 0.1), Vector3(1.1 * sx, 1.75, -4.83), Fx.glow(Color(1.0, 0.95, 0.8), 0.6))
+		box(root, Vector3(0.16, 0.3, 0.3), Vector3(1.66 * sx, 3.0, -4.5), dark)
+	box(root, Vector3(3.1, 0.35, 0.3), Vector3(0, 1.35, -4.85), dark)
+	box(root, Vector3(2.6, 1.2, 1.3), Vector3(0, 2.1, -1.6), sand)
+	box(root, Vector3(2.9, 0.12, 5.0), Vector3(0, 1.6, 2.2), dark)
 	_wheels(root, 1.5, [-3.4, 0.6, 2.8])
 	var rig := _weapon_rig(root, Vector3(0, 1.9, 3.4), 0.3)
 	var pitch: Node3D = rig[1]
-	box(pitch, Vector3(2.6, 1.6, 5.6), Vector3(0, 0.8, -2.6), sand)
+	# the launcher: a frame of eight sealed canisters, their round caps to the front
+	box(pitch, Vector3(2.7, 0.2, 5.7), Vector3(0, -0.05, -2.6), dark)
 	for ix in 4:
 		for iy in 2:
-			cyl(pitch, 0.28, 0.28, 0.12, Vector3(-0.96 + ix * 0.64, 0.4 + iy * 0.8, -5.42), dark, Vector3(90, 0, 0), 8)
+			var c := Vector3(-0.96 + ix * 0.64, 0.42 + iy * 0.68, -2.6)
+			cyl(pitch, 0.3, 0.3, 5.4, c, sand, Vector3(90, 0, 0), 12)
+			cyl(pitch, 0.31, 0.31, 0.1, c + Vector3(0, 0, -2.72), dark, Vector3(90, 0, 0), 12)
+			cyl(pitch, 0.33, 0.33, 0.12, c + Vector3(0, 0, 1.2), dark, Vector3(90, 0, 0), 12)
+	for sx in [-1.0, 1.0]:
+		box(pitch, Vector3(0.1, 1.5, 0.12), Vector3(1.32 * sx, 0.75, -4.6), dark)
+		box(pitch, Vector3(0.1, 1.5, 0.12), Vector3(1.32 * sx, 0.75, -0.6), dark)
 	root.set_meta("muzzle", node(pitch, Vector3(0, 0.8, -5.6)))
 	root.set_meta("idle_pitch", 0.35)
 	return root
@@ -118,17 +185,37 @@ static func iris() -> Node3D:
 
 static func patriot() -> Node3D:
 	var root := Node3D.new()
-	var khaki := Fx.solid(Color(0.45, 0.42, 0.32), 0.8)
+	var khaki := Fx.paint(Color(0.45, 0.42, 0.32), 0.8, 0.15, 0.4)
 	var dark := Fx.solid(Color(0.08, 0.08, 0.08), 0.6)
-	box(root, Vector3(3.2, 0.8, 9.0), Vector3(0, 1.2, 0), khaki)
+	var steel := Fx.solid(Color(0.34, 0.35, 0.33), 0.6, 0.5)
+	# the M901 launching station: a semi-trailer on its outriggers, the generator at the front
+	box(root, Vector3(3.0, 0.5, 9.4), Vector3(0, 1.25, 0), dark)
+	box(root, Vector3(3.2, 0.3, 9.0), Vector3(0, 1.6, 0), khaki)
+	box(root, Vector3(2.6, 1.3, 1.8), Vector3(0, 2.4, -3.4), khaki)
+	box(root, Vector3(2.2, 0.9, 0.08), Vector3(0, 2.4, -4.32), dark)
 	_wheels(root, 1.6, [2.2, 3.6], 0.8)
 	cyl(root, 0.15, 0.15, 3.0, Vector3(0, 1.0, -5.5), dark, Vector3(90, 0, 0), 6)
+	for sx in [-1.0, 1.0]:
+		for sz in [-3.6, 0.6]:
+			box(root, Vector3(1.6, 0.16, 0.2), Vector3(2.2 * sx, 1.3, sz), steel)
+			cyl(root, 0.1, 0.1, 1.3, Vector3(2.9 * sx, 0.65, sz), steel, Vector3.ZERO, 8)
+			cyl(root, 0.4, 0.4, 0.08, Vector3(2.9 * sx, 0.04, sz), steel, Vector3.ZERO, 10)
 	var rig := _weapon_rig(root, Vector3(0, 1.6, 3.0), 0.4)
+	var turret: Node3D = rig[0]
 	var pitch: Node3D = rig[1]
-	box(pitch, Vector3(3.1, 2.4, 6.6), Vector3(0, 1.2, -3.0), khaki)
+	cyl(turret, 1.3, 1.4, 0.4, Vector3(0, 0.2, 0), steel, Vector3.ZERO, 16)
+	# four canisters in their frame, ribbed, with square blow-out covers
+	box(pitch, Vector3(3.2, 0.2, 6.8), Vector3(0, -0.05, -3.0), dark)
 	for ix in 2:
 		for iy in 2:
-			box(pitch, Vector3(1.3, 1.0, 0.12), Vector3(-0.72 + ix * 1.44, 0.6 + iy * 1.2, -6.33), dark)
+			var c := Vector3(-0.77 + ix * 1.54, 0.65 + iy * 1.22, -3.0)
+			box(pitch, Vector3(1.42, 1.1, 6.5), c, khaki)
+			for k in 5:
+				box(pitch, Vector3(1.5, 1.18, 0.1), c + Vector3(0, 0, -2.8 + k * 1.4), steel)
+			box(pitch, Vector3(1.2, 0.9, 0.08), c + Vector3(0, 0, -3.28), dark)
+	for sx in [-1.0, 1.0]:
+		box(pitch, Vector3(0.12, 2.6, 0.14), Vector3(1.62 * sx, 1.25, -5.9), dark)
+		box(pitch, Vector3(0.12, 2.6, 0.14), Vector3(1.62 * sx, 1.25, -0.2), dark)
 	root.set_meta("muzzle", node(pitch, Vector3(0, 1.2, -6.5)))
 	root.set_meta("idle_pitch", 0.66)
 	return root
@@ -226,7 +313,7 @@ static func camo_net() -> Node3D:
 # --- Threats ---------------------------------------------------------------------
 static func scout() -> Node3D:
 	var root := Node3D.new()
-	var gray := Fx.solid(Color(0.55, 0.58, 0.56), 0.6)
+	var gray := Fx.paint(Color(0.55, 0.58, 0.56), 0.6, 0.1, 0.0)
 	cyl(root, 0.35, 0.35, 3.0, Vector3.ZERO, gray, Vector3(90, 0, 0), 8)
 	box(root, Vector3(8.0, 0.12, 1.1), Vector3(0, 0.15, -0.2), gray)
 	cyl(root, 0.1, 0.1, 2.4, Vector3(0, 0, 2.3), gray, Vector3(90, 0, 0), 5)
@@ -242,53 +329,81 @@ static func scout() -> Node3D:
 
 static func shahed() -> Node3D:
 	var root := Node3D.new()
-	var mat := Fx.solid(Color(0.24, 0.25, 0.26), 0.7)
-	var wing := PrismMesh.new()
-	wing.size = Vector3(6.2, 5.2, 0.35)
-	part(root, wing, mat, Vector3(0, 0, 0.3), Vector3(-90, 0, 0))
-	cyl(root, 0.38, 0.38, 4.2, Vector3.ZERO, mat, Vector3(90, 0, 0), 8)
-	cyl(root, 0.0, 0.38, 0.9, Vector3(0, 0, -2.55), mat, Vector3(-90, 0, 0), 8)
+	var mat := Fx.paint(Color(0.24, 0.25, 0.26), 0.7, 0.1, 0.0)
+	var mb := MeshBuilder.new()
+	var w := Color(1, 1, 1)
+	# the delta wing: thick along the body, thin at the tips; the apex at the nose and a straight
+	# trailing edge
+	var a_t := Vector3(0, 0.1, -2.3)
+	var a_b := Vector3(0, -0.1, -2.3)
+	var r_t := Vector3(0, 0.24, 2.3)
+	var r_b := Vector3(0, -0.2, 2.3)
 	for sx in [-1.0, 1.0]:
-		box(root, Vector3(0.08, 1.0, 0.9), Vector3(3.0 * sx, 0.4, 2.4), mat)
-	part(root, Fx.sphere(0.32, 6), Fx.glow(Color(1.0, 0.55, 0.2), 4.0), Vector3(0, 0, 2.3))
+		var t_t := Vector3(3.1 * sx, 0.04, 2.3)
+		var t_b := Vector3(3.1 * sx, -0.03, 2.3)
+		var f_t := Vector3(3.1 * sx, 0.04, 1.5)
+		var f_b := Vector3(3.1 * sx, -0.03, 1.5)
+		mb.quad_n(a_t, f_t, t_t, r_t, Vector3(0, 1, 0), w)
+		mb.quad_n(a_b, f_b, t_b, r_b, Vector3(0, -1, 0), w)
+		mb.quad_n(a_t, a_b, f_b, f_t, Vector3(sx, 0, -1).normalized(), w)
+		mb.quad_n(f_t, f_b, t_b, t_t, Vector3(sx, 0, 0), w)
+		mb.quad_n(r_t, r_b, t_b, t_t, Vector3(0, 0, 1), w)
+		# the fins on the wing tips, above and below
+		mb.box(Vector3(0.07, 1.4, 1.0), Vector3(3.08 * sx, 0.0, 1.85), w)
+	# the body blended into the wing, the nose with the warhead, the engine at the tail
+	mb.loft([[-2.75, 0.05, 0.05, -0.05, 0.05, 0.02], [-2.2, 0.27, 0.26, -0.26, 0.27, 0.1], [-1.0, 0.4, 0.38, -0.36, 0.43, 0.14],
+		[1.2, 0.4, 0.38, -0.34, 0.45, 0.14], [2.3, 0.3, 0.28, -0.24, 0.35, 0.1], [2.7, 0.22, 0.22, -0.2, 0.25, 0.08]], w)
+	mb.cyl(0.25, 0.25, 0.45, Vector3(0, 0.03, 2.85), Color(0.4, 0.4, 0.4), 0.0, Vector3(90, 0, 0), 10)
+	part(root, mb.commit(), mat)
+	part(root, Fx.sphere(0.26, 6), Fx.glow(Color(1.0, 0.55, 0.2), 4.0), Vector3(0, 0.03, 2.75))
 	# hot piston engine: dim flickering glow, visible at night as a moving spark
 	var g := Fx.glare(Color(1.0, 0.5, 0.15), 1.3, 1.2, 0.0024, 0.0, 0.9)
-	g.position = Vector3(0, 0, 2.6)
+	g.position = Vector3(0, 0, 3.0)
 	root.add_child(g)
-	var spin := node(root, Vector3(0, 0, 2.2))
-	box(spin, Vector3(0.1, 1.5, 0.06), Vector3.ZERO, Fx.solid(Color(0.1, 0.1, 0.1)))
+	var spin := node(root, Vector3(0, 0.03, 3.12))
+	box(spin, Vector3(0.12, 1.6, 0.05), Vector3.ZERO, Fx.solid(Color(0.1, 0.1, 0.1)))
+	cyl(spin, 0.1, 0.06, 0.2, Vector3(0, 0, 0.05), Fx.solid(Color(0.1, 0.1, 0.1)), Vector3(90, 0, 0), 6)
 	root.set_meta("spin", spin)
 	return root
 
 
 static func cruise() -> Node3D:
 	var root := Node3D.new()
-	var mat := Fx.solid(Color(0.68, 0.7, 0.72), 0.35, 0.5)
-	cyl(root, 0.45, 0.45, 7.0, Vector3.ZERO, mat, Vector3(90, 0, 0), 10)
-	cyl(root, 0.0, 0.45, 1.3, Vector3(0, 0, -4.15), mat, Vector3(-90, 0, 0), 10)
-	box(root, Vector3(5.2, 0.08, 0.9), Vector3(0, -0.2, 0.3), mat)
-	box(root, Vector3(0.08, 1.0, 0.7), Vector3(0, 0.5, 3.2), mat)
-	box(root, Vector3(2.0, 0.08, 0.6), Vector3(0, 0, 3.2), mat)
-	part(root, Fx.sphere(0.4, 8), Fx.glow(Color(1.0, 0.6, 0.2), 6.0), Vector3(0, 0, 3.7))
+	var mat := Fx.paint(Color(0.68, 0.7, 0.72), 0.35, 0.5, 0.0)
+	var dark := Fx.solid(Color(0.06, 0.06, 0.07), 0.5, 0.4)
+	var mb := MeshBuilder.new()
+	var w := Color(1, 1, 1)
+	# a flattened body with an ogive nose, the wings swung out from under it, three tail
+	# surfaces and the turbofan hanging under the tail
+	mb.loft([[-4.6, 0.04, 0.04, -0.04, 0.04, 0.01], [-4.2, 0.22, 0.2, -0.18, 0.2, 0.08], [-3.4, 0.42, 0.36, -0.36, 0.4, 0.14],
+		[-1.0, 0.5, 0.42, -0.42, 0.45, 0.16], [2.6, 0.5, 0.42, -0.42, 0.45, 0.16], [3.5, 0.36, 0.32, -0.3, 0.36, 0.12], [3.9, 0.2, 0.2, -0.16, 0.2, 0.07]], w)
+	for sx in [-1.0, 1.0]:
+		mb.box(Vector3(2.9, 0.07, 0.85), Vector3(1.6 * sx, -0.36, 0.25), w, 0.0, Vector3(0, -7.0 * sx, 0))
+		mb.box(Vector3(1.2, 0.06, 0.6), Vector3(0.75 * sx, 0.1, 3.35), w, 0.0, Vector3(0, 0, -18.0 * sx))
+	mb.box(Vector3(0.07, 1.0, 0.7), Vector3(0, 0.8, 3.3), w)
+	mb.cyl(0.21, 0.24, 1.5, Vector3(0, -0.66, 2.9), w, 0.0, Vector3(90, 0, 0), 12)
+	part(root, mb.commit(), mat)
+	cyl(root, 0.18, 0.18, 0.06, Vector3(0, -0.66, 2.13), dark, Vector3(90, 0, 0), 12)
+	part(root, Fx.sphere(0.24, 8), Fx.glow(Color(1.0, 0.6, 0.2), 6.0), Vector3(0, -0.66, 3.65))
 	var l := OmniLight3D.new()
 	l.light_color = Color(1.0, 0.55, 0.2)
 	l.light_energy = 2.0
 	l.omni_range = 25.0
-	l.position = Vector3(0, 0, 4.5)
+	l.position = Vector3(0, -0.4, 4.5)
 	root.add_child(l)
 	# turbojet: yellow-white plume with a short glowing trail
 	var g := Fx.glare(Color(1.0, 0.72, 0.38), 2.4, 2.2, 0.0034, 0.12, 0.3)
-	g.position = Vector3(0, 0, 4.2)
+	g.position = Vector3(0, -0.6, 4.2)
 	root.add_child(g)
 	var ex := Fx.exhaust(Color(1.0, 0.5, 0.15), 26, 0.3, 0.9)
-	ex.position = Vector3(0, 0, 4.2)
+	ex.position = Vector3(0, -0.6, 4.2)
 	root.add_child(ex)
 	return root
 
 
 static func ballistic() -> Node3D:
 	var root := Node3D.new()
-	var mat := Fx.solid(Color(0.45, 0.5, 0.4), 0.5, 0.2)
+	var mat := Fx.paint(Color(0.45, 0.5, 0.4), 0.5, 0.2, 0.0)
 	cyl(root, 0.8, 0.8, 9.0, Vector3.ZERO, mat, Vector3(90, 0, 0), 12)
 	cyl(root, 0.0, 0.8, 2.6, Vector3(0, 0, -5.8), mat, Vector3(-90, 0, 0), 12)
 	for i in 4:
@@ -317,10 +432,8 @@ static func gerbera() -> Node3D:
 	var root := shahed()
 	root.scale = Vector3.ONE * 0.8
 	for c in root.get_children():
-		if c is MeshInstance3D and (c as MeshInstance3D).material_override is StandardMaterial3D:
-			var m := (c as MeshInstance3D).material_override as StandardMaterial3D
-			if not m.emission_enabled:
-				(c as MeshInstance3D).material_override = Fx.solid(Color(0.62, 0.6, 0.52), 0.8)
+		if c is MeshInstance3D and (c as MeshInstance3D).mesh is ArrayMesh:
+			(c as MeshInstance3D).material_override = Fx.paint(Color(0.62, 0.6, 0.52), 0.8, 0.0, 0.0)
 	return root
 
 
@@ -584,7 +697,7 @@ static func drone_rack() -> Node3D:
 ## Towed twin 23 mm on a firing position: two barrels on a small carriage, ammo crates.
 static func zu23() -> Node3D:
 	var root := Node3D.new()
-	var olive := Fx.solid(Color(0.28, 0.32, 0.2), 0.85)
+	var olive := Fx.paint(Color(0.28, 0.32, 0.2), 0.85, 0.15, 0.5)
 	var dark := Fx.solid(Color(0.12, 0.12, 0.12), 0.6)
 	var sand := Fx.solid(Color(0.45, 0.42, 0.3), 0.95)
 	# sandbag ring around the emplacement
@@ -613,7 +726,7 @@ static func zu23() -> Node3D:
 ## ZSU-23-4 Shilka: tracked hull, four barrels and the dish of the gun radar.
 static func shilka() -> Node3D:
 	var root := Node3D.new()
-	var olive := Fx.solid(Color(0.24, 0.28, 0.18), 0.85)
+	var olive := Fx.paint(Color(0.24, 0.28, 0.18), 0.85, 0.15, 0.7)
 	var dark := Fx.solid(Color(0.1, 0.1, 0.11), 0.6)
 	var steel := Fx.solid(Color(0.5, 0.52, 0.55), 0.45, 0.6)
 	_tracks(root, 3.4, 7.2)
@@ -644,7 +757,7 @@ static func shilka() -> Node3D:
 static func igla() -> Node3D:
 	var root := Node3D.new()
 	var sand := Fx.solid(Color(0.46, 0.43, 0.31), 0.95)
-	var olive := Fx.solid(Color(0.26, 0.3, 0.19), 0.85)
+	var olive := Fx.paint(Color(0.26, 0.3, 0.19), 0.85, 0.1, 0.4)
 	var tube := Fx.solid(Color(0.32, 0.34, 0.26), 0.7)
 	var dark := Fx.solid(Color(0.13, 0.13, 0.13), 0.6)
 	for i in 12:
@@ -670,7 +783,7 @@ static func igla() -> Node3D:
 ## Avenger: light 4x4 with two four-round Stinger pods on a powered turret.
 static func avenger() -> Node3D:
 	var root := Node3D.new()
-	var sand := Fx.solid(Color(0.42, 0.4, 0.31), 0.8)
+	var sand := Fx.paint(Color(0.42, 0.4, 0.31), 0.8, 0.15, 0.4)
 	var dark := Fx.solid(Color(0.12, 0.12, 0.13), 0.6)
 	var glass := Fx.solid(Color(0.1, 0.18, 0.22), 0.15, 0.4)
 	box(root, Vector3(3.0, 1.0, 5.4), Vector3(0, 1.1, 0), sand)
@@ -698,7 +811,7 @@ static func avenger() -> Node3D:
 ## Osa-AKM: amphibious 6x6 with four tubes and the tracking dish between them.
 static func osa() -> Node3D:
 	var root := Node3D.new()
-	var olive := Fx.solid(Color(0.27, 0.31, 0.21), 0.85)
+	var olive := Fx.paint(Color(0.27, 0.31, 0.21), 0.85, 0.15, 0.7)
 	var dark := Fx.solid(Color(0.11, 0.11, 0.12), 0.6)
 	var steel := Fx.solid(Color(0.52, 0.54, 0.56), 0.4, 0.6)
 	box(root, Vector3(3.4, 1.3, 8.0), Vector3(0, 1.3, 0), olive)
@@ -722,8 +835,8 @@ static func osa() -> Node3D:
 ## NASAMS: a truck carrying a frame of six launch canisters that tilts up to fire.
 static func nasams() -> Node3D:
 	var root := Node3D.new()
-	var green := Fx.solid(Color(0.22, 0.29, 0.22), 0.8)
-	var canister := Fx.solid(Color(0.36, 0.38, 0.34), 0.7)
+	var green := Fx.paint(Color(0.22, 0.29, 0.22), 0.8, 0.15, 0.5)
+	var canister := Fx.paint(Color(0.36, 0.38, 0.34), 0.7, 0.2, 0.0)
 	var dark := Fx.solid(Color(0.12, 0.12, 0.13), 0.6)
 	var glass := Fx.solid(Color(0.1, 0.18, 0.22), 0.15, 0.4)
 	box(root, Vector3(3.0, 0.7, 7.4), Vector3(0, 1.2, 0.4), green)
@@ -746,7 +859,7 @@ static func nasams() -> Node3D:
 ## Buk-M1 TELAR: tracked chassis, radar dome and four heavy missiles on the rail.
 static func buk() -> Node3D:
 	var root := Node3D.new()
-	var olive := Fx.solid(Color(0.25, 0.29, 0.19), 0.85)
+	var olive := Fx.paint(Color(0.25, 0.29, 0.19), 0.85, 0.15, 0.7)
 	var dark := Fx.solid(Color(0.11, 0.11, 0.12), 0.6)
 	var white := Fx.solid(Color(0.78, 0.78, 0.74), 0.6)
 	_tracks(root, 3.6, 8.4)
@@ -773,8 +886,8 @@ static func buk() -> Node3D:
 ## S-300PS TEL: 8x8 tractor with four vertical launch tubes raised over the tail.
 static func s300() -> Node3D:
 	var root := Node3D.new()
-	var green := Fx.solid(Color(0.2, 0.26, 0.2), 0.85)
-	var tube := Fx.solid(Color(0.42, 0.44, 0.4), 0.7)
+	var green := Fx.paint(Color(0.2, 0.26, 0.2), 0.85, 0.15, 0.6)
+	var tube := Fx.paint(Color(0.42, 0.44, 0.4), 0.7, 0.2, 0.0)
 	var dark := Fx.solid(Color(0.11, 0.11, 0.12), 0.6)
 	var glass := Fx.solid(Color(0.1, 0.18, 0.22), 0.15, 0.4)
 	box(root, Vector3(3.6, 1.0, 11.0), Vector3(0, 1.45, 0), green)
@@ -796,14 +909,24 @@ static func s300() -> Node3D:
 	return root
 
 
-## Track units for the armoured chassis (Shilka, Buk).
+## Track units for the armoured chassis (Gepard, Shilka, Buk): the run on the ground and the
+## return run, the slopes up to the sprocket and the idler, six road wheels, a side skirt.
 static func _tracks(root: Node3D, width: float, length: float) -> void:
-	var rubber := Fx.solid(Color(0.09, 0.09, 0.1), 0.95)
-	var steel := Fx.solid(Color(0.3, 0.31, 0.32), 0.7, 0.4)
+	var rubber := Fx.solid(Color(0.07, 0.07, 0.08), 0.95)
+	var steel := Fx.solid(Color(0.26, 0.27, 0.25), 0.7, 0.4)
+	var skirt := Fx.paint(Color(0.25, 0.29, 0.19), 0.85, 0.15, 0.7)
 	for sx in [-1.0, 1.0]:
-		box(root, Vector3(0.9, 1.1, length), Vector3(width * 0.5 * sx, 0.7, 0), rubber)
-		for i in 5:
-			cyl(root, 0.42, 0.42, 0.55, Vector3(width * 0.5 * sx, 0.6, -length * 0.4 + i * length * 0.2), steel, Vector3(0, 0, 90), 10)
+		var x: float = width * 0.5 * sx
+		box(root, Vector3(0.8, 0.22, length * 0.8), Vector3(x, 0.11, 0), rubber)
+		box(root, Vector3(0.8, 0.2, length * 0.92), Vector3(x, 1.12, 0), rubber)
+		for e in [-1.0, 1.0]:
+			box(root, Vector3(0.8, 0.2, length * 0.17), Vector3(x, 0.56, e * length * 0.455), rubber, Vector3(-e * 52.0, 0, 0))
+			cyl(root, 0.4, 0.4, 0.7, Vector3(x, 0.78, e * length * 0.455), steel, Vector3(0, 0, 90), 12)
+		for i in 6:
+			var z := -length * 0.36 + i * length * 0.144
+			cyl(root, 0.4, 0.4, 0.62, Vector3(x, 0.5, z), steel, Vector3(0, 0, 90), 12)
+			cyl(root, 0.14, 0.14, 0.68, Vector3(x, 0.5, z), rubber, Vector3(0, 0, 90), 6)
+		box(root, Vector3(0.08, 0.5, length * 0.9), Vector3(x + sx * 0.42, 1.0, 0), skirt)
 
 
 # --- Fire and rescue service ---------------------------------------------------------
@@ -861,38 +984,215 @@ static func fire_depot() -> Node3D:
 ## Merges primitive meshes into one ArrayMesh with per-part vertex colours, so a whole
 ## prop (e.g. a tree) is a single MultiMesh instance. parts: [[Mesh, Transform3D, Color], ...]
 static func combine(parts: Array) -> ArrayMesh:
+	var mb := MeshBuilder.new()
+	for p in parts:
+		mb.add_mesh(p[0], p[1], p[2], Vector2.ZERO)
+	return mb.commit()
+
+
+## Collects geometry into one surface: vertex colours tint the parts, UV.x tells the shader which
+## material a part is (0 = paint / leaves / clothes, taking the instance colour), UV.y carries a
+## per-vertex value (height in a crown, for the shading and the sway).
+class MeshBuilder:
 	var verts := PackedVector3Array()
 	var norms := PackedVector3Array()
 	var cols := PackedColorArray()
+	var uvs := PackedVector2Array()
 	var idx := PackedInt32Array()
-	for p in parts:
-		var m: Mesh = p[0]
-		var xf: Transform3D = p[1]
-		var c: Color = p[2]
+	## Second UV set, only for the leaf cards (where on the card a pixel is); filled up with zeros
+	## for everything else when the mesh is committed.
+	var uv2s := PackedVector2Array()
+
+	## A leaf card: a square of side s around p in the plane (t1, t2), shaded with the normal n of
+	## the crown it belongs to. UV.y = v (height in the crown), UV2 = the corner of the card.
+	func card(p: Vector3, t1: Vector3, t2: Vector3, s: float, n: Vector3, c: Color, v: float, part := 4.0) -> void:
+		while uv2s.size() < verts.size():
+			uv2s.append(Vector2.ZERO)
+		var base := verts.size()
+		var h := s * 0.5
+		var corners := [[-1.0, -1.0], [1.0, -1.0], [1.0, 1.0], [-1.0, 1.0]]
+		for k in corners:
+			verts.append(p + t1 * (float(k[0]) * h) + t2 * (float(k[1]) * h))
+			norms.append(n)
+			cols.append(c)
+			uvs.append(Vector2(part, v))
+			uv2s.append(Vector2(float(k[0]) * 0.5 + 0.5, float(k[1]) * 0.5 + 0.5))
+		idx.append_array(PackedInt32Array([base, base + 1, base + 2, base, base + 2, base + 3]))
+
+	## A quad with a given outward normal (the winding is put right by itself).
+	func quad_n(p0: Vector3, p1: Vector3, p2: Vector3, p3: Vector3, n: Vector3, c: Color, part := 0.0) -> void:
+		if (p2 - p0).cross(p1 - p0).dot(n) < 0.0:
+			quad(p0, p3, p2, p1, c, part)
+		else:
+			quad(p0, p1, p2, p3, c, part)
+
+	## A smooth skin through cross-sections [z, half width at the bottom, half width at the top,
+	## y bottom, y top, corner radius] (a car body): every section is a ring of eight points with
+	## chamfered corners, the normals are shared between the faces so the surface shades as one
+	## curved panel. Both ends are closed.
+	func loft(sections: Array, c: Color, part := 0.0) -> void:
+		var rings: Array = []
+		for s in sections:
+			var z := float(s[0])
+			var wb := float(s[1])
+			var wt := float(s[2])
+			var y0 := float(s[3])
+			var y1 := float(s[4])
+			var r := minf(float(s[5]), (y1 - y0) * 0.45)
+			var rt := minf(r * 1.4, (y1 - y0) * 0.45)
+			var ws := wt + (wb - wt) * rt / maxf(y1 - y0, 0.001)
+			rings.append(PackedVector3Array([Vector3(wb - r, y0, z), Vector3(wb, y0 + r, z), Vector3(ws, y1 - rt, z), Vector3(wt - rt, y1, z),
+				Vector3(-(wt - rt), y1, z), Vector3(-ws, y1 - rt, z), Vector3(-wb, y0 + r, z), Vector3(-(wb - r), y0, z)]))
+		var n := rings.size()
+		var base := verts.size()
+		for k in n:
+			var ring: PackedVector3Array = rings[k]
+			var prev: PackedVector3Array = rings[maxi(k - 1, 0)]
+			var next: PackedVector3Array = rings[mini(k + 1, n - 1)]
+			var mid := (ring[1] + ring[5]) * 0.5
+			for i in 8:
+				var along := next[i] - prev[i]
+				var around := ring[(i + 1) % 8] - ring[(i + 7) % 8]
+				var nn := around.cross(along).normalized()
+				if nn.dot(ring[i] - mid) < 0.0:
+					nn = -nn
+				verts.append(ring[i])
+				norms.append(nn)
+				cols.append(c)
+				uvs.append(Vector2(part, 0.0))
+		for k in n - 1:
+			for i in 8:
+				var a := base + k * 8 + i
+				var b := base + k * 8 + (i + 1) % 8
+				var c2 := base + (k + 1) * 8 + (i + 1) % 8
+				var d := base + (k + 1) * 8 + i
+				var out := verts[a] - Vector3(0, (verts[base + k * 8 + 1].y + verts[base + k * 8 + 5].y) * 0.5, verts[a].z)
+				if (verts[c2] - verts[a]).cross(verts[b] - verts[a]).dot(out) < 0.0:
+					idx.append_array(PackedInt32Array([a, d, c2, a, c2, b]))
+				else:
+					idx.append_array(PackedInt32Array([a, b, c2, a, c2, d]))
+		for e in 2:
+			var ring: PackedVector3Array = rings[0 if e == 0 else n - 1]
+			var nz := Vector3(0, 0, -1.0 if e == 0 else 1.0)
+			var cb := verts.size()
+			for i in 8:
+				verts.append(ring[i])
+				norms.append(nz)
+				cols.append(c)
+				uvs.append(Vector2(part, 0.0))
+			for i in range(1, 7):
+				if (ring[i + 1] - ring[0]).cross(ring[i] - ring[0]).dot(nz) < 0.0:
+					idx.append_array(PackedInt32Array([cb, cb + i + 1, cb + i]))
+				else:
+					idx.append_array(PackedInt32Array([cb, cb + i, cb + i + 1]))
+
+	func add_mesh(m: Mesh, xf: Transform3D, c: Color, uv: Vector2) -> void:
 		var arr := m.surface_get_arrays(0)
 		var v: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
 		var n: PackedVector3Array = arr[Mesh.ARRAY_NORMAL]
 		var ind = arr[Mesh.ARRAY_INDEX]
 		var base := verts.size()
+		var nb := xf.basis.inverse().transposed()
 		for i in v.size():
 			verts.append(xf * v[i])
-			norms.append((xf.basis * n[i]).normalized())
+			norms.append((nb * n[i]).normalized())
 			cols.append(c)
+			uvs.append(uv)
 		if ind == null or (ind as PackedInt32Array).is_empty():
 			for i in v.size():
 				idx.append(base + i)
 		else:
 			for i in ind:
 				idx.append(base + i)
-	var a := []
-	a.resize(Mesh.ARRAY_MAX)
-	a[Mesh.ARRAY_VERTEX] = verts
-	a[Mesh.ARRAY_NORMAL] = norms
-	a[Mesh.ARRAY_COLOR] = cols
-	a[Mesh.ARRAY_INDEX] = idx
-	var am := ArrayMesh.new()
-	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, a)
-	return am
+
+	func box(size: Vector3, pos: Vector3, c: Color, part := 0.0, rot := Vector3.ZERO) -> void:
+		var m := BoxMesh.new()
+		m.size = size
+		add_mesh(m, Transform3D(Basis.from_euler(rot * (PI / 180.0)), pos), c, Vector2(part, 0.0))
+
+	func cyl(rt: float, rb: float, h: float, pos: Vector3, c: Color, part := 0.0, rot := Vector3.ZERO, seg := 8) -> void:
+		var m := CylinderMesh.new()
+		m.top_radius = rt
+		m.bottom_radius = rb
+		m.height = h
+		m.radial_segments = seg
+		m.rings = 1
+		add_mesh(m, Transform3D(Basis.from_euler(rot * (PI / 180.0)), pos), c, Vector2(part, 0.0))
+
+	## A lumpy ball (a crown of leaves, a bush): a sphere whose surface is pushed in and out.
+	## UV.y = 0 at its bottom … 1 at its top.
+	func blob(center: Vector3, radii: Vector3, seg: int, rings: int, seed: float, lump: float, c: Color, part := 0.0) -> void:
+		var base := verts.size()
+		for r in rings + 1:
+			var v := float(r) / rings
+			var phi := v * PI
+			for s in seg + 1:
+				var u := float(s % seg) / seg
+				var th := u * TAU
+				var d := Vector3(sin(phi) * cos(th), cos(phi), sin(phi) * sin(th))
+				var k := 1.0 + lump * (sin(d.x * 5.1 + seed) * sin(d.y * 4.3 + seed * 1.7) * sin(d.z * 4.7 + seed * 0.6) + 0.5 * sin(d.x * 9.7 + d.z * 8.3 + seed * 2.3))
+				verts.append(center + d * radii * k)
+				norms.append((d / radii).normalized())
+				cols.append(c)
+				uvs.append(Vector2(part, 1.0 - v))
+		for r in rings:
+			for s in seg:
+				var a := base + r * (seg + 1) + s
+				var b := a + seg + 1
+				idx.append_array(PackedInt32Array([a, b, a + 1, a + 1, b, b + 1]))
+
+	## A hull through cross-sections [z, half width, y bottom, y top] (a car body, a cabin):
+	## sides, top, bottom and both ends.
+	func hull(sections: Array, c: Color, part := 0.0) -> void:
+		for i in sections.size() - 1:
+			var a: Array = sections[i]
+			var b: Array = sections[i + 1]
+			var a0 := Vector3(-a[1], a[2], a[0])
+			var a1 := Vector3(a[1], a[2], a[0])
+			var a2 := Vector3(a[1], a[3], a[0])
+			var a3 := Vector3(-a[1], a[3], a[0])
+			var b0 := Vector3(-b[1], b[2], b[0])
+			var b1 := Vector3(b[1], b[2], b[0])
+			var b2 := Vector3(b[1], b[3], b[0])
+			var b3 := Vector3(-b[1], b[3], b[0])
+			quad(a3, a2, b2, b3, c, part)   # top
+			quad(a1, a0, b0, b1, c, part)   # bottom
+			quad(a2, a1, b1, b2, c, part)   # +x side
+			quad(a0, a3, b3, b0, c, part)   # −x side
+		var f: Array = sections[0]
+		quad(Vector3(f[1], f[3], f[0]), Vector3(-f[1], f[3], f[0]), Vector3(-f[1], f[2], f[0]), Vector3(f[1], f[2], f[0]), c, part)
+		var l: Array = sections[sections.size() - 1]
+		quad(Vector3(-l[1], l[3], l[0]), Vector3(l[1], l[3], l[0]), Vector3(l[1], l[2], l[0]), Vector3(-l[1], l[2], l[0]), c, part)
+
+	## One flat quad with its own normal (corners counter-clockwise seen from outside).
+	func quad(p0: Vector3, p1: Vector3, p2: Vector3, p3: Vector3, c: Color, part := 0.0) -> void:
+		var n := (p2 - p0).cross(p1 - p0).normalized()
+		var base := verts.size()
+		for p in [p0, p1, p2, p3]:
+			verts.append(p)
+			norms.append(n)
+			cols.append(c)
+			uvs.append(Vector2(part, 0.0))
+		idx.append_array(PackedInt32Array([base, base + 1, base + 2, base, base + 2, base + 3]))
+
+	func commit() -> ArrayMesh:
+		var a := []
+		a.resize(Mesh.ARRAY_MAX)
+		a[Mesh.ARRAY_VERTEX] = verts
+		a[Mesh.ARRAY_NORMAL] = norms
+		a[Mesh.ARRAY_COLOR] = cols
+		a[Mesh.ARRAY_TEX_UV] = uvs
+		if not uv2s.is_empty():
+			while uv2s.size() < verts.size():
+				uv2s.append(Vector2.ZERO)
+			a[Mesh.ARRAY_TEX_UV2] = uv2s
+		a[Mesh.ARRAY_INDEX] = idx
+		var am := ArrayMesh.new()
+		am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, a)
+		return am
+
+
+static var _cache := {}
 
 
 static func _cyl_mesh(rt: float, rb: float, h: float, seg: int) -> CylinderMesh:
@@ -909,51 +1209,220 @@ static func _xf(pos: Vector3, scale := Vector3.ONE) -> Transform3D:
 	return Transform3D(Basis().scaled(scale), pos)
 
 
-## Chestnut / linden: trunk + rounded crown. Height ≈ 7 units at scale 1.
-static func deciduous_mesh() -> ArrayMesh:
-	var crown := SphereMesh.new()
-	crown.radius = 1.0
-	crown.height = 2.0
-	crown.radial_segments = 7
-	crown.rings = 4
-	return combine([
-		[_cyl_mesh(0.22, 0.3, 3.2, 5), _xf(Vector3(0, 1.6, 0)), Color(0.42, 0.32, 0.26)],
-		[crown, _xf(Vector3(0, 4.6, 0), Vector3(2.6, 2.3, 2.6)), Color(1, 1, 1)],
-		[crown, _xf(Vector3(0.9, 5.6, 0.4), Vector3(1.6, 1.5, 1.6)), Color(0.9, 0.95, 0.9)],
-	])
+## Wraps clumps of a crown ([centre, radii]) in leaf cards over a smaller dark core. y0..y1 is the
+## height span of the crown (for the shading), per the number of cards a clump gets.
+static func _leafy(mb: MeshBuilder, clumps: Array, y0: float, y1: float, per: int, seed: int) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed
+	var white := Color(1, 1, 1)
+	for i in clumps.size():
+		var c: Vector3 = clumps[i][0]
+		var r: Vector3 = clumps[i][1]
+		mb.blob(c, r * 0.66, 8, 5, 1.0 + i * 1.7, 0.2, Color(0.5, 0.5, 0.5))
+		for k in per:
+			var d := Vector3(rng.randf_range(-1.0, 1.0), rng.randf_range(-0.55, 1.0), rng.randf_range(-1.0, 1.0))
+			if d.length() < 0.2:
+				continue
+			d = d.normalized()
+			var p := c + d * r * rng.randf_range(0.6, 1.0)
+			# the card leans off the surface of the clump, every one its own way
+			var nc := (d + Vector3(rng.randf_range(-1.0, 1.0), rng.randf_range(-1.0, 1.0), rng.randf_range(-1.0, 1.0)) * 0.8).normalized()
+			var t1 := nc.cross(Vector3.UP if absf(nc.y) < 0.9 else Vector3.RIGHT).normalized()
+			var t2 := nc.cross(t1)
+			var spin := rng.randf() * TAU
+			var a1 := t1 * cos(spin) + t2 * sin(spin)
+			var a2 := nc.cross(a1)
+			var shade := rng.randf_range(0.8, 1.15)
+			mb.card(p, a1, a2, rng.randf_range(1.9, 2.8), (d + Vector3(0, 0.5, 0)).normalized(), Color(shade, shade, shade), clampf((p.y - y0) / (y1 - y0), 0.0, 1.0))
 
 
-## Pine: trunk + two stacked cones. Height ≈ 10 units at scale 1.
-static func conifer_mesh() -> ArrayMesh:
-	var cone := _cyl_mesh(0.0, 1.0, 1.0, 6)
-	return combine([
-		[_cyl_mesh(0.18, 0.26, 3.0, 5), _xf(Vector3(0, 1.5, 0)), Color(0.4, 0.3, 0.22)],
-		[cone, _xf(Vector3(0, 4.6, 0), Vector3(2.4, 5.0, 2.4)), Color(1, 1, 1)],
-		[cone, _xf(Vector3(0, 7.4, 0), Vector3(1.7, 4.2, 1.7)), Color(0.92, 1, 0.92)],
-	])
+## Chestnut / linden / poplar: a trunk and a crown of lumpy clumps. About 11 m at scale 1.
+## detail 0 = seen from kilometres (one clump), 1 = a street tree, 2 = close up (branches, nine
+## clumps). Shaders.TREE shades it: UV.x = 1 on the wood.
+static func deciduous_mesh(detail := 1) -> ArrayMesh:
+	var key := "tree%d" % detail
+	if _cache.has(key):
+		return _cache[key]
+	var mb := MeshBuilder.new()
+	var white := Color(1, 1, 1)
+	if detail <= 0:
+		mb.cyl(0.2, 0.32, 4.0, Vector3(0, 2.0, 0), white, 1.0, Vector3.ZERO, 5)
+		mb.blob(Vector3(0, 7.0, 0), Vector3(3.6, 3.9, 3.6), 7, 4, 1.0, 0.16, white)
+	elif detail == 1:
+		mb.cyl(0.18, 0.34, 4.6, Vector3(0, 2.3, 0), white, 1.0, Vector3.ZERO, 6)
+		mb.blob(Vector3(0, 7.2, 0), Vector3(3.3, 3.2, 3.3), 9, 5, 1.0, 0.2, white)
+		mb.blob(Vector3(1.6, 8.6, 0.7), Vector3(2.2, 2.0, 2.2), 8, 4, 2.3, 0.2, white)
+		mb.blob(Vector3(-1.5, 6.4, -1.1), Vector3(2.3, 1.9, 2.3), 8, 4, 4.1, 0.2, white)
+	elif detail >= 3:
+		# close up (Max / UltraMax): the trunk forks into boughs, every clump is a dark core
+		# wrapped in sprays of leaves — cards whose gaps the shader cuts out, so the outline of
+		# the crown is leaves and sky, not a polygon
+		mb.cyl(0.21, 0.4, 5.2, Vector3(0, 2.6, 0), white, 1.0, Vector3.ZERO, 10)
+		for b in [[Vector3(1.0, 6.2, 0.3), Vector3(0, 0, -34)], [Vector3(-0.9, 6.0, -0.6), Vector3(22, 0, 32)], [Vector3(0.1, 6.6, 1.0), Vector3(-32, 0, 4)],
+				[Vector3(0.3, 7.6, -0.3), Vector3(8, 0, -8)], [Vector3(-0.2, 6.2, -1.2), Vector3(38, 0, -6)]]:
+			mb.cyl(0.07, 0.17, 3.4, b[0], white, 1.0, b[1], 6)
+		var clumps := [[Vector3(0, 8.5, 0), Vector3(2.6, 2.4, 2.6)], [Vector3(2.0, 7.4, 0.6), Vector3(2.0, 1.7, 2.0)], [Vector3(-1.9, 7.2, -0.9), Vector3(2.1, 1.8, 2.0)],
+			[Vector3(0.4, 7.0, 2.1), Vector3(1.9, 1.6, 1.9)], [Vector3(-0.5, 6.9, -2.2), Vector3(1.9, 1.6, 1.8)], [Vector3(1.3, 9.7, -0.8), Vector3(1.7, 1.5, 1.7)],
+			[Vector3(-1.2, 9.5, 0.9), Vector3(1.7, 1.5, 1.7)], [Vector3(2.4, 6.0, -1.4), Vector3(1.4, 1.2, 1.4)], [Vector3(-2.5, 5.9, 1.2), Vector3(1.5, 1.2, 1.4)]]
+		_leafy(mb, clumps, 4.6, 11.4, 30, 811)
+	else:
+		mb.cyl(0.2, 0.38, 5.0, Vector3(0, 2.5, 0), white, 1.0, Vector3.ZERO, 8)
+		# main boughs
+		for b in [[Vector3(0.9, 6.0, 0.3), Vector3(0, 0, -32)], [Vector3(-0.8, 5.8, -0.5), Vector3(20, 0, 30)], [Vector3(0.1, 6.4, 0.9), Vector3(-30, 0, 4)]]:
+			mb.cyl(0.08, 0.16, 3.0, b[0], white, 1.0, b[1], 5)
+		var clumps := [[Vector3(0, 8.4, 0), Vector3(2.6, 2.4, 2.6)], [Vector3(2.0, 7.4, 0.6), Vector3(2.0, 1.7, 2.0)], [Vector3(-1.9, 7.2, -0.9), Vector3(2.1, 1.8, 2.0)],
+			[Vector3(0.4, 7.0, 2.1), Vector3(1.9, 1.6, 1.9)], [Vector3(-0.5, 6.9, -2.2), Vector3(1.9, 1.6, 1.8)], [Vector3(1.3, 9.6, -0.8), Vector3(1.7, 1.5, 1.7)],
+			[Vector3(-1.2, 9.4, 0.9), Vector3(1.7, 1.5, 1.7)], [Vector3(2.4, 6.0, -1.4), Vector3(1.4, 1.2, 1.4)], [Vector3(-2.5, 5.9, 1.2), Vector3(1.5, 1.2, 1.4)]]
+		for i in clumps.size():
+			mb.blob(clumps[i][0], clumps[i][1], 10, 6, 1.0 + i * 1.7, 0.24, white)
+	var m := mb.commit()
+	_cache[key] = m
+	return m
 
 
-## Passenger car (≈4.4 m), front towards -Z. Instance colour paints the body.
-static func car_mesh() -> ArrayMesh:
-	return combine([
-		[Fx.cube(Vector3(1.9, 0.75, 4.4)), _xf(Vector3(0, 0.62, 0)), Color(1, 1, 1)],
-		[Fx.cube(Vector3(1.7, 0.62, 2.3)), _xf(Vector3(0, 1.3, 0.25)), Color(0.12, 0.14, 0.17)],
-		[Fx.cube(Vector3(2.0, 0.3, 4.2)), _xf(Vector3(0, 0.24, 0)), Color(0.05, 0.05, 0.05)],
-	])
+## Scots pine: a tall bare trunk with a flat crown at the top. About 16 m at scale 1.
+static func conifer_mesh(detail := 1) -> ArrayMesh:
+	var key := "pine%d" % detail
+	if _cache.has(key):
+		return _cache[key]
+	var mb := MeshBuilder.new()
+	var white := Color(1, 1, 1)
+	if detail <= 0:
+		mb.cyl(0.12, 0.26, 9.0, Vector3(0, 4.5, 0), white, 1.0, Vector3.ZERO, 5)
+		mb.blob(Vector3(0, 11.2, 0), Vector3(2.9, 3.6, 2.9), 7, 4, 3.0, 0.2, white)
+	elif detail >= 3:
+		mb.cyl(0.11, 0.28, 10.5, Vector3(0, 5.25, 0), white, 1.0, Vector3.ZERO, 10)
+		for b in [[Vector3(0.7, 8.2, 0.1), Vector3(0, 0, -62)], [Vector3(-0.6, 7.4, -0.3), Vector3(30, 0, 58)], [Vector3(0.9, 10.6, 0.3), Vector3(0, 0, -48)], [Vector3(-0.8, 10.9, -0.5), Vector3(20, 0, 50)]]:
+			mb.cyl(0.03, 0.07, 2.0, b[0], white, 1.0, b[1], 5)
+		_leafy(mb, [[Vector3(0, 12.6, 0), Vector3(2.4, 2.0, 2.4)], [Vector3(1.3, 10.8, 0.5), Vector3(2.0, 1.3, 2.0)], [Vector3(-1.2, 11.0, -0.8), Vector3(2.1, 1.3, 1.9)],
+			[Vector3(0.2, 9.4, -1.3), Vector3(1.7, 1.0, 1.6)], [Vector3(-0.4, 14.0, 0.4), Vector3(1.5, 1.5, 1.5)]], 8.4, 15.5, 30, 433)
+	else:
+		var seg := 6 if detail == 1 else 8
+		mb.cyl(0.11, 0.28, 10.5, Vector3(0, 5.25, 0), white, 1.0, Vector3.ZERO, seg)
+		var clumps := [[Vector3(0, 12.6, 0), Vector3(2.4, 2.0, 2.4)], [Vector3(1.3, 10.8, 0.5), Vector3(2.0, 1.3, 2.0)], [Vector3(-1.2, 11.0, -0.8), Vector3(2.1, 1.3, 1.9)],
+			[Vector3(0.2, 9.4, -1.3), Vector3(1.7, 1.0, 1.6)], [Vector3(-0.4, 14.0, 0.4), Vector3(1.5, 1.5, 1.5)]]
+		for i in (clumps.size() if detail >= 2 else 3):
+			mb.blob(clumps[i][0], clumps[i][1], 8 if detail == 1 else 10, 4 if detail == 1 else 6, 2.0 + i * 1.3, 0.26, white)
+		if detail >= 2:
+			# a few dead boughs under the crown
+			for b in [[Vector3(0.7, 8.2, 0.1), Vector3(0, 0, -62)], [Vector3(-0.6, 7.4, -0.3), Vector3(30, 0, 58)]]:
+				mb.cyl(0.03, 0.06, 1.6, b[0], white, 1.0, b[1], 4)
+	var m := mb.commit()
+	_cache[key] = m
+	return m
 
 
-## Pedestrian (≈1.8 m): legs, torso (instance colour = clothes), head.
+## Passenger car (≈4.5 m), front towards -Z. Instance colour paints the body; UV.x marks the
+## glass (1), tyres and trim (2), head lamps (3) and tail lamps (4) for Shaders.CAR.
+## detail 0 = a box with a cabin, 1 = a shaped body with wheels, 2 = bumpers, mirrors, arches.
+static func car_mesh(detail := 1) -> ArrayMesh:
+	var key := "car%d" % detail
+	if _cache.has(key):
+		return _cache[key]
+	var mb := MeshBuilder.new()
+	var paint := Color(1, 1, 1)
+	if detail <= 0:
+		mb.box(Vector3(1.8, 0.62, 4.4), Vector3(0, 0.6, 0), paint)
+		mb.box(Vector3(1.6, 0.56, 2.3), Vector3(0, 1.18, 0.25), paint, 1.0)
+		mb.box(Vector3(1.86, 0.3, 4.2), Vector3(0, 0.24, 0), paint, 2.0)
+	elif detail >= 3:
+		# close up (Max / UltraMax): a curved skin — the body from bumper to bumper, the cabin
+		# leaning in to the roof — with the glass set into it, lamps, a grille, plates, mirrors
+		mb.loft([[-2.24, 0.62, 0.58, 0.4, 0.6, 0.06], [-2.14, 0.83, 0.78, 0.27, 0.7, 0.1], [-1.55, 0.9, 0.86, 0.2, 0.82, 0.1], [-0.95, 0.91, 0.88, 0.2, 0.92, 0.09],
+			[0.0, 0.92, 0.88, 0.2, 0.95, 0.09], [1.25, 0.91, 0.87, 0.2, 0.97, 0.09], [1.9, 0.88, 0.84, 0.24, 0.96, 0.1], [2.14, 0.8, 0.76, 0.3, 0.86, 0.1],
+			[2.25, 0.66, 0.62, 0.4, 0.72, 0.06]], paint)
+		mb.loft([[-1.0, 0.84, 0.8, 0.9, 0.95, 0.02], [-0.3, 0.83, 0.64, 0.92, 1.4, 0.07], [0.3, 0.83, 0.65, 0.93, 1.43, 0.07], [0.95, 0.83, 0.64, 0.94, 1.41, 0.07],
+			[1.74, 0.84, 0.78, 0.95, 1.0, 0.02]], paint)
+		# windscreen, rear window and the side glass, a hair proud of the cabin
+		var wn := Vector3(0, 0.84, -0.55).normalized()
+		mb.quad_n(Vector3(-0.73, 1.0, -0.91) + wn * 0.014, Vector3(0.73, 1.0, -0.91) + wn * 0.014, Vector3(0.59, 1.365, -0.35) + wn * 0.014, Vector3(-0.59, 1.365, -0.35) + wn * 0.014, wn, paint, 1.0)
+		var rn := Vector3(0, 0.88, 0.47).normalized()
+		mb.quad_n(Vector3(-0.59, 1.375, 1.01) + rn * 0.014, Vector3(0.59, 1.375, 1.01) + rn * 0.014, Vector3(0.71, 1.045, 1.65) + rn * 0.014, Vector3(-0.71, 1.045, 1.65) + rn * 0.014, rn, paint, 1.0)
+		for sx in [-1.0, 1.0]:
+			var sn := Vector3(sx * 0.92, 0.4, 0).normalized()
+			var xb: float = sx * 0.836
+			var xt: float = sx * 0.694
+			mb.quad_n(Vector3(xb, 1.0, -0.76), Vector3(xb, 1.0, 0.2), Vector3(xt, 1.33, 0.2), Vector3(xt, 1.33, -0.27), sn, paint, 1.0)
+			mb.quad_n(Vector3(xb, 1.0, 0.29), Vector3(xb, 1.0, 1.46), Vector3(xt, 1.33, 0.9), Vector3(xt, 1.33, 0.29), sn, paint, 1.0)
+			# the mirror, the door handles, a dark sill
+			mb.box(Vector3(0.17, 0.11, 0.1), Vector3(0.97 * sx, 1.02, -0.74), paint)
+			mb.box(Vector3(0.03, 0.03, 0.16), Vector3(0.925 * sx, 0.86, -0.1), paint, 5.0)
+			mb.box(Vector3(0.03, 0.03, 0.16), Vector3(0.92 * sx, 0.87, 0.95), paint, 5.0)
+			mb.box(Vector3(0.05, 0.1, 2.3), Vector3(0.9 * sx, 0.26, 0.0), paint, 2.0)
+			# lamps: a wide head lamp wrapping the corner, a tall tail lamp
+			mb.box(Vector3(0.44, 0.13, 0.16), Vector3(0.56 * sx, 0.67, -2.15), paint, 3.0, Vector3(0, -12.0 * sx, 0))
+			mb.box(Vector3(0.36, 0.17, 0.12), Vector3(0.6 * sx, 0.8, 2.17), paint, 4.0, Vector3(0, 10.0 * sx, 0))
+		for wz in [-1.38, 1.36]:
+			for sx in [-1.0, 1.0]:
+				mb.cyl(0.335, 0.335, 0.23, Vector3(0.8 * sx, 0.335, wz), paint, 2.0, Vector3(0, 0, 90), 18)
+				mb.cyl(0.2, 0.2, 0.245, Vector3(0.805 * sx, 0.335, wz), paint, 5.0, Vector3(0, 0, 90), 12)
+				mb.cyl(0.07, 0.07, 0.26, Vector3(0.805 * sx, 0.335, wz), paint, 2.0, Vector3(0, 0, 90), 8)
+		# the grille and the lower intakes, the plates
+		mb.box(Vector3(0.74, 0.13, 0.06), Vector3(0, 0.6, -2.235), paint, 2.0)
+		mb.box(Vector3(1.3, 0.12, 0.08), Vector3(0, 0.36, -2.2), paint, 2.0)
+		mb.box(Vector3(1.36, 0.12, 0.08), Vector3(0, 0.38, 2.2), paint, 2.0)
+		mb.box(Vector3(0.5, 0.11, 0.03), Vector3(0, 0.47, -2.262), paint, 6.0)
+		mb.box(Vector3(0.5, 0.11, 0.03), Vector3(0, 0.6, 2.262), paint, 6.0)
+	else:
+		# the body, nose first: bumper, bonnet, the waist under the cabin, boot, tail
+		mb.hull([[-2.25, 0.8, 0.3, 0.6], [-2.1, 0.88, 0.24, 0.7], [-1.0, 0.9, 0.22, 0.84], [1.25, 0.9, 0.22, 0.9], [2.1, 0.88, 0.26, 0.86], [2.22, 0.8, 0.34, 0.7]], paint)
+		# the glasshouse and the roof panel over it
+		mb.hull([[-1.0, 0.82, 0.84, 0.86], [-0.3, 0.72, 0.86, 1.38], [0.85, 0.72, 0.88, 1.4], [1.6, 0.8, 0.9, 0.92]], paint, 1.0)
+		mb.hull([[-0.32, 0.7, 1.37, 1.42], [0.86, 0.7, 1.39, 1.44]], paint)
+		var seg := 8 if detail == 1 else 14
+		for wz in [-1.38, 1.36]:
+			for sx in [-1.0, 1.0]:
+				mb.cyl(0.33, 0.33, 0.24, Vector3(0.82 * sx, 0.33, wz), paint, 2.0, Vector3(0, 0, 90), seg)
+				if detail >= 2:
+					mb.cyl(0.19, 0.19, 0.26, Vector3(0.83 * sx, 0.33, wz), Color(1, 1, 1), 5.0, Vector3(0, 0, 90), 8)
+		for sx in [-1.0, 1.0]:
+			mb.box(Vector3(0.42, 0.16, 0.08), Vector3(0.6 * sx, 0.62, -2.21), paint, 3.0)
+			mb.box(Vector3(0.44, 0.14, 0.08), Vector3(0.6 * sx, 0.72, 2.2), paint, 4.0)
+		if detail >= 2:
+			mb.box(Vector3(1.7, 0.16, 0.14), Vector3(0, 0.36, -2.24), paint, 2.0)
+			mb.box(Vector3(1.7, 0.16, 0.14), Vector3(0, 0.4, 2.22), paint, 2.0)
+			mb.box(Vector3(0.6, 0.12, 0.05), Vector3(0, 0.5, 2.25), paint, 5.0)
+			for sx in [-1.0, 1.0]:
+				mb.box(Vector3(0.2, 0.12, 0.12), Vector3(0.98 * sx, 0.95, -0.72), paint)
+				mb.box(Vector3(0.04, 0.5, 0.04), Vector3(0.76 * sx, 1.12, 0.28), paint, 2.0)
+	var m := mb.commit()
+	_cache[key] = m
+	return m
+
+
+## Pedestrian (≈1.8 m), facing -Z: UV.x marks the skin (1), trousers and shoes (2) and hair (3);
+## the coat takes the instance colour (Shaders.PEOPLE).
 static func person_mesh() -> ArrayMesh:
-	var head := SphereMesh.new()
-	head.radius = 0.14
-	head.height = 0.28
-	head.radial_segments = 6
-	head.rings = 3
-	return combine([
-		[Fx.cube(Vector3(0.42, 0.85, 0.24)), _xf(Vector3(0, 0.43, 0)), Color(0.18, 0.2, 0.26)],
-		[Fx.cube(Vector3(0.5, 0.66, 0.3)), _xf(Vector3(0, 1.2, 0)), Color(1, 1, 1)],
-		[head, _xf(Vector3(0, 1.68, 0)), Color(0.9, 0.72, 0.6)],
-	])
+	if _cache.has("person"):
+		return _cache["person"]
+	var mb := MeshBuilder.new()
+	var c := Color(1, 1, 1)
+	for sx in [-1.0, 1.0]:
+		mb.box(Vector3(0.17, 0.86, 0.2), Vector3(0.1 * sx, 0.43, 0), c, 2.0)
+		mb.box(Vector3(0.11, 0.62, 0.14), Vector3(0.29 * sx, 1.13, 0), c)
+	mb.box(Vector3(0.44, 0.64, 0.26), Vector3(0, 1.17, 0), c)
+	mb.cyl(0.07, 0.07, 0.1, Vector3(0, 1.53, 0), c, 1.0, Vector3.ZERO, 6)
+	mb.blob(Vector3(0, 1.68, 0), Vector3(0.12, 0.14, 0.13), 7, 4, 0.0, 0.0, c, 1.0)
+	mb.blob(Vector3(0, 1.73, 0.02), Vector3(0.125, 0.11, 0.135), 7, 3, 0.0, 0.0, c, 3.0)
+	var m := mb.commit()
+	_cache["person"] = m
+	return m
+
+
+## A street lamp post, 9 m at scale 1: the arm reaches out towards -Z with the lamp head at its
+## end (the glow is a separate sprite there).
+static func lamp_post_mesh() -> ArrayMesh:
+	if _cache.has("post"):
+		return _cache["post"]
+	var mb := MeshBuilder.new()
+	var c := Color(1, 1, 1)
+	mb.cyl(0.14, 0.2, 0.9, Vector3(0, 0.45, 0), c, 0.0, Vector3.ZERO, 8)
+	mb.cyl(0.07, 0.11, 8.2, Vector3(0, 5.0, 0), c, 0.0, Vector3.ZERO, 8)
+	mb.cyl(0.05, 0.06, 2.1, Vector3(0, 9.1, -0.98), c, 0.0, Vector3(80, 0, 0), 6)
+	mb.box(Vector3(0.34, 0.12, 0.8), Vector3(0, 9.26, -2.1), Color(1.6, 1.6, 1.6))
+	var m := mb.commit()
+	_cache["post"] = m
+	return m
 
 
 # --- Living city props --------------------------------------------------------------------
