@@ -274,11 +274,27 @@ func build() -> void:
 		city.id, int(half / 500.0), int(half / 500.0), gen_ms, fp_box.size(), b_roof.count(), b_lights.count(), b_cars.count(), built_bridges.size(), city.districts.size()])
 
 
-## How many worker threads the generation uses. A release build takes them all; a debug build takes
-## a global lock on every script call (the engine checks for freed objects), so more than eight
-## threads only queue on it.
-func _threads() -> int:
-	return 8 if OS.is_debug_build() else -1
+## How many worker threads a step of the generation uses. The row steps (zones, the water mesh)
+## only read flat arrays and gain up to sixteen threads; the tiles (`heavy`) build arrays as they
+## go, and past eight threads they wait for each other (Kyiv on a 24-thread processor, release
+## build: 0.6 s with 8 threads, 1.7 s with 16, 2.8 s with 24). A debug build takes a global lock on
+## every script call (the engine checks for freed objects), so it never gains past eight either.
+func _threads(heavy := false) -> int:
+	if _threads_arg > 0:
+		return _threads_arg
+	var cores := OS.get_processor_count()
+	return mini(cores, 8) if heavy or OS.is_debug_build() else mini(cores, 16)
+
+
+## Test hook: -- --gen-threads=N fixes the number of worker threads (to measure a build).
+var _threads_arg := _int_arg("--gen-threads=")
+
+
+static func _int_arg(prefix: String) -> int:
+	for a in OS.get_cmdline_user_args():
+		if String(a).begins_with(prefix):
+			return int(String(a).trim_prefix(prefix))
+	return 0
 
 
 var _prof_t := 0
@@ -1507,7 +1523,7 @@ func _gen_tiles() -> void:
 	tile_fp0.resize(n)
 	tile_fpn.resize(n)
 	tile_blocks.resize(n)
-	var gid := WorkerThreadPool.add_group_task(func(t: int) -> void: _tile_out[t] = CityGen.tile_buildings(self, t), n, _threads(), true, "UAD tiles")
+	var gid := WorkerThreadPool.add_group_task(func(t: int) -> void: _tile_out[t] = CityGen.tile_buildings(self, t), n, _threads(true), true, "UAD tiles")
 	WorkerThreadPool.wait_for_group_task_completion(gid)
 	for t in n:
 		var o: CityGen.TileOut = _tile_out[t]
