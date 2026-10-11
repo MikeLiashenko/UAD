@@ -1480,4 +1480,17 @@ const T := {
 	"мышь ↔ азимут · мышь ↕ дальность · ПКМ — взять отметку на сопровождение · колесо — шкала": "mouse ↔ bearing · mouse ↕ range · RMB — track the echo · wheel — scale",
 	"ИНСТРУКТОР · урок %d из %d": "INSTRUCTOR · lesson %d of %d",
 	"лента": "belt",
+	# --- MaxRealism: the supply request ---------------------------------------------------
+	"Снабжение, радар и приказы — на командном пункте: зелёная кабина у мачты с красным огнём. Там %s.": "Supplies, the radar and the orders are at the command post: the green cabin by the mast with the red light. Press %s there.",
+	"Заявка принята: %s. Колонна будет через %d с.": "Request accepted: %s. The column arrives in %d s.",
+	"Колонна снабжения на позиции: %s.": "The supply column is on the position: %s.",
+	"Снабжение": "Supplies",
+	"ЗАЯВКА НА СНАБЖЕНИЕ": "SUPPLY REQUEST",
+	"Заказанное привозит колонна снабжения: систему — через %d с, ракеты — через %d с. Деньги списываются сразу. Стрелки и Enter — выбрать и заказать.": "What is ordered is brought by a supply column: a system in %d s, missiles in %d s. The money is taken at once. Arrows and Enter — choose and order.",
+	"На позиции": "On the position",
+	"В пути · %d с": "On the road · %d s",
+	"Заказать": "Order",
+	"На позиции: %d шт.": "On the position: %d",
+	" · в пути: %d, через %d с": " · on the road: %d, in %d s",
+	"Ракеты заказывают к тем комплексам, что уже стоят на позиции.": "Missiles are ordered for the systems that already stand on the position.",
 }

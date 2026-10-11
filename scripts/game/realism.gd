@@ -7,7 +7,8 @@ extends Node
 ##  * everything with a radar of its own — an operator's console: a round scope with unnamed
 ##    blips, an azimuth and a range handwheel (the mouse), lock, and as many launches as the
 ##    operator decides. A missile either brings the target down or passes by (GS.kill_chance);
-##  * the command post — the surveillance radar, the state of the city and the supply terminal.
+##  * the command post — the surveillance radar, the state of the city and the supply terminal
+##    (scripts/ui/supply.gd): what is ordered there is brought by a column some seconds later.
 ## Threats carry no labels: what is coming is told over the radio (bearing, distance, how many)
 ## and read off the scope (speed and altitude of the tracked blip).
 
@@ -27,6 +28,8 @@ const SWEEP_SAM := 1.6
 ## The lock gate around the cursor: azimuth and a share of the range.
 const GATE_AZ := 0.07
 const GATE_RNG := 0.08
+## Seconds a supply column takes to bring an order to the position.
+const DELIVERY := {"weapon": 40.0, "ammo": 20.0, "camo": 30.0}
 
 var game
 var hud
@@ -53,6 +56,8 @@ var radio_log: Array = []
 var note := ""
 var note_t := 0.0
 var _greeted := false
+## Paid orders on the road: [{kind, id, n, t}] — t is the seconds left until the column arrives.
+var orders: Array = []
 
 
 func _ready() -> void:
@@ -84,6 +89,7 @@ func begin() -> void:
 	if not _greeted and not GS.training:
 		_greeted = true
 		radio(GS.t("Позиция на связи. Расчёты стволов на местах, огонь по готовности."))
+		radio(GS.t("Снабжение, радар и приказы — на командном пункте: зелёная кабина у мачты с красным огнём. Там %s.") % GS.key_label("shop"), Color(0.75, 0.82, 0.76))
 
 
 # --- Stations ------------------------------------------------------------------------------------
@@ -411,6 +417,97 @@ func _update_scope(delta: float) -> void:
 	missiles = keep
 
 
+# --- Supplies -------------------------------------------------------------------------------------
+func _order_name(kind: String, id: String, n: int) -> String:
+	if kind == "camo":
+		return GS.t("Маскировочная сеть")
+	var def: Dictionary = GS.WEAPONS[id]
+	if kind == "weapon":
+		return GS.t(String(def.name))
+	var one := GS.t("Дрон %s") % GS.t(String(def.short)) if String(def.kind) == "drone" else GS.t("Ракета %s") % GS.t(String(def.short))
+	return "%s ×%d" % [one, n]
+
+
+## Pays for a system, `n` rounds for one, or the camouflage net and puts the order on the road.
+func order(kind: String, id: String, n: int) -> bool:
+	var price := 0
+	match kind:
+		"weapon":
+			if GS.unlocked.get(id, false) or on_order(kind, id) > 0:
+				return false
+			price = int(GS.WEAPONS[id].unlock)
+		"ammo":
+			price = int(GS.WEAPONS[id].missile_price) * n
+		"camo":
+			if GS.camo or on_order(kind, id) > 0:
+				return false
+			price = GS.CAMO_PRICE
+		_:
+			return false
+	if not GS.spend(price):
+		return false
+	orders.append({"kind": kind, "id": id, "n": n, "t": float(DELIVERY[kind])})
+	radio(GS.t("Заявка принята: %s. Колонна будет через %d с.") % [_order_name(kind, id, n), int(DELIVERY[kind])], Color(0.75, 0.82, 0.76))
+	return true
+
+
+## How much of something is on the road.
+func on_order(kind: String, id: String) -> int:
+	var n := 0
+	for o in orders:
+		if String(o.kind) == kind and String(o.id) == id:
+			n += int(o.n)
+	return n
+
+
+## Seconds until the last of it arrives.
+func order_eta(kind: String, id: String) -> float:
+	var t := 0.0
+	for o in orders:
+		if String(o.kind) == kind and String(o.id) == id:
+			t = maxf(t, float(o.t))
+	return t
+
+
+func _deliver(o: Dictionary, announce := true) -> void:
+	var id := String(o.id)
+	match String(o.kind):
+		"weapon":
+			GS.unlocked[id] = true
+			if GS.WEAPONS[id].has("start_ammo"):
+				GS.ammo[id] = int(GS.ammo.get(id, 0)) + int(GS.WEAPONS[id].start_ammo)
+			game.add_weapon(id)
+		"ammo":
+			GS.ammo[id] = int(GS.ammo.get(id, 0)) + int(o.n)
+		"camo":
+			GS.camo = true
+	GS.state_changed.emit()
+	if announce:
+		radio(GS.t("Колонна снабжения на позиции: %s.") % _order_name(String(o.kind), id, int(o.n)), Color(0.7, 0.95, 0.75))
+		SFX.play("cash", -8.0)
+
+
+## Everything on the road is unloaded at once: the world is being saved, and what was paid for
+## must not be lost with the column.
+func flush_orders() -> void:
+	for o in orders:
+		_deliver(o, false)
+	orders.clear()
+
+
+func _tick_orders(delta: float) -> void:
+	if orders.is_empty():
+		return
+	var left := []
+	for o in orders:
+		o.t = float(o.t) - delta
+		if float(o.t) <= 0.0:
+			_deliver(o)
+		else:
+			left.append(o)
+	orders = left
+
+
 # --- Radio ----------------------------------------------------------------------------------------
 func radio(text: String, color := Color(0.86, 0.9, 0.82)) -> void:
 	if text == "":
@@ -545,6 +642,7 @@ func _process(delta: float) -> void:
 		radio_log.pop_front()
 	console_t = maxf(0.0, console_t - delta)
 	note_t = maxf(0.0, note_t - delta)
+	_tick_orders(delta)
 	near = _find_near() if game.view == "walk" else {}
 	if scope_on():
 		_update_scope(delta)

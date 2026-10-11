@@ -1810,6 +1810,7 @@ func _print_summary() -> void:
 	if game and game.rl != null:
 		var rl = game.rl
 		print("UAD RL: view=%s seat=%s scope=%s track=%s blips=%d locks=%d shots=%d kills=%d misses=%d radio=%d near=%s" % [game.view, game.selected_weapon, rl.scope_on(), rl.track != null, rl.blips.size(), int(_rl.locks), int(_rl.shots), int(GS.stats.kills), int(GS.stats.get("misses", 0)), rl.radio_log.size(), str(rl.near.get("id", "-"))])
+		print("UAD RL SUPPLY: on the road=%d owned=%s ammo=%s camo=%s money=%d" % [rl.orders.size(), str(game.owned_weapons()), str(GS.ammo), GS.camo, GS.money])
 		for r in rl.radio_log:
 			print("   radio: ", r.text)
 		if rl.training != null:
@@ -1836,6 +1837,13 @@ func _realism_hooks(delta: float) -> void:
 		else:
 			rl.sit(where)
 		print("UAD RL sit %s -> view=%s scope=%s scale=%.0f" % [where, game.view, rl.scope_on(), rl.scope_scale])
+	if _args.has("rl-order") and _clock >= 3.0:
+		# --rl-order=osa,osa:4,camo: a system, four rounds for it and the net are put on the road
+		for item in String(_args["rl-order"]).split(","):
+			var kv := item.split(":")
+			var ok: bool = rl.order("camo", "camo", 1) if kv[0] == "camo" else (rl.order("ammo", kv[0], int(kv[1])) if kv.size() > 1 else rl.order("weapon", kv[0], 1))
+			print("UAD RL order %s -> %s money=%d on the road=%d" % [item, ok, GS.money, rl.orders.size()])
+		_args.erase("rl-order")
 	if _args.has("rl-bot") and rl.scope_on():
 		_scope_bot(delta, 2)
 	if _args.has("train-bot") and rl.training != null:

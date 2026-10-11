@@ -240,6 +240,8 @@ func rebuild_hud() -> void:
 
 
 func save_progress() -> void:
+	if rl != null:
+		rl.flush_orders() # what a supply column is still bringing is saved as delivered
 	GS.damaged = map.damaged_list()
 	GS.crushed = map.crushed_list()
 	GS.save_world()

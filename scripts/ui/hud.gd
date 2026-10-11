@@ -5,6 +5,7 @@ extends CanvasLayer
 const UiKit = preload("res://scripts/ui/ui_kit.gd")
 const Radar = preload("res://scripts/ui/radar.gd")
 const Shop = preload("res://scripts/ui/shop.gd")
+const Supply = preload("res://scripts/ui/supply.gd")
 const StrikeMap = preload("res://scripts/ui/strike_map.gd")
 const SettingsMenu = preload("res://scripts/ui/settings_menu.gd")
 const Reticle = preload("res://scripts/ui/reticle.gd")
@@ -1190,7 +1191,8 @@ func open_shop(on_close := Callable()) -> void:
 		return
 	_close_overlay()
 	_set_paused(true)
-	var s := Shop.new()
+	# MaxRealism: the supply request of the command post, with deliveries by column
+	var s: Shop = Supply.new() if GS.realism else Shop.new()
 	s.game = game
 	var after := func() -> void:
 		_overlay = null
@@ -1275,7 +1277,7 @@ func show_morning(r: Dictionary) -> void:
 		var watch := func() -> void:
 			open_video(vid, func() -> void: show_morning(r))
 		v.add_child(UiKit.button(GS.t("▶ Нарезка ночи (0:%02d)") % (clips.size() * int(GS.VIDEO_CLIP_LEN)), watch))
-	v.add_child(UiKit.button(GS.t("Магазин"), shop_then_next))
+	v.add_child(UiKit.button(GS.t("Снабжение") if GS.realism else GS.t("Магазин"), shop_then_next))
 	v.add_child(UiKit.button(GS.t("Следующий день ▶"), next))
 	if game.autotest and not game.main._args.has("opened"):
 		print("UAD: morning report ", r)

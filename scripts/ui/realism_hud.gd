@@ -138,6 +138,8 @@ func _draw_radio(sz: Vector2, below: float) -> void:
 	var y := 40.0
 	var w := minf(520.0, sz.x * 0.4)
 	match String(game.view):
+		"walk":
+			y = 86.0 # under the compass
 		"post":
 			w = sz.x * 0.5 - _post_radius(sz) - 70.0
 		"base":
