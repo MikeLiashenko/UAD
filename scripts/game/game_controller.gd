@@ -654,6 +654,7 @@ func spawn_missile(pos: Vector3, dir: Vector3, tgt, wid: String, carrier := Vect
 	fx_root.add_child(m)
 	_net_note_launch(pos, tgt, wid)
 	# launch: blast of smoke and a flash that lights the base
+	Fx.launch_flash(fx_root, pos, 1.0 if carrier == Vector3.ZERO else 0.5)
 	var puff := Node3D.new()
 	fx_root.add_child(puff)
 	puff.global_position = pos
@@ -662,18 +663,26 @@ func spawn_missile(pos: Vector3, dir: Vector3, tgt, wid: String, carrier := Vect
 	l.light_energy = 12.0
 	l.omni_range = 90.0
 	puff.add_child(l)
-	var smoke := Fx.exhaust(Color(0.6, 0.55, 0.5), 30, 2.5, 4.0)
+	# the cloud the motor leaves over the launcher: lit orange at first, it hangs there for a while
+	var smoke := Fx.exhaust(Color(0.6, 0.55, 0.5), 30, 5.5, 5.0)
 	smoke.material_override = Fx.smoke_mat()
 	smoke.one_shot = true
 	smoke.explosiveness = 0.9
 	smoke.spread = 60.0
 	smoke.initial_velocity_min = 4.0
 	smoke.initial_velocity_max = 12.0
+	smoke.gravity = Vector3(0, 1.2, 0)
+	var grad := Gradient.new()
+	grad.set_color(0, Color(1.0, 0.7, 0.36, 0.8))
+	grad.add_point(0.15, Color(0.8, 0.5, 0.28, 0.65))
+	grad.add_point(0.45, Color(0.5, 0.42, 0.38, 0.45))
+	grad.set_color(grad.get_point_count() - 1, Color(0.3, 0.3, 0.32, 0.0))
+	smoke.color_ramp = grad
 	smoke.emitting = true
 	puff.add_child(smoke)
 	var tw := puff.create_tween()
 	tw.tween_property(l, "light_energy", 0.0, 0.8)
-	tw.tween_callback(puff.queue_free).set_delay(3.0)
+	tw.tween_callback(puff.queue_free).set_delay(5.5)
 	hud.log_event(GS.t("Пуск %s → %s") % [GS.t(String(GS.WEAPONS[wid].short)), GS.t(String(tgt.def.name))], Color(0.6, 0.9, 1.0))
 	if view == "base":
 		shake(0.4)

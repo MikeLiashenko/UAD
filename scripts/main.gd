@@ -12,6 +12,8 @@ extends Node
 ##   --view=base|fpv [--aimbot] [--weapon=id]   gunner / FPV drone view; aimbot tracks threats
 ##   --fpv-at=SECONDS           jump to the FPV drone console mid-raid
 ##   --parade=id,id,…           (with --autotest) those threat models in a row over the battery
+##   --fxstage                  (with --autotest) night at once and a staged raid on the battery,
+##                              the same every run: the sky effects for the shot list
 ##   --crush=X,Z                collapse and set fire to the building at X,Z (fire-service test)
 ##   --camat=X,Z[,DIST]         park the overhead camera on a spot
 ##   --screen=menu|settings|map|worlds|create|game   --open=shop|pause|morning|gameover|feed|video|record
@@ -449,6 +451,8 @@ func _notification(what: int) -> void:
 
 func _process(delta: float) -> void:
 	_fit_near()
+	if _args.has("fxstage") and game and is_instance_valid(game):
+		_fx_stage(delta)
 	if _args.has("lockfirst") and game and is_instance_valid(game) and not game.enemies.is_empty():
 		# test hook: the first target is the selected one (the target card of the top view)
 		game.locked = game.enemies[0]
@@ -869,6 +873,59 @@ func _start_autotest() -> void:
 			m.position = GS.base_pos + Vector3((i - (row.size() - 1) * 0.5) * 14.0, 60.0, 0.0)
 			game.fx_root.add_child(m)
 	print("UAD: autotest base at ", pos, " loc=", loc_want)
+
+
+## --fxstage: night falls at once and the battery is raided on a fixed timetable, from a fixed
+## side and close in, so that a shot list finds launches, trails and intercepts in the sky at
+## known seconds. [second, weapon, count, altitude, kilometres out].
+const FX_STAGE := [
+	[1.0, "shahed", 6, 700.0, 3.2], [3.0, "cruise", 4, 250.0, 7.0], [6.0, "ballistic", 2, 0.0, 0.0],
+	[8.0, "geran3", 4, 1200.0, 6.0], [11.0, "kalibr", 4, 180.0, 8.0], [13.0, "shahed", 8, 400.0, 3.0],
+	[16.0, "ballistic", 3, 0.0, 0.0], [18.0, "cruise", 5, 300.0, 7.0], [21.0, "geran5", 4, 900.0, 6.0],
+]
+var _fx_t := -1.0
+var _fx_i := 0
+
+
+func _fx_stage(delta: float) -> void:
+	if _fx_t < 0.0:
+		_fx_t = 0.0
+		Game.Fx.quiet = true
+		seed(7)
+		game._rng.seed = 7
+		if String(_args.fxstage) != "day": # --fxstage=day: the same raid in daylight
+			game.director.start_night()
+			game.director.night_blend = 1.0
+		game.director.schedule.clear()
+		game.director.phase_len = 1.0e6
+	_fx_t += delta
+	GS.base_hp = 100.0
+	GS.city = 100.0
+	if _fx_i >= FX_STAGE.size():
+		if game.enemies.is_empty() or _fx_t > 30.0:
+			_fx_t = 0.0 # the raid starts over
+			_fx_i = 0
+		return
+	var s: Array = FX_STAGE[_fx_i]
+	if _fx_t < float(s[0]):
+		return
+	_fx_i += 1
+	var before: int = game.enemies.size()
+	game.launch(String(s[1]), int(s[2]), true, float(s[3]))
+	# the same bearings every run, and close in: no minute of waiting for the first trail
+	var bearing := deg_to_rad(40.0 + 25.0 * float(_fx_i % 4))
+	var from := Vector3(sin(bearing), 0.0, -cos(bearing))
+	var side := Vector3(-from.z, 0.0, from.x)
+	for k in range(before, game.enemies.size()):
+		var e = game.enemies[k]
+		if String(e.type) == "ballistic":
+			continue
+		var j := k - before
+		e.position = GS.base_pos + from * (float(s[4]) * 1000.0 + (j / 4) * 300.0) + side * ((j % 4 - 1.5) * 260.0) + Vector3(0, float(s[3]) * (0.9 + 0.05 * (j % 5)), 0)
+		e.waypoints.clear()
+		e.waypoints.append(e.target_pos)
+		e.cruise_alt = e.position.y
+		e.vel = Vector3(e.target_pos.x - e.position.x, 0.0, e.target_pos.z - e.position.z).normalized() * e.speed
 
 
 ## Controls round trip: defaults resolve, a rebind sticks and takes the key from its old owner.

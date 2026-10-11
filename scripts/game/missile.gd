@@ -37,8 +37,8 @@ func _ready() -> void:
 	_trail.mesh = Fx.sphere(1.0, 6)
 	_trail.material_override = Fx.smoke_mat()
 	_trail.local_coords = false
-	_trail.amount = 90
-	_trail.lifetime = 2.2
+	_trail.amount = 40
+	_trail.lifetime = 1.4
 	_trail.direction = Vector3.BACK
 	_trail.spread = 8.0
 	_trail.initial_velocity_min = 1.0
@@ -62,8 +62,14 @@ func _ready() -> void:
 	# the long streak across the sky
 	var ribbon := Trail.new()
 	ribbon.follow = self
-	ribbon.life = 9.0 if float(def.speed) > 800.0 else 7.0
-	ribbon.step = maxf(6.0, max_speed * ribbon.life / 220.0)
+	# a heavy long-range round draws a fat column and a long arc of light, a shoulder-fired one a
+	# thin thread
+	var heavy := clampf((float(def.range) - 5000.0) / 35000.0, 0.0, 1.0)
+	ribbon.life = lerpf(6.5, 10.0, heavy)
+	ribbon.glow_time = lerpf(5.0, 8.0, heavy)
+	ribbon.w0 = lerpf(1.1, 2.0, heavy)
+	ribbon.w1 = lerpf(11.0, 24.0, heavy)
+	ribbon.wobble = lerpf(9.0, 18.0, heavy)
 	game.fx_root.add_child(ribbon)
 	_orient()
 	if cosmetic:

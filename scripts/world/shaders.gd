@@ -1735,21 +1735,226 @@ uniform float base_size = 2.0;
 uniform float dist_k = 0.004;
 uniform float day_vis = 0.25;
 uniform float flicker = 0.0;
+// the diffraction star a camera draws around a point light (0 = none)
+uniform float rays = 0.0;
+// the hot centre (0 = a soft halo only: the haze lit around a burst)
+uniform float core = 1.0;
+varying float inside;
 
 void vertex() {
 	vec4 c = MODELVIEW_MATRIX * vec4(0.0, 0.0, 0.0, 1.0);
 	float d = max(-c.z, 0.1);
 	float s = max(base_size, d * dist_k);
+	// lit haze is seen from outside: a camera standing in it is not blinded by an orange wall
+	float halo = 1.0 - clamp(core, 0.0, 1.0);
+	inside = mix(1.0, clamp(d / (s * 0.7), 0.0, 1.0), halo);
+	// haze is a volume, the sprite a flat sheet: drawn half its size nearer (and as much smaller),
+	// it does not cut into the ground or the roofs under a low burst
+	float k = (d - halo * min(s * 0.45, d * 0.6)) / d;
+	c.xyz *= k;
+	s *= k;
 	c.xy += VERTEX.xy * s;
 	POSITION = PROJECTION_MATRIX * c;
 }
 
 void fragment() {
-	float r = length(UV - 0.5) * 2.0;
+	vec2 p = (UV - 0.5) * 2.0;
+	float r = length(p);
 	float a = clamp(1.0 - r, 0.0, 1.0);
-	a = a * a * (0.3 + 0.7 * a) + pow(a, 12.0) * 2.0;
+	float g = a * a * (0.3 + 0.7 * a) + pow(a, 12.0) * 2.0 * core;
+	if (rays > 0.0) {
+		// four long spikes a little off the axes and four short ones between them
+		vec2 d1 = vec2(p.x * 0.966 - p.y * 0.259, p.x * 0.259 + p.y * 0.966);
+		vec2 d2 = vec2(d1.x + d1.y, d1.y - d1.x) * 0.7071;
+		float s1 = exp(-abs(d1.x) * 80.0) + exp(-abs(d1.y) * 80.0);
+		float s2 = exp(-abs(d2.x) * 120.0) + exp(-abs(d2.y) * 120.0);
+		g += rays * (s1 + s2 * 0.4) * a * 1.6;
+	}
 	float f = 1.0 - flicker * 0.35 * (sin(TIME * 37.0) * 0.5 + 0.5) * (sin(TIME * 23.0 + 1.7) * 0.5 + 0.5);
-	ALBEDO = color.rgb * energy * a * f * mix(day_vis, 1.0, night);
+#if CURRENT_RENDERER != RENDERER_COMPATIBILITY
+	// a halo without a centre is haze lit against the sky: the brighter sky of Forward+ needs more
+	f *= mix(1.9, 1.0, clamp(core, 0.0, 1.0));
+#endif
+	ALBEDO = color.rgb * energy * g * f * inside * mix(day_vis, 1.0, night);
+}
+"""
+
+## The streak a missile leaves across the night sky (scripts/game/trail.gd): one ribbon that is both
+## the smoke and the line of light a long exposure keeps of the motor. The mesh holds the points
+## the motor passed (NORMAL = the direction of flight, UV = side / second of birth, UV2 = follows
+## the head / metres along the trail); everything that changes with time happens here, so a trail
+## that only hangs in the sky and fades costs the game nothing.
+##  - the smoke widens, curls and drifts as it ages, is broken into puffs along its length, glows
+##    behind the nozzle and is lit from below by the city;
+##  - down its middle runs the afterglow: a line a pixel or two wide, white-hot at the head and
+##    cooling to an ember that outlives the smoke — the arcs of an air-defence battery at work.
+## Premultiplied: the smoke covers, the light adds.
+const TRAIL := """
+shader_type spatial;
+render_mode unshaded, blend_premul_alpha, cull_disabled, depth_draw_never, shadows_disabled;
+global uniform float night;
+uniform float now = 0.0;
+uniform vec3 head = vec3(0.0);
+uniform float life = 9.0;
+uniform float hot_time = 1.4;
+uniform float glow_time = 6.0;
+uniform float w0 = 1.4;
+uniform float w1 = 16.0;
+uniform float px = 0.0013;
+uniform float wobble = 14.0;
+// how much longer than usual the bends are: a fast missile's points are far apart
+uniform float curl_scale = 1.0;
+uniform float seed = 0.0;
+uniform vec4 hot : source_color = vec4(1.0, 0.7, 0.4, 0.95);
+uniform float hot_energy = 3.0;
+uniform vec4 smoke : source_color = vec4(0.62, 0.62, 0.66, 0.42);
+uniform vec4 glow : source_color = vec4(1.0, 0.72, 0.4, 1.0);
+uniform float glow_energy = 2.2;
+varying float age;
+varying float along;
+varying float height;
+
+float hash1(vec2 p) {
+	vec3 q = fract(vec3(p.xyx) * 0.1031);
+	q += dot(q, q.yzx + 33.33);
+	return fract((q.x + q.y) * q.z);
+}
+
+float vnoise(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = fract(p);
+	f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(hash1(i), hash1(i + vec2(1.0, 0.0)), f.x), mix(hash1(i + vec2(0.0, 1.0)), hash1(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+
+void vertex() {
+	vec3 p = VERTEX;
+	age = max(now - UV.y, 0.0);
+	if (UV2.x > 0.5) {
+		p = head;
+		age = 0.0;
+	}
+	along = UV2.y;
+	height = p.y;
+	float k = clamp(age / life, 0.0, 1.0);
+	// the air is never still: the column curls wider the longer it hangs, and drifts downwind
+	// (long lazy bends only: a trail has few points to bend at)
+	vec3 q = p * (0.0042 / curl_scale) + vec3(seed, seed * 1.7, seed * 0.6);
+	vec3 curl = vec3(sin(q.y * 1.7 + q.z * 1.3) + sin(q.z * 2.9 + q.x * 0.8),
+		sin(q.x * 1.9 + q.z * 0.7) * 0.6 + sin(q.y * 2.3 + q.x * 1.1) * 0.4,
+		sin(q.x * 1.3 + q.y * 2.1) + sin(q.y * 3.1 + q.z * 0.9));
+	p += curl * wobble * (1.0 - exp(-age * 0.22)) + vec3(2.2, 0.5, 1.3) * age;
+	vec3 to_cam = CAMERA_POSITION_WORLD - p;
+	float dist = length(to_cam);
+	vec3 side = cross(NORMAL, to_cam);
+	float sl = length(side);
+	side = sl > 0.0001 ? side / sl : vec3(0.0, 1.0, 0.0);
+	// never thinner than a pixel or two, however far away
+	float w = max(mix(w0, w1, sqrt(k)), dist * px);
+	VERTEX = p + side * (UV.x - 0.5) * w;
+}
+
+void fragment() {
+	float k = clamp(age / life, 0.0, 1.0);
+	float x = abs(UV.x * 2.0 - 1.0);
+	// the smoke: soft across, torn into puffs along its length as it thins out
+	float puff = vnoise(vec2(along * 0.035, seed * 7.0)) * 0.6 + vnoise(vec2(along * 0.11, seed * 3.0 + x)) * 0.4;
+	float body = smoothstep(1.0, 0.2, x) * (1.0 - k) * (1.0 - k) * smoke.a;
+	body *= mix(1.0, smoothstep(0.15, 0.75, puff) * 1.3, smoothstep(0.05, 0.6, k));
+	body = clamp(body, 0.0, 1.0);
+	float h = clamp(1.0 - age / hot_time, 0.0, 1.0);
+	// by night smoke shows only where something lights it: the city from below, the motor behind it
+	vec3 city = vec3(1.0, 0.58, 0.3) * 0.7 * exp(-max(height, 0.0) / 1200.0);
+	vec3 lit = smoke.rgb * mix(vec3(1.0), vec3(0.34, 0.34, 0.4) + city, night);
+	vec3 col = mix(lit, hot.rgb * hot_energy, h * h * hot.a);
+	// the afterglow: a line down the middle that keeps its width on the screen
+	float fw = max(fwidth(x), 0.0001);
+	float line = smoothstep(fw * 2.2, 0.0, x);
+	float g = clamp(1.0 - age / glow_time, 0.0, 1.0);
+	float ember = g * sqrt(g);
+	vec3 light = glow.rgb * glow_energy * line * (ember + 2.5 * exp(-age * 2.2)) * mix(0.1, 1.0, night);
+#if CURRENT_RENDERER != RENDERER_COMPATIBILITY
+	// the bright, moonlit sky of the Forward+ levels takes more light to draw a line on
+	light *= 1.7;
+#endif
+	ALBEDO = col * body + light;
+	ALPHA = body;
+}
+"""
+
+## A burst of sparks (scripts/game/sparks.gd): every spark is a short ribbon whose path — thrown
+## out, slowed by the air, bent down by its weight — is worked out here from the second of the
+## burst, so a hundred of them cost one draw and no script. VERTEX carries the spark's velocity
+## (a share of `speed`), UV = side / place along the streak (0 head, 1 tail), UV2 = how long this
+## spark lives (a share of `life`) / a random number.
+const SPARKS := """
+shader_type spatial;
+render_mode unshaded, blend_add, cull_disabled, depth_draw_never, shadows_disabled, fog_disabled;
+global uniform float night;
+uniform float t = 0.0;
+uniform float speed = 40.0;
+uniform float gravity = 12.0;
+uniform float drag = 1.0;
+uniform float life = 3.0;
+uniform float streak = 0.35;
+uniform float size = 0.8;
+uniform float px = 0.0012;
+uniform vec4 head_color : source_color = vec4(1.0, 0.9, 0.7, 1.0);
+uniform vec4 tail_color : source_color = vec4(1.0, 0.45, 0.1, 1.0);
+uniform float energy = 3.0;
+varying float fade;
+varying float tailness;
+varying float rnd;
+
+void vertex() {
+	vec3 v0 = VERTEX * speed;
+	float mine = life * UV2.x;
+	// the tail is where the head was a moment ago
+	float tt = clamp(t - UV.y * streak * (0.5 + UV2.y), 0.0, mine);
+	vec3 gd = vec3(0.0, -gravity, 0.0) / drag;
+	float e = exp(-drag * tt);
+	vec3 p = gd * tt + (v0 - gd) * (1.0 - e) / drag;
+	vec3 vel = gd + (v0 - gd) * e;
+	vec3 wp = MODEL_MATRIX[3].xyz + p;
+	vec3 to_cam = CAMERA_POSITION_WORLD - wp;
+	vec3 side = cross(vel, to_cam);
+	float sl = length(side);
+	side = sl > 0.0001 ? side / sl : vec3(1.0, 0.0, 0.0);
+	fade = clamp(1.0 - t / mine, 0.0, 1.0);
+	tailness = UV.y;
+	rnd = UV2.y;
+	float w = max(size * (0.4 + 0.6 * fade), length(to_cam) * px);
+	VERTEX = p + side * (UV.x - 0.5) * w;
+}
+
+void fragment() {
+	float x = 1.0 - abs(UV.x * 2.0 - 1.0);
+	float along = 1.0 - tailness;
+	vec3 c = mix(tail_color.rgb, head_color.rgb, along * along * fade);
+	// a dying spark flickers
+	float tw = 0.75 + 0.25 * sin(t * 43.0 + rnd * 97.0) * (1.0 - fade);
+	ALBEDO = c * energy * x * along * pow(fade, 0.7) * tw * mix(0.5, 1.0, night);
+}
+"""
+
+## Smoke and fire particles (Fx.smoke_mat / Fx.fire_mat): the particle meshes are little spheres,
+## and a sphere drawn flat has a hard polygon for an edge. Here it thins out towards its rim, so
+## a cloud of them reads as one soft volume. Smoke that is not lit goes dark at night; the
+## colour comes from the particle (COLOR) times `tint`.
+const PUFF := """
+shader_type spatial;
+render_mode unshaded, BLEND, depth_draw_never, shadows_disabled;
+global uniform float night;
+uniform vec4 tint = vec4(1.0);
+
+void fragment() {
+	float f = clamp(dot(normalize(NORMAL), normalize(VIEW)), 0.0, 1.0);
+	float a = smoothstep(0.05, 0.9, f);
+	vec3 c = COLOR.rgb * tint.rgb;
+	float bright = max(c.r, max(c.g, c.b));
+	c = mix(c * mix(1.0, 0.55, night), c, smoothstep(0.45, 0.85, bright));
+	ALBEDO = c;
+	ALPHA = COLOR.a * tint.a * a * a;
 }
 """
 

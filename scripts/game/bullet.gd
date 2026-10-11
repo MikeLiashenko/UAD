@@ -27,9 +27,12 @@ static func lead(from: Vector3, tp: Vector3, tv: Vector3, speed: float) -> Vecto
 
 
 func _ready() -> void:
-	mesh = Fx.cube(Vector3(0.34, 0.34, 13.0) if not manual else Vector3(0.26, 0.26, 9.0))
+	# a tracer is a streak of light as long as the round flies in a blink: at these speeds a short
+	# one would be a row of dots
+	var streak := clampf(vel.length() * 0.016, 13.0, 60.0)
+	mesh = Fx.cube(Vector3(0.34, 0.34, streak) if not manual else Vector3(0.26, 0.26, streak * 0.7))
 	material_override = Fx.glow(color, 6.0)
-	extra_cull_margin = 16.0
+	extra_cull_margin = 40.0
 	cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_orient()
 

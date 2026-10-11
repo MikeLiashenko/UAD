@@ -422,7 +422,7 @@ static func ballistic() -> Node3D:
 	l.position = Vector3(0, 0, 6.0)
 	root.add_child(l)
 	# re-entry: blinding plasma glow and a long burning streak
-	var g := Fx.glare(Color(1.0, 0.86, 0.62), 4.0, 7.0, 0.009, 0.45, 0.2)
+	var g := Fx.glare(Color(1.0, 0.86, 0.62), 4.0, 7.0, 0.009, 0.45, 0.2, 0.7)
 	g.position = Vector3(0, 0, 4.0)
 	root.add_child(g)
 	var ex := Fx.exhaust(Color(1.0, 0.45, 0.1), 60, 0.9, 3.0)
@@ -537,7 +537,7 @@ static func oniks() -> Node3D:
 	for i in 4:
 		var a := TAU * float(i) / 4.0 + PI * 0.25
 		box(root, Vector3(0.08, 1.4, 1.6), Vector3(cos(a) * 0.9, sin(a) * 0.9, 3.4), mat, Vector3(0, 0, rad_to_deg(a) + 90.0))
-	var g := Fx.glare(Color(1.0, 0.9, 0.75), 3.4, 4.0, 0.006, 0.3, 0.15)
+	var g := Fx.glare(Color(1.0, 0.9, 0.75), 3.4, 4.0, 0.006, 0.3, 0.15, 0.6)
 	g.position = Vector3(0, 0, 4.6)
 	root.add_child(g)
 	var ex := Fx.exhaust(Color(1.0, 0.7, 0.4), 50, 0.5, 1.8)
@@ -588,7 +588,7 @@ static func kinzhal() -> Node3D:
 	for i in 4:
 		var a := TAU * float(i) / 4.0
 		box(root, Vector3(0.06, 1.1, 1.0), Vector3(cos(a) * 0.7, sin(a) * 0.7, 3.2), mat, Vector3(0, 0, rad_to_deg(a) + 90.0))
-	var g := Fx.glare(Color(0.9, 0.6, 1.0), 4.4, 7.0, 0.009, 0.5, 0.25)
+	var g := Fx.glare(Color(0.9, 0.6, 1.0), 4.4, 7.0, 0.009, 0.5, 0.25, 0.7)
 	g.position = Vector3(0, 0, -3.0)
 	root.add_child(g)
 	var ex := Fx.exhaust(Color(0.85, 0.5, 1.0), 60, 0.8, 2.6)
@@ -607,7 +607,7 @@ static func zircon() -> Node3D:
 	for i in 4:
 		var a := TAU * float(i) / 4.0 + PI * 0.25
 		box(root, Vector3(0.05, 0.8, 0.9), Vector3(cos(a) * 0.5, sin(a) * 0.5, 2.7), mat, Vector3(0, 0, rad_to_deg(a) + 90.0))
-	var g := Fx.glare(Color(0.7, 0.85, 1.0), 4.6, 7.0, 0.009, 0.5, 0.25)
+	var g := Fx.glare(Color(0.7, 0.85, 1.0), 4.6, 7.0, 0.009, 0.5, 0.25, 0.7)
 	g.position = Vector3(0, 0, -4.0)
 	root.add_child(g)
 	var ex := Fx.exhaust(Color(0.75, 0.85, 1.0), 60, 0.8, 2.4)
@@ -647,7 +647,7 @@ static func kh22() -> Node3D:
 static func oreshnik() -> Node3D:
 	var root := Node3D.new()
 	cyl(root, 0.0, 1.1, 3.2, Vector3.ZERO, Fx.glow(Color(1.0, 0.85, 0.55), 6.0), Vector3(-90, 0, 0), 10)
-	var g := Fx.glare(Color(1.0, 0.92, 0.7), 6.0, 12.0, 0.012, 0.8, 0.1)
+	var g := Fx.glare(Color(1.0, 0.92, 0.7), 6.0, 12.0, 0.012, 0.8, 0.1, 0.9)
 	root.add_child(g)
 	var ex := Fx.exhaust(Color(1.0, 0.6, 0.25), 80, 1.4, 4.0)
 	ex.position = Vector3(0, 0, 2.0)
@@ -714,7 +714,7 @@ static func interceptor(big: bool) -> Node3D:
 	var flame := cyl(root, 0.1, r * 1.6, 3.0, Vector3(0, 0, length / 2.0 + 1.5), Fx.ghost(Color(1.0, 0.85, 0.5, 1.0), 4.0), Vector3(90, 0, 0), 8)
 	flame.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	# solid-rocket motor: the brightest thing in the night sky
-	var g := Fx.glare(Color(1.0, 0.9, 0.72), 4.5 if big else 3.5, 2.8, 0.0065 if big else 0.0055, 0.35, 0.25)
+	var g := Fx.glare(Color(1.0, 0.9, 0.72), 4.5 if big else 3.5, 2.8, 0.0065 if big else 0.0055, 0.35, 0.25, 0.7)
 	g.position = Vector3(0, 0, length / 2.0 + 0.8)
 	root.add_child(g)
 	var ex := Fx.exhaust(Color(1.0, 0.55, 0.15), 40, 0.45, 1.3 if big else 1.0)

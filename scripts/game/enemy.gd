@@ -125,12 +125,16 @@ func _ready() -> void:
 		# a warhead coming down from the stratosphere draws a burning line
 		var tr := Trail.new()
 		tr.follow = self
-		tr.life = 4.0
-		tr.hot_time = 1.5
-		tr.step = 80.0
-		tr.w0 = 2.2
-		tr.w1 = 9.0
-		tr.hot = Color(3.4, 1.9, 0.9, 0.95)
+		tr.life = 4.5
+		tr.hot_time = 1.6
+		tr.glow_time = 6.0
+		tr.w0 = 2.4
+		tr.w1 = 10.0
+		tr.wobble = 5.0
+		tr.hot = Color(1.0, 0.56, 0.26, 0.95)
+		tr.hot_energy = 3.4
+		tr.glow = Color(1.0, 0.55, 0.25)
+		tr.glow_energy = 2.8
 		tr.smoke = Color(0.7, 0.55, 0.45, 0.3)
 		game.fx_root.add_child(tr)
 	if puppet:

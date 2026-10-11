@@ -53,7 +53,7 @@ func _ready() -> void:
 	rotation.y = atan2(-d.x, -d.z)
 	_scan = randf() * TAU
 	_flash = MeshInstance3D.new()
-	_flash.mesh = Fx.sphere(0.9, 8)
+	_flash.mesh = Fx.sphere(0.4, 8)
 	_flash.material_override = Fx.glow(Color(1.0, 0.8, 0.4), 8.0)
 	_flash.visible = false
 	muzzle.add_child(_flash)
@@ -62,7 +62,7 @@ func _ready() -> void:
 	_flash_light.light_energy = 0.0
 	_flash_light.omni_range = 22.0
 	muzzle.add_child(_flash_light)
-	_flash_glare = Fx.glare(Color(1.0, 0.8, 0.5), 3.0, 2.5, 0.004, 0.4)
+	_flash_glare = Fx.glare(Color(1.0, 0.8, 0.5), 3.0, 3.4, 0.005, 0.4, 0.0, 0.9)
 	_flash_glare.visible = false
 	muzzle.add_child(_flash_glare)
 

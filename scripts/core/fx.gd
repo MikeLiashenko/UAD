@@ -2,6 +2,10 @@ extends RefCounted
 ## Shared procedural materials + one-shot visual effects (explosions, splashes, fires, glares).
 
 const Shaders = preload("res://scripts/world/shaders.gd")
+const Sparks = preload("res://scripts/game/sparks.gd")
+
+## No floating captions ("+$1 300", "ПРОМАХ") over the effects: for pictures of the sky.
+static var quiet := false
 
 static var _mats := {}
 static var _meshes := {}
@@ -91,30 +95,22 @@ static func ghost(c: Color, energy := 1.5) -> StandardMaterial3D:
 	return m
 
 
-static func smoke_mat() -> StandardMaterial3D:
+## Smoke particles: soft-edged puffs coloured by the particle, dark at night unless lit (Shaders.PUFF).
+static func smoke_mat() -> ShaderMaterial:
 	if _mats.has("smoke"):
 		return _mats["smoke"]
-	var m := StandardMaterial3D.new()
-	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	m.vertex_color_use_as_albedo = true
-	m.albedo_color = Color(0.55, 0.55, 0.6, 0.35)
-	m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	var m := Shaders.material(Shaders.PUFF.replace("BLEND", "blend_mix"))
+	m.set_shader_parameter("tint", Color(0.55, 0.55, 0.6, 0.5))
 	_mats["smoke"] = m
 	return m
 
 
-static func fire_mat() -> StandardMaterial3D:
-	## Additive, vertex-coloured: glowing exhaust / flame particles.
+## Additive, particle-coloured: glowing exhaust / flame particles with the same soft edge.
+static func fire_mat() -> ShaderMaterial:
 	if _mats.has("fire"):
 		return _mats["fire"]
-	var m := StandardMaterial3D.new()
-	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	m.vertex_color_use_as_albedo = true
-	m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	m.albedo_color = Color(3.0, 3.0, 3.0, 1.0)
+	var m := Shaders.material(Shaders.PUFF.replace("BLEND", "blend_add"))
+	m.set_shader_parameter("tint", Color(3.0, 3.0, 3.0, 1.0))
 	_mats["fire"] = m
 	return m
 
@@ -161,8 +157,9 @@ static func ring_mesh(radius: float, thickness: float) -> TorusMesh:
 
 
 # --- Glare sprites ------------------------------------------------------------------------
-static func glare_material(c: Color, energy: float, base_size: float, dist_k: float, day_vis := 0.25, flicker := 0.0, unique := false) -> ShaderMaterial:
-	var key := "gl%s_%.2f_%.2f_%.4f_%.2f_%.2f" % [c.to_html(), energy, base_size, dist_k, day_vis, flicker]
+## `rays` = the star a lens draws around a point light, `core` 0 = a soft halo without a centre.
+static func glare_material(c: Color, energy: float, base_size: float, dist_k: float, day_vis := 0.25, flicker := 0.0, unique := false, rays := 0.0, core := 1.0) -> ShaderMaterial:
+	var key := "gl%s_%.2f_%.2f_%.4f_%.2f_%.2f_%.2f_%.2f" % [c.to_html(), energy, base_size, dist_k, day_vis, flicker, rays, core]
 	if not unique and _mats.has(key):
 		return _mats[key]
 	if _glare_shader == null:
@@ -176,6 +173,8 @@ static func glare_material(c: Color, energy: float, base_size: float, dist_k: fl
 	m.set_shader_parameter("dist_k", dist_k)
 	m.set_shader_parameter("day_vis", day_vis)
 	m.set_shader_parameter("flicker", flicker)
+	m.set_shader_parameter("rays", rays)
+	m.set_shader_parameter("core", core)
 	if not unique:
 		_mats[key] = m
 	return m
@@ -183,10 +182,10 @@ static func glare_material(c: Color, energy: float, base_size: float, dist_k: fl
 
 ## A light blob that stays visible at any distance (engine plume, flash). `dist_k` sets its
 ## minimum on-screen size: world size = max(base_size, distance * dist_k).
-static func glare(c: Color, energy := 2.0, base_size := 2.0, dist_k := 0.004, day_vis := 0.25, flicker := 0.0) -> MeshInstance3D:
+static func glare(c: Color, energy := 2.0, base_size := 2.0, dist_k := 0.004, day_vis := 0.25, flicker := 0.0, rays := 0.0) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	mi.mesh = quad()
-	mi.material_override = glare_material(c, energy, base_size, dist_k, day_vis, flicker)
+	mi.material_override = glare_material(c, energy, base_size, dist_k, day_vis, flicker, false, rays)
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mi.extra_cull_margin = 400.0
 	return mi
@@ -243,8 +242,10 @@ static func _smoke(root: Node3D, amount: int, size: float, life: float, rise := 
 	p.scale_amount_curve = sc
 	var grad := Gradient.new()
 	if lit:
-		grad.set_color(0, Color(1.0, 0.62, 0.25, 0.75))
-		grad.add_point(0.12, Color(0.45, 0.3, 0.25, 0.6))
+		# the cloud of a burst hangs there lit orange — by its own fire, then by the city below
+		grad.set_color(0, Color(1.0, 0.66, 0.3, 0.8))
+		grad.add_point(0.1, Color(0.8, 0.47, 0.24, 0.7))
+		grad.add_point(0.4, Color(0.42, 0.31, 0.27, 0.5))
 	else:
 		grad.set_color(0, Color(0.35, 0.3, 0.3, 0.55))
 	grad.set_color(grad.get_point_count() - 1, Color(0.16, 0.16, 0.18, 0.0))
@@ -254,12 +255,33 @@ static func _smoke(root: Node3D, amount: int, size: float, life: float, rise := 
 	return p
 
 
-## Air burst. `big` = warhead / ballistic intercept: brighter flash, heavier ember rain.
+## How much of the spark rain a graphics level draws.
+static func detail() -> float:
+	return [0.45, 0.7, 1.0, 1.0, 1.0][clampi(int(GS.settings.quality), 0, 4)]
+
+
+## The nearest of the spark counts there are ready-made bursts for.
+static func _spark_count(n: float) -> int:
+	var best := 12
+	for c in [12, 20, 32, 48, 72, 100]:
+		if absf(float(c) - n) < absf(float(best) - n):
+			best = c
+	return best
+
+
+## Air burst, the way a camera sees it at night: a blinding point with the star of the lens around
+## it, the haze of half the sky lit up for a moment, splinters, a willow of embers that arcs over
+## and rains down, and a cloud that hangs there glowing. `big` = warhead / ballistic intercept:
+## brighter flash, heavier ember rain.
 static func explosion(parent: Node, pos: Vector3, size := 1.0, color := Color(1.0, 0.55, 0.15), big := false) -> void:
 	var root := Node3D.new()
 	parent.add_child(root)
 	root.global_position = pos
 	var s := size * (1.4 if big else 1.0)
+	var many := detail() * clampf(s, 0.6, 2.2)
+	# the light of a big one does not grow with it for ever: a warhead on the ground must not
+	# turn the night into a sunrise
+	var g := minf(s, 1.0 + (s - 1.0) * 0.35) if s > 1.0 else s
 	# light that illuminates the city below
 	var light := OmniLight3D.new()
 	light.light_color = color.lerp(Color(1, 0.9, 0.7), 0.4)
@@ -267,14 +289,31 @@ static func explosion(parent: Node, pos: Vector3, size := 1.0, color := Color(1.
 	light.omni_range = 170.0 * s
 	light.omni_attenuation = 1.2
 	root.add_child(light)
-	# screen-visible flash glare
+	# the flash, seen from any distance, with its star
 	var flash := MeshInstance3D.new()
 	flash.mesh = quad()
 	flash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	flash.extra_cull_margin = 600.0
-	var fm := glare_material(Color(1.0, 0.85, 0.6), 6.0, 30.0 * s, 0.05 * s, 0.6, 0.0, true)
+	var fm := glare_material(Color(1.0, 0.86, 0.62), 3.2, 70.0 * g, 0.11 * g, 0.6, 0.0, true, 1.6)
 	flash.material_override = fm
 	root.add_child(flash)
+	# the haze around the burst lights up (a puff the size of a drone leaving its rail lights nothing)
+	var hazy := 1.0 if s >= 0.4 else 0.0
+	var halo := MeshInstance3D.new()
+	halo.mesh = quad()
+	halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	halo.extra_cull_margin = 1500.0
+	var hm := glare_material(color.lerp(Color(1.0, 0.6, 0.3), 0.6), 1.9 * hazy, (700.0 if big else 560.0) * g, 0.0, 0.2, 0.0, true, 0.0, 0.0)
+	halo.material_override = hm
+	root.add_child(halo)
+	# and the cloud of the burst goes on glowing from inside for a few seconds
+	var cloud := MeshInstance3D.new()
+	cloud.mesh = quad()
+	cloud.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	cloud.extra_cull_margin = 400.0
+	var cm := glare_material(Color(1.0, 0.5, 0.2), 1.5 * hazy, 110.0 * g, 0.0, 0.3, 0.6, true, 0.0, 0.0)
+	cloud.material_override = cm
+	root.add_child(cloud)
 	# fireball: hot white core + orange shell
 	var core_mat := StandardMaterial3D.new()
 	core_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -303,13 +342,11 @@ static func explosion(parent: Node, pos: Vector3, size := 1.0, color := Color(1.
 	ring.rotation = Vector3(randf_range(-0.5, 0.5), randf() * TAU, randf_range(-0.5, 0.5))
 	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(ring)
-	# fragments: fast streaks, then a slow rain of burning embers
-	_sparks(root, Color(1.0, 0.75, 0.35), int(40 * clampf(s, 0.6, 2.5)), 70.0 * s, 1.0, -25.0, true)
-	var embers := _sparks(root, color, int((70 if big else 34) * clampf(s, 0.6, 2.0)), 34.0 * s, 3.2, -9.0)
-	embers.damping_min = 1.0
-	embers.damping_max = 2.5
-	embers.explosiveness = 0.85
-	_smoke(root, 14, 5.5 * s, 6.0, 5.0, true)
+	# fragments: splinters that are gone in a second, then the embers arcing over and raining down
+	Sparks.burst(root, pos, _spark_count(40.0 * many), 170.0 * s, 1.1, 16.0, 2.0, 0.08, 0.5, Color(1.0, 0.95, 0.8), Color(1.0, 0.62, 0.25), 4.0)
+	Sparks.burst(root, pos, _spark_count((56.0 if big else 26.0) * many), 78.0 * s, 4.6 if big else 3.6, 12.0, 0.62, 0.5, 0.75,
+		Color(1.0, 0.86, 0.55), color.lerp(Color(1.0, 0.4, 0.08), 0.6), 3.2, 0.2)
+	_smoke(root, 18, 5.0 + 6.5 * s, 11.0, 5.0 + 4.0 * s, true)
 	var tw := root.create_tween()
 	tw.set_parallel(true)
 	tw.tween_property(core, "scale", Vector3.ONE * 7.0 * s, 0.22).from(Vector3.ONE * 1.5).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
@@ -318,9 +355,41 @@ static func explosion(parent: Node, pos: Vector3, size := 1.0, color := Color(1.
 	tw.tween_property(shell_mat, "albedo_color", Color(0.4, 0.08, 0.0, 0.0), 0.9)
 	tw.tween_property(ring, "scale", Vector3(40, 40, 40) * s, 0.7).from(Vector3.ONE * 2.0).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
 	tw.tween_property(ring_mat, "albedo_color", Color(0, 0, 0, 0), 0.7)
-	tw.tween_property(light, "light_energy", 0.0, 0.9).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
-	tw.tween_property(fm, "shader_parameter/energy", 0.0, 0.45).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
-	tw.chain().tween_callback(root.queue_free).set_delay(6.5)
+	tw.tween_property(light, "light_energy", 0.0, 1.1).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+	# the point stays burning for a second after the flash itself
+	tw.tween_property(fm, "shader_parameter/energy", 0.0, 1.2).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+	tw.tween_property(fm, "shader_parameter/rays", 0.0, 0.7)
+	tw.tween_property(hm, "shader_parameter/energy", 0.0, 1.6).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(cm, "shader_parameter/energy", 0.0, 4.0).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.chain().tween_callback(root.queue_free).set_delay(11.0)
+
+
+## A missile leaves its launcher: the motor lights the smoke and the yard around it, and for a
+## moment the launch is the brightest thing in the city.
+static func launch_flash(parent: Node, pos: Vector3, size := 1.0) -> void:
+	var root := Node3D.new()
+	parent.add_child(root)
+	root.global_position = pos
+	var flash := MeshInstance3D.new()
+	flash.mesh = quad()
+	flash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	flash.extra_cull_margin = 300.0
+	var fm := glare_material(Color(1.0, 0.86, 0.62), 3.0, 9.0 * size, 0.03 * size, 0.5, 0.0, true, 0.4)
+	flash.material_override = fm
+	root.add_child(flash)
+	var halo := MeshInstance3D.new()
+	halo.mesh = quad()
+	halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	halo.extra_cull_margin = 600.0
+	var hm := glare_material(Color(1.0, 0.66, 0.36), 0.3, 150.0 * size, 0.0, 0.15, 0.0, true, 0.0, 0.0)
+	halo.material_override = hm
+	root.add_child(halo)
+	Sparks.burst(root, pos, 12, 26.0 * size, 1.3, 14.0, 1.6, 0.14, 0.45, Color(1.0, 0.9, 0.7), Color(1.0, 0.5, 0.15), 2.6, 0.6)
+	var tw := root.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(fm, "shader_parameter/energy", 0.0, 0.8).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+	tw.tween_property(hm, "shader_parameter/energy", 0.0, 1.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.chain().tween_callback(root.queue_free).set_delay(0.5)
 
 
 static func splash(parent: Node, pos: Vector3) -> void:
@@ -376,6 +445,8 @@ static func exhaust(color: Color, amount := 30, life := 0.35, size := 1.0) -> CP
 
 
 static func float_text(parent: Node, pos: Vector3, text: String, color: Color) -> void:
+	if quiet:
+		return
 	var l := Label3D.new()
 	l.text = text
 	l.font = GS.font

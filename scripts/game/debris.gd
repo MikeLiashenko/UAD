@@ -5,6 +5,7 @@ extends MeshInstance3D
 ## explodes on impact.
 
 const Fx = preload("res://scripts/core/fx.gd")
+const Trail = preload("res://scripts/game/trail.gd")
 
 const GRAVITY := 9.81
 const DRAG := 0.25
@@ -30,6 +31,12 @@ var cosmetic := false
 var _axis := Vector3.UP
 var _spin := 1.0
 var _trail: CPUParticles3D
+var _line: Node
+## A fragment burns out on the way down: seconds its glow lasts (the airframe burns to the ground).
+var _burn := 1.0e9
+var _age := 0.0
+## Every piece meets the air its own way.
+var _terminal := TERMINAL
 
 
 ## Same integration as _process, used to predict where debris of a target would fall.
@@ -64,18 +71,51 @@ func _ready() -> void:
 		mesh = Fx.cube(Vector3(randf_range(0.8, 2.2), randf_range(0.5, 1.4), randf_range(0.8, 2.4)))
 		material_override = Fx.glow(Color(1.0, 0.42, 0.1), 3.5)
 		_spin = randf_range(3.0, 9.0)
+	# every piece draws its fall: a burning line that curves down to the ground. The airframe
+	# drags a column of fire and black smoke, a fragment a thin thread of sparks.
+	var line := Trail.new()
+	_line = line
+	line.follow = self
+	line.back = 0.0
+	line.step = 12.0
+	line.hot = Color(1.0, 0.5, 0.16, 0.95)
+	line.glow = Color(1.0, 0.52, 0.18)
+	if wreck:
+		line.life = 6.0
+		line.hot_time = 1.3
+		line.glow_time = 3.2
+		line.w0 = 2.0
+		line.w1 = 15.0
+		line.wobble = 7.0
+		line.smoke = Color(0.3, 0.28, 0.28, 0.55)
+		line.glow_energy = 2.6
+	else:
+		_burn = randf_range(1.2, 4.5)
+		_terminal = TERMINAL * randf_range(0.7, 1.15)
+		line.life = 2.4
+		line.hot_time = 0.5
+		line.glow_time = randf_range(0.3, 0.9)
+		line.w0 = 0.5
+		line.w1 = 4.0
+		line.wobble = 2.5
+		line.smoke = Color(0.4, 0.36, 0.34, 0.22)
+		line.hot_energy = 2.4
+		line.glow_energy = 1.7
+	game.fx_root.add_child(line)
+	if not wreck:
+		return
 	_trail = CPUParticles3D.new()
 	_trail.mesh = Fx.sphere(1.0, 5)
 	_trail.material_override = Fx.smoke_mat()
 	_trail.local_coords = false
-	_trail.amount = 40 if wreck else 24
-	_trail.lifetime = 2.2 if wreck else 1.6
+	_trail.amount = 30
+	_trail.lifetime = 2.2
 	_trail.spread = 30.0
 	_trail.initial_velocity_min = 0.5
 	_trail.initial_velocity_max = 2.0
 	_trail.gravity = Vector3(0, 2.0, 0)
-	_trail.scale_amount_min = 1.2 if wreck else 0.8
-	_trail.scale_amount_max = 2.8 if wreck else 1.8
+	_trail.scale_amount_min = 1.2
+	_trail.scale_amount_max = 2.8
 	var grad := Gradient.new()
 	grad.set_color(0, Color(1.0, 0.5, 0.15, 0.8))
 	grad.add_point(0.2, Color(0.35, 0.3, 0.3, 0.45))
@@ -85,7 +125,13 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	vel.y = maxf(vel.y - GRAVITY * delta, -TERMINAL)
+	_age += delta
+	if _age > _burn and visible:
+		# burnt out: the piece goes on falling, dark
+		visible = false
+		if is_instance_valid(_line):
+			_line.finish()
+	vel.y = maxf(vel.y - GRAVITY * delta, -_terminal)
 	vel.x *= 1.0 - DRAG * delta
 	vel.z *= 1.0 - DRAG * delta
 	position += vel * delta
@@ -94,8 +140,9 @@ func _process(delta: float) -> void:
 	if position.y <= gh:
 		position.y = gh
 		game.debris_landed(self, gh)
-		_trail.emitting = false
-		_trail.reparent(game.fx_root)
-		var tr := _trail
-		get_tree().create_timer(2.5, false).timeout.connect(tr.queue_free)
+		if _trail != null:
+			_trail.emitting = false
+			_trail.reparent(game.fx_root)
+			var tr := _trail
+			get_tree().create_timer(2.5, false).timeout.connect(tr.queue_free)
 		queue_free()
