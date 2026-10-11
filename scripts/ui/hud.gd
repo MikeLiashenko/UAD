@@ -694,6 +694,8 @@ func _update_target_info() -> void:
 		target_panel.visible = false
 		return
 	target_panel.visible = true
+	if _weapons_panel != null and _weapons_panel.visible:
+		target_panel.offset_bottom = -(_weapons_panel.size.y + 18.0)
 	var e = info.enemy
 	var dist := Vector2(e.position.x - GS.base_pos.x, e.position.z - GS.base_pos.z).length()
 	var w = game.weapons.get(game.selected_weapon)

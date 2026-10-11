@@ -448,6 +448,9 @@ func _notification(what: int) -> void:
 
 func _process(delta: float) -> void:
 	_fit_near()
+	if _args.has("lockfirst") and game and is_instance_valid(game) and not game.enemies.is_empty():
+		# test hook: the first target is the selected one (the target card of the top view)
+		game.locked = game.enemies[0]
 	if _args.has("follow") and game and is_instance_valid(game) and not game.enemies.is_empty():
 		var near = _nearest_enemy()
 		game.rig.focus(near.position)
