@@ -148,7 +148,7 @@ func _draw() -> void:
 				var go: String = GS.t("ЗАХВАТ · ЛКМ — ПУСК ДРОНА") if kind == "drone" else GS.t("ЗАХВАТ · ПУСК ЛКМ")
 				_txt(sp + Vector2(-60, -r - 10), go, 14, RED, HORIZONTAL_ALIGNMENT_CENTER, 120)
 			if kind == "gun" and fcs:
-				var lp: Vector3 = Bullet.lead(w.muzzle.global_position, e.position, e.vel, float(w.def.speed))
+				var lp: Vector3 = Bullet.lead(w.muzzle.global_position, e.position, e.vel, GS.shot_speed(w.id))
 				if not cam.is_position_behind(lp):
 					var ls := cam.unproject_position(lp)
 					draw_line(sp, ls, Color(1.0, 0.85, 0.3, 0.5), 1.0)

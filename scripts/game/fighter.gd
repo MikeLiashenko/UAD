@@ -286,9 +286,12 @@ func _keys(delta: float) -> void:
 
 
 func _fly(delta: float) -> void:
+	# the jet's own clock: like everything in the air it flies GS.TEMPO times faster than life —
+	# the same turn circles and climbs, flown sooner (`speed` stays the real number, m/s)
+	var dt := delta * GS.TEMPO
 	var want := BURNER if burner else lerpf(MIN_SPEED, MIL, throttle)
-	speed = move_toward(speed, want, (55.0 if want > speed else 36.0) * delta)
-	speed = clampf(speed - dir.y * 60.0 * delta, MIN_SPEED * 0.8, BURNER * 1.1) # climbing costs speed
+	speed = move_toward(speed, want, (55.0 if want > speed else 36.0) * dt)
+	speed = clampf(speed - dir.y * 60.0 * dt, MIN_SPEED * 0.8, BURNER * 1.1) # climbing costs speed
 	# the patrol area: past it the jet is turned back towards the city
 	var flat := Vector2(pos.x, pos.z).length()
 	outside = flat > PATROL
@@ -304,12 +307,12 @@ func _fly(delta: float) -> void:
 	var rate := TURN * clampf(speed / 240.0, 0.55, 1.15) * (0.9 if burner else 1.0) * (GCAS_PULL if gcas else 1.0)
 	var ang := dir.angle_to(steer)
 	if ang > 0.0001:
-		dir = dir.slerp(steer, clampf(rate * delta / ang, 0.0, 1.0)).normalized()
-	pos += dir * speed * delta
+		dir = dir.slerp(steer, clampf(rate * dt / ang, 0.0, 1.0)).normalized()
+	pos += dir * speed * dt
 	# bank into the turn by the rate of turn around the vertical
 	var yaw_rate := 0.0
-	if delta > 0.0:
-		yaw_rate = wrapf(atan2(-dir.x, -dir.z) - atan2(-old.x, -old.z), -PI, PI) / delta
+	if dt > 0.0:
+		yaw_rate = wrapf(atan2(-dir.x, -dir.z) - atan2(-old.x, -old.z), -PI, PI) / dt
 	bank = lerpf(bank, clampf(yaw_rate * 1.6, -1.3, 1.3), 1.0 - exp(-delta * 4.0))
 	fuel -= delta * (3.0 if burner else 1.0)
 	if fuel < FUEL * 0.2 and not _bingo:
@@ -319,9 +322,9 @@ func _fly(delta: float) -> void:
 		game.set_view("top") # exit() lands it
 		return
 	var ground: float = _ground(pos)
-	# PULL UP: the present course meets the ground or a roof within a second
+	# PULL UP: the present course meets the ground or a roof within a second of the pilot's time
 	pull_up = false
-	for k in [0.25, 0.5, 0.75, 1.0]:
+	for k in [0.25 * GS.TEMPO, 0.5 * GS.TEMPO, 0.75 * GS.TEMPO, GS.TEMPO]:
 		var q: Vector3 = pos + dir * speed * float(k)
 		if q.y < _ground(q) + 3.0:
 			pull_up = true
@@ -410,7 +413,7 @@ func _gun_aim() -> void:
 		var rel: Vector3 = e.position - pos
 		if rel.length() > GUN_REACH or rel.dot(dir) <= 0.0:
 			continue
-		var lp: Vector3 = e.position + e.vel * (rel.length() / (float(def.speed) + speed))
+		var lp: Vector3 = e.position + e.vel * (rel.length() / (GS.shot_speed("f16gun") + speed * GS.TEMPO))
 		var a := dir.angle_to(lp - pos)
 		if a < best:
 			best = a
@@ -431,7 +434,7 @@ func _gun(delta: float) -> void:
 		var s: float = def.spread
 		var at := (gun_lead - muzzle).normalized() if gun_target != null else dir
 		var d := (at + Vector3(randf_range(-s, s), randf_range(-s, s), randf_range(-s, s))).normalized()
-		game.spawn_bullet(muzzle, d * float(def.speed) + dir * speed, "f16gun", GUN_LIFE, true)
+		game.spawn_bullet(muzzle, d * GS.shot_speed("f16gun") + dir * speed * GS.TEMPO, "f16gun", GUN_LIFE / GS.TEMPO, true)
 	if _gun_snd <= 0.0:
 		_gun_snd = 0.07
 		game.play_3d("cannon", pos, -4.0, 0.05)
@@ -498,7 +501,7 @@ func fire(kind: String) -> void:
 	locked = true
 	loaded[kind] = int(loaded[kind]) - 1
 	var from := pos - Vector3(0, 1.2, 0) + dir * 2.0
-	game.spawn_missile(from, dir, lock, kind, dir * speed)
+	game.spawn_missile(from, dir, lock, kind, dir * speed * GS.TEMPO)
 	game.hud.log_event(GS.t("Пуск %s по цели «%s»") % [GS.t(String(GS.WEAPONS[kind].short)), GS.t(String(lock.def.name))], Color(0.6, 0.95, 1.0))
 
 
@@ -538,7 +541,7 @@ func _place_jet() -> void:
 func _camera(delta: float) -> void:
 	var flat := Vector3(dir.x, 0.0, dir.z).normalized() if Vector2(dir.x, dir.z).length() > 0.05 else Vector3.FORWARD
 	var want := pos - dir * 26.0 - flat * 4.0 + Vector3(0, 7.5, 0)
-	_cam_pos = _cam_pos.lerp(want, 1.0 - exp(-delta * 9.0))
+	_cam_pos = _cam_pos.lerp(want, 1.0 - exp(-delta * 9.0 * GS.TEMPO))
 	cam.global_position = _cam_pos
 	var up := Vector3.UP.rotated(dir, -bank * 0.35) if absf(dir.y) < 0.95 else Vector3.FORWARD
 	cam.look_at(pos + dir * 70.0, up)

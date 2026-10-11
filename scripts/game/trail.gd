@@ -20,6 +20,9 @@ var hot := Color(3.2, 2.2, 1.2, 0.95)
 var smoke := Color(0.62, 0.62, 0.66, 0.42)
 ## Offset of the nozzle behind the followed node, along its -Z (forward) axis.
 var back := 3.0
+## Distance between two points of the ribbon, metres: a fast missile needs longer links, or the
+## MAX_POINTS it may keep would cover only the last seconds of its flight.
+var step := 6.0
 
 var _p := PackedVector3Array()
 var _t := PackedFloat32Array()
@@ -73,7 +76,7 @@ func _process(delta: float) -> void:
 		if follow != null and is_instance_valid(follow) and follow.is_inside_tree():
 			var pos := follow.global_position + follow.global_transform.basis.z * back
 			var n := _p.size()
-			if n == 0 or _p[n - 1].distance_to(pos) > 6.0:
+			if n == 0 or _p[n - 1].distance_to(pos) > step:
 				_p.append(pos)
 				_t.append(_now)
 				if _p.size() > MAX_POINTS:

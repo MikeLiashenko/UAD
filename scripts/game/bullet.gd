@@ -42,12 +42,14 @@ func _orient() -> void:
 
 func _process(delta: float) -> void:
 	var p0 := position
-	vel.y -= 4.9 * delta
+	vel.y -= 4.9 * GS.TEMPO * GS.TEMPO * delta # the drop over the range stays what it is in life
 	var p1 := p0 + vel * delta
 	for e in game.enemies:
 		if e.dead:
 			continue
-		if seg_dist(p0, p1, e.position) < e.radius + 0.8:
+		# both move within the frame: the round is swept past the target in the target's own frame
+		var rel0: Vector3 = p0 - e.position
+		if seg_dist(rel0, rel0 + (vel - e.vel) * delta, Vector3.ZERO) < e.radius + 0.8:
 			var eff: float = GS.eff(weapon_id, e)
 			e.take_damage(damage * eff, weapon_id)
 			if manual:

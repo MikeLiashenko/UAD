@@ -13,7 +13,9 @@ const Meshes = preload("res://scripts/core/meshes.gd")
 const Fx = preload("res://scripts/core/fx.gd")
 const Trail = preload("res://scripts/game/trail.gd")
 
-const B_GRAVITY := 9.81
+## Flight runs GS.TEMPO times faster than life; gravity is scaled with it, so a ballistic arc keeps
+## its real shape.
+var gravity: float = 9.81 * GS.TEMPO * GS.TEMPO
 const DETECT_TIME := 14.0
 ## A scout sees the base from this far (horizontally).
 const DETECT_RADIUS := 600.0
@@ -73,7 +75,7 @@ var _flash := 0.0
 var _p0 := Vector3.ZERO
 var _v0 := Vector3.ZERO
 var _flight := 15.0
-var _life := 110.0
+var _life := 75.0
 var _leaving := false
 var _alt_amp := 0.0
 var _alt_freq := 0.1
@@ -97,12 +99,12 @@ func _ready() -> void:
 	def = GS.ENEMIES[variant]
 	hp = float(def.hp)
 	max_hp = hp
-	speed = float(def.speed) * _rng.randf_range(0.92, 1.08)
+	speed = float(def.speed) * GS.TEMPO * _rng.randf_range(0.92, 1.08)
 	radius = float(def.radius)
 	if cruise_alt <= 0.0:
 		cruise_alt = _rng.randf_range(float(def.alt_min), float(def.alt_max))
 	_alt_amp = cruise_alt * _rng.randf_range(0.08, 0.25)
-	_alt_freq = _rng.randf_range(0.03, 0.09)
+	_alt_freq = _rng.randf_range(0.03, 0.09) * GS.TEMPO
 	_alt_phase = _rng.randf() * TAU
 	model = Meshes.enemy_model(variant)
 	add_child(model)
@@ -123,8 +125,9 @@ func _ready() -> void:
 		# a warhead coming down from the stratosphere draws a burning line
 		var tr := Trail.new()
 		tr.follow = self
-		tr.life = 7.0
-		tr.hot_time = 2.6
+		tr.life = 4.0
+		tr.hot_time = 1.5
+		tr.step = 80.0
 		tr.w0 = 2.2
 		tr.w1 = 9.0
 		tr.hot = Color(3.4, 1.9, 0.9, 0.95)
@@ -146,8 +149,8 @@ func _ready() -> void:
 		"ballistic":
 			_p0 = position
 			var fl: Array = def.get("flight", [15.0, 22.0])
-			_flight = _rng.randf_range(float(fl[0]), float(fl[1]))
-			_v0 = (target_pos - _p0 + Vector3(0, 0.5 * B_GRAVITY * _flight * _flight, 0)) / _flight
+			_flight = _rng.randf_range(float(fl[0]), float(fl[1])) / GS.TEMPO
+			_v0 = (target_pos - _p0 + Vector3(0, 0.5 * gravity * _flight * _flight, 0)) / _flight
 			vel = _v0
 		"cruise" when def.get("glide", false):
 			# a glide bomb: released far out and high up, it slides down one straight line
@@ -224,7 +227,7 @@ func _steer(aim: Vector3, turn: float, delta: float) -> void:
 ## Desired cruise altitude right now: slow climbs/descents, and never below the rooftops ahead.
 func _alt_here() -> float:
 	var a := cruise_alt + _alt_amp * sin(age * _alt_freq * TAU + _alt_phase)
-	var fwd := Vector3(vel.x, 0, vel.z).normalized() * maxf(speed * 1.5, 150.0)
+	var fwd := Vector3(vel.x, 0, vel.z).normalized() * maxf(speed / GS.TEMPO * 1.5, 150.0)
 	var ahead := position + fwd
 	var ceil_h: float = maxf(game.map.ceiling(ahead.x, ahead.z), game.map.ceiling(position.x, position.z))
 	return maxf(a, ceil_h + 40.0)
@@ -241,13 +244,13 @@ func _fly_direct(delta: float) -> void:
 		aim.y = _alt_here() + 250.0 # terminal pop-up before diving onto the target
 	if final and (hd < dive or crippled):
 		aim = wp
-	var turn := 0.55 if type == "shahed" else 0.6 * maxf(1.0, speed / 200.0)
+	var turn := 0.55 if type == "shahed" else 0.6 * maxf(1.0, speed / GS.TEMPO / 200.0)
 	if final and hd < dive:
 		turn *= 3.0 # the terminal guidance is the tightest part of the flight
 	if crippled:
 		turn = 0.35
-	_steer(aim, turn, delta)
-	if not final and hd < maxf(350.0, speed * 1.5):
+	_steer(aim, turn * GS.TEMPO, delta)
+	if not final and hd < maxf(350.0, speed / GS.TEMPO * 1.5):
 		waypoints.pop_front()
 	if final and (position.distance_to(wp) < maxf(12.0, speed * delta * 1.5) or (hd < 40.0 and position.y <= wp.y + 3.0)):
 		game.enemy_impact(self)
@@ -257,8 +260,8 @@ func _fly_direct(delta: float) -> void:
 
 func _fly_ballistic() -> void:
 	var t := age
-	position = _p0 + _v0 * t - Vector3(0, 0.5 * B_GRAVITY * t * t, 0)
-	vel = _v0 - Vector3(0, B_GRAVITY * t, 0)
+	position = _p0 + _v0 * t - Vector3(0, 0.5 * gravity * t * t, 0)
+	vel = _v0 - Vector3(0, gravity * t, 0)
 	if t >= _flight or position.y <= game.map.ground_height(position.x, position.z):
 		position = target_pos
 		game.enemy_impact(self)
@@ -299,7 +302,7 @@ func _fly_scout(delta: float) -> void:
 		_leaving = true
 		_pick_scout_waypoint()
 	var wp: Vector3 = waypoints[0]
-	_steer(Vector3(wp.x, _alt_here(), wp.z), 0.7, delta)
+	_steer(Vector3(wp.x, _alt_here(), wp.z), 0.7 * GS.TEMPO, delta)
 	if Vector2(wp.x - position.x, wp.z - position.z).length() < 200.0:
 		_pick_scout_waypoint()
 	if _leaving and Vector2(position.x - GS.base_pos.x, position.z - GS.base_pos.z).length() > 9000.0:
@@ -345,7 +348,7 @@ func _predicted() -> Vector3:
 	var dt := clampf(float(Net.server_now() - _net_t) / 1000.0, 0.0, 1.5)
 	var p := _net_p + _net_v * dt
 	if type == "ballistic":
-		p.y -= 0.5 * B_GRAVITY * dt * dt
+		p.y -= 0.5 * gravity * dt * dt
 	return p
 
 
@@ -353,7 +356,7 @@ func _net_follow(delta: float) -> void:
 	var dt := clampf(float(Net.server_now() - _net_t) / 1000.0, 0.0, 1.5)
 	var v := _net_v
 	if type == "ballistic":
-		v.y -= B_GRAVITY * dt
+		v.y -= gravity * dt
 	# dead reckoning: move on with the velocity, then ease out whatever error is left
 	position += v * delta
 	var err := _predicted() - position

@@ -146,7 +146,7 @@ func _process(delta: float) -> void:
 	var mp := muzzle.global_position
 	var aim: Vector3 = target.position
 	if def.kind == "gun":
-		aim = Bullet.lead(mp, target.position, target.vel, float(def.speed))
+		aim = Bullet.lead(mp, target.position, target.vel, GS.shot_speed(id))
 	elif def.kind == "drone":
 		# the rail throws the drone up at a fixed angle; it climbs out and then hunts
 		aim = target.position + Vector3(0, 200.0, 0)
@@ -180,7 +180,7 @@ func _fire_gun_at(aim: Vector3, is_manual: bool) -> void:
 	var s: float = def.spread
 	var dir := (aim - mp).normalized()
 	dir = (dir + Vector3(randf_range(-s, s), randf_range(-s, s), randf_range(-s, s))).normalized()
-	game.spawn_bullet(mp, dir * float(def.speed), id, effective_range() / float(def.speed) * 1.25, is_manual)
+	game.spawn_bullet(mp, dir * GS.shot_speed(id), id, effective_range() / GS.shot_speed(id) * 1.25, is_manual)
 	_flash_t = 0.035
 	if id == "gepard":
 		game.play_3d("cannon", global_position, -8.0 + (4.0 if is_manual else 0.0), 0.05)

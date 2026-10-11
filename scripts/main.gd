@@ -11,6 +11,7 @@ extends Node
 ##   --loc=river|forest|city|field  --weapons=mg,gepard,drone,iris,patriot  --day=N  --money=N
 ##   --view=base|fpv [--aimbot] [--weapon=id]   gunner / FPV drone view; aimbot tracks threats
 ##   --fpv-at=SECONDS           jump to the FPV drone console mid-raid
+##   --parade=id,id,…           (with --autotest) those threat models in a row over the battery
 ##   --crush=X,Z                collapse and set fire to the building at X,Z (fire-service test)
 ##   --camat=X,Z[,DIST]         park the overhead camera on a spot
 ##   --screen=menu|settings|map|worlds|create|game   --open=shop|pause|morning|gameover|feed|video|record
@@ -626,7 +627,7 @@ func _fighter_pilot(delta: float) -> void:
 	f.trigger = false
 	var want: Vector3 = Vector3(GS.base_pos.x - f.pos.x, 1500.0 - f.pos.y, GS.base_pos.z - f.pos.z).normalized()
 	if best != null:
-		want = (Bullet.lead(f.pos, best.position, best.vel, 1050.0 + f.speed) - f.pos).normalized()
+		want = (Bullet.lead(f.pos, best.position, best.vel, (1050.0 + f.speed) * GS.TEMPO) - f.pos).normalized()
 		f.burner = bd > 9000.0
 		f.throttle = 0.85
 		if f.locked and f.lock == best and float(best.inbound) < float(best.hp):
@@ -737,7 +738,7 @@ func _mfg_pilot(delta: float) -> void:
 		m.switch_seat()
 	if m.seat == "gun":
 		var muzzle: Vector3 = (m.unit.muzzle as Node3D).global_position
-		var ld := Bullet.lead(muzzle, tip.position, tip.vel, float(GS.WEAPONS.mg.speed))
+		var ld := Bullet.lead(muzzle, tip.position, tip.vel, GS.shot_speed("mg"))
 		var d := (ld - muzzle).normalized()
 		var wy := atan2(-d.x, -d.z)
 		var wp := asin(clampf(d.y, -1.0, 1.0))
@@ -789,7 +790,7 @@ func _aimbot() -> void:
 	var e = _nearest_enemy()
 	var aim: Vector3 = e.position
 	if String(w.def.kind) == "gun":
-		aim = Bullet.lead(w.muzzle.global_position, e.position, e.vel, float(w.def.speed))
+		aim = Bullet.lead(w.muzzle.global_position, e.position, e.vel, GS.shot_speed(w.id))
 	var d: Vector3 = (aim - cam.global_position).normalized()
 	bv.yaw = atan2(-d.x, -d.z)
 	bv.pitch = asin(clampf(d.y, -1.0, 1.0))
@@ -859,6 +860,14 @@ func _start_autotest() -> void:
 			game.walker.yaw = deg_to_rad(float(_args.walkyaw))
 		game.walker.pitch = float(_args.get("walkpitch", "0.08"))
 		game.walker.test_forward = _args.has("walkfwd")
+	if _args.has("parade"):
+		# the threat models side by side, 60 m over the battery, for a look at them (shots.sh)
+		const Meshes = preload("res://scripts/core/meshes.gd")
+		var row := String(_args.parade).split(",")
+		for i in row.size():
+			var m: Node3D = Meshes.enemy_model(row[i])
+			m.position = GS.base_pos + Vector3((i - (row.size() - 1) * 0.5) * 14.0, 60.0, 0.0)
+			game.fx_root.add_child(m)
 	print("UAD: autotest base at ", pos, " loc=", loc_want)
 
 

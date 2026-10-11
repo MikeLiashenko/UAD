@@ -54,20 +54,26 @@ func _init() -> void:
 	video_authors = ["@olena.kyiv", "@serhii_obolon", "@nightwatch_ua", "@darnytsia_live", "@pechersk_cam",
 		"@vika.balcony", "@taxi_2am", "@rooftop_kyiv", "@oksana_news", "@dnipro_view"]
 	threat_sectors = [0.0, 30.0, 60.0, 90.0, 120.0, 150.0, 180.0, 270.0]
-	# the combined strikes on the capital: drone swarms with decoys to saturate the air defence,
-	# Kh-101 from the strategic bombers, Kalibrs from the Black Sea, Iskanders and Kinzhals
+	# the combined strikes on the capital: drone swarms with decoys to saturate the air defence, the
+	# jet Gerans later on, Kh-101 from the strategic bombers, Kalibrs from the Black Sea, Iskanders,
+	# S-400 rounds from beyond the northern border, Kinzhals and Zircons from Crimea
 	raid = {
-		"drone": [["shahed", 0.6, 1], ["gerbera", 0.3, 2], ["geran3", 0.15, 7]],
+		"drone": [["shahed", 0.6, 1], ["gerbera", 0.3, 2], ["geran3", 0.15, 7], ["geran4", 0.12, 9], ["geran5", 0.12, 11]],
 		"cruise": [["cruise", 0.65, 3], ["kalibr", 0.35, 4]],
-		"ballistic": [["ballistic", 0.7, 5], ["kinzhal", 0.3, 8]],
+		"ballistic": [["ballistic", 0.6, 5], ["s400", 0.25, 6], ["kinzhal", 0.3, 8], ["zircon", 0.2, 10], ["s500", 0.1, 13]],
 	}
 	raid_sectors = {
 		"kalibr": [150.0, 165.0, 180.0, 195.0, 210.0],
 		"cruise": [30.0, 60.0, 90.0, 120.0, 0.0],
 		"ballistic": [0.0, 20.0, 90.0, 120.0, 150.0],
 		"kinzhal": [90.0, 120.0, 150.0, 180.0],
+		"s400": [0.0, 20.0, 40.0],
+		"s500": [20.0, 40.0, 60.0],
+		"zircon": [150.0, 165.0, 180.0],
 	}
-	raid_note = "Киев бьют комбинированно: рои шахедов с ложными целями «Гербера», Х-101 с Ту-95, «Калибры» с моря, «Искандеры» и «Кинжалы» — последних берёт только Patriot."
+	raid_events = {12: {"weapon": "oreshnik", "count": 6,
+		"alert": "⚠ УГРОЗА: БАЛЛИСТИКА СРЕДНЕЙ ДАЛЬНОСТИ «ОРЕШНИК» ПО КИЕВУ! Всем в укрытия"}}
+	raid_note = "Киев бьют комбинированно: рои шахедов с ложными целями «Гербера», Х-101 с Ту-95, «Калибры» с моря, «Искандеры», С-400 по земле, позже — «Кинжалы» и «Цирконы»: их берут только Patriot и дальние комплексы. На двенадцатую ночь ждите «Орешник»."
 	city_center = ll(50.445, 30.52)
 	city_radii = Vector2(12500, 11500)
 	park_threshold = 0.5

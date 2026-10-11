@@ -12,6 +12,13 @@ const INERTIA := 0.75
 ## Wreckage does not fall faster than this (air drag).
 const TERMINAL := 75.0
 
+
+## What a wreck starts with: the momentum of its target at the target's real speed. Flight runs
+## GS.TEMPO times faster than life, a fall does not — so the pieces come down as far ahead of the
+## kill as they would in life.
+static func start_vel(target_vel: Vector3) -> Vector3:
+	return target_vel * (INERTIA / GS.TEMPO)
+
 var game
 var vel := Vector3.ZERO
 var penalty := 1000
@@ -28,7 +35,7 @@ var _trail: CPUParticles3D
 ## Same integration as _process, used to predict where debris of a target would fall.
 static func predict(map, pos: Vector3, v: Vector3) -> Vector3:
 	var p := pos
-	var vv := v * INERTIA
+	var vv := start_vel(v)
 	var dt := 0.2
 	for i in 1500:
 		vv.y = maxf(vv.y - GRAVITY * dt, -TERMINAL)

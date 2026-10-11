@@ -183,7 +183,7 @@ func _draw() -> void:
 		if e == tracked or locked:
 			var closing: float = (d.vel - e.vel).dot((e.position - d.position).normalized())
 			_txt(sp + Vector2(r + 6, -2), GS.t("%s · %d м") % [GS.t(String(e.def.abbr)), int(dist)], 13, ec)
-			_txt(sp + Vector2(r + 6, 16), GS.t("сближение %d км/ч · %d%%") % [int(closing), int(100.0 * e.hp / e.max_hp)], 12, Color(ec.r, ec.g, ec.b, 0.85))
+			_txt(sp + Vector2(r + 6, 16), GS.t("сближение %d км/ч · %d%%") % [int(GS.real_kmh(closing)), int(100.0 * e.hp / e.max_hp)], 12, Color(ec.r, ec.g, ec.b, 0.85))
 			if locked:
 				_txt(sp + Vector2(-60, -r - 10), GS.t("ЦЕЛЬ"), 14, RED, HORIZONTAL_ALIGNMENT_CENTER, 120)
 	# --- telemetry, bottom left (clear of the status panel and the event log)
@@ -197,7 +197,7 @@ func _draw() -> void:
 	_gauge(top + Vector2(0, 44), 150, 10, batt, bcol, GS.t("АККУМУЛЯТОР %d%%") % int(batt * 100.0))
 	_gauge(top + Vector2(0, 84), 150, 10, clampf(d.in_throttle / 1.35, 0.0, 1.0), Color(0.4, 0.85, 1.0), GS.t("ТЯГА %d%%") % int(d.in_throttle * 100.0))
 	# ground speed on the console is the airframe number a pilot expects (max ~175 km/h)
-	_txt(top + Vector2(0, 124), GS.t("V %d км/ч · H %d м") % [int(d.speed * 3.6), int(d.position.y)], 15, col)
+	_txt(top + Vector2(0, 124), GS.t("V %d км/ч · H %d м") % [int(GS.real_kmh(d.speed)), int(d.position.y)], 15, col)
 	var to_base: float = d.position.distance_to(GS.base_pos)
 	_txt(top + Vector2(0, 146), GS.t("до базы %.1f км · в воздухе %d") % [to_base * 0.001, game.drones.size()], 14, Color(col.r, col.g, col.b, 0.85))
 	# --- link, bottom right

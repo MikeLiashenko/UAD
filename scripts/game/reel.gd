@@ -419,7 +419,7 @@ func _setup_shot(by: String) -> void:
 			_shot_travel = clampf(dist / 260.0, 1.2, 2.6)
 			_shot = Node3D.new()
 			add_child(_shot)
-			_shot.add_child(Meshes.interceptor(by == "patriot" or by == "s300"))
+			_shot.add_child(Meshes.interceptor(by in ["patriot", "s300", "s400", "s500"]))
 			_shot.add_child(Fx.glare(Color(1.0, 0.85, 0.5), 3.0, 2.2, 0.0022, 0.6, 0.35))
 			var plume := Fx.exhaust(Color(1.0, 0.7, 0.35), 40, 1.5, 1.7)
 			plume.material_override = Fx.smoke_mat()

@@ -26,11 +26,13 @@ var cosmetic := false
 
 func _ready() -> void:
 	def = GS.WEAPONS[weapon_id]
-	max_speed = float(def.speed)
-	turn = float(def.turn)
+	# the air picture runs GS.TEMPO times faster than life: speed, turn rate and the burn of the motor
+	max_speed = GS.shot_speed(weapon_id)
+	turn = float(def.turn) * GS.TEMPO
+	boost /= GS.TEMPO
 	# enough fuel and battery to fly out to the edge of its zone, and a little more
-	life = float(def.range) / max_speed * 1.7 + 6.0
-	add_child(Meshes.interceptor(weapon_id == "patriot"))
+	life = float(def.range) / max_speed * 1.7 + 2.0
+	add_child(Meshes.interceptor(weapon_id in ["patriot", "s300", "s400", "s500"]))
 	_trail = CPUParticles3D.new()
 	_trail.mesh = Fx.sphere(1.0, 6)
 	_trail.material_override = Fx.smoke_mat()
@@ -60,7 +62,8 @@ func _ready() -> void:
 	# the long streak across the sky
 	var ribbon := Trail.new()
 	ribbon.follow = self
-	ribbon.life = 11.0 if max_speed > 800.0 else 8.0
+	ribbon.life = 9.0 if float(def.speed) > 800.0 else 7.0
+	ribbon.step = maxf(6.0, max_speed * ribbon.life / 220.0)
 	game.fx_root.add_child(ribbon)
 	_orient()
 	if cosmetic:
@@ -86,7 +89,7 @@ func _process(delta: float) -> void:
 		return
 	life -= delta
 	boost -= delta
-	speed = minf(max_speed, speed + max_speed * 1.3 * delta)
+	speed = minf(max_speed, speed + max_speed * 1.3 * GS.TEMPO * delta)
 	var dir := vel.normalized()
 	if _target_ok():
 		if boost <= 0.0:

@@ -45,9 +45,9 @@ func _init() -> void:
 	# Belgorod is due north: most of the raids come in from the north and the north-east
 	threat_sectors = [340.0, 0.0, 10.0, 20.0, 35.0, 50.0, 65.0, 80.0, 100.0]
 	raid = {
-		"drone": [["shahed", 0.55, 1], ["molniya", 0.3, 2], ["geran3", 0.15, 6]],
-		"cruise": [["kab", 0.65, 2], ["cruise", 0.35, 5]],
-		"ballistic": [["s300", 0.6, 3], ["ballistic", 0.4, 5]],
+		"drone": [["shahed", 0.55, 1], ["molniya", 0.3, 2], ["geran3", 0.15, 6], ["geran4", 0.12, 8], ["geran5", 0.12, 10]],
+		"cruise": [["kab", 0.65, 2], ["cruise", 0.35, 5], ["kalibr", 0.15, 7]],
+		"ballistic": [["s300", 0.6, 3], ["ballistic", 0.4, 5], ["s400", 0.35, 6], ["s500", 0.1, 12]],
 	}
 	# glide bombs every night, from the Su-34s over Belgorod
 	raid_extra = [{"weapon": "kab", "from": 2, "count": [1, 3], "at": 0.2}, {"weapon": "kab", "from": 6, "count": [2, 3], "at": 0.7}]
@@ -56,10 +56,13 @@ func _init() -> void:
 	raid_sectors = {
 		"kab": [345.0, 0.0, 15.0, 30.0],
 		"s300": [350.0, 0.0, 10.0, 25.0],
+		"s400": [350.0, 0.0, 10.0, 25.0],
+		"s500": [0.0, 20.0, 40.0],
+		"kalibr": [150.0, 170.0, 190.0],
 		"ballistic": [0.0, 15.0, 30.0, 60.0],
 		"molniya": [0.0, 20.0, 40.0, 70.0],
 	}
-	raid_note = "Харьков в 30 км от Белгорода: КАБ с УМПК сбрасывают из-за границы, С-300 по земле и «Искандеры» долетают за секунды. Против КАБ стволы почти бесполезны — нужны ЗРК."
+	raid_note = "Харьков в 30 км от Белгорода: КАБ с УМПК сбрасывают из-за границы, С-300 и С-400 по земле и «Искандеры» долетают за секунды. Против КАБ стволы почти бесполезны — нужны ЗРК."
 	city_center = ll(49.99, 36.26)
 	city_radii = Vector2(10500, 10000)
 	park_threshold = 0.5

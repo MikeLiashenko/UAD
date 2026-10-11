@@ -247,6 +247,10 @@ static func weapon_model(id: String) -> Node3D:
 			return s300()
 		"patriot":
 			return patriot()
+		"s400":
+			return s300(1)
+		"s500":
+			return s300(2)
 	return pickup()
 
 
@@ -458,6 +462,51 @@ static func geran3() -> Node3D:
 	return root
 
 
+## Geran-4: a new airframe made for the jet — a shorter, stiffer cropped delta with the engine
+## buried in the tail instead of a pod on the back.
+static func geran4() -> Node3D:
+	var root := Node3D.new()
+	var mat := Fx.solid(Color(0.2, 0.21, 0.24), 0.5, 0.2)
+	var wing := PrismMesh.new()
+	wing.size = Vector3(5.0, 4.2, 0.26)
+	part(root, wing, mat, Vector3(0, 0, 0.5), Vector3(-90, 0, 0))
+	cyl(root, 0.44, 0.44, 4.4, Vector3(0, 0.1, 0), mat, Vector3(90, 0, 0), 10)
+	cyl(root, 0.0, 0.44, 1.3, Vector3(0, 0.1, -2.85), mat, Vector3(-90, 0, 0), 10)
+	cyl(root, 0.3, 0.38, 0.5, Vector3(0, 0.1, 2.45), Fx.solid(Color(0.32, 0.32, 0.34), 0.4, 0.6), Vector3(90, 0, 0), 10)
+	for sx in [-1.0, 1.0]:
+		box(root, Vector3(0.08, 0.9, 0.8), Vector3(2.45 * sx, 0.35, 2.2), mat)
+	var g := Fx.glare(Color(1.0, 0.75, 0.42), 2.2, 2.0, 0.003, 0.1, 0.3)
+	g.position = Vector3(0, 0.1, 2.9)
+	root.add_child(g)
+	var ex := Fx.exhaust(Color(1.0, 0.55, 0.2), 20, 0.25, 0.7)
+	ex.position = Vector3(0, 0.1, 2.9)
+	root.add_child(ex)
+	return root
+
+
+## Geran-5: no flying wing — a six-metre fuselage with straight wings, a cruciform tail and the
+## turbojet on a pylon over the tail: closer to a small cruise missile than to a Shahed.
+static func geran5() -> Node3D:
+	var root := Node3D.new()
+	var mat := Fx.solid(Color(0.16, 0.17, 0.19), 0.55, 0.2)
+	var metal := Fx.solid(Color(0.32, 0.32, 0.34), 0.4, 0.6)
+	cyl(root, 0.4, 0.4, 5.0, Vector3.ZERO, mat, Vector3(90, 0, 0), 10)
+	cyl(root, 0.0, 0.4, 1.2, Vector3(0, 0, -3.1), mat, Vector3(-90, 0, 0), 10)
+	cyl(root, 0.4, 0.2, 0.9, Vector3(0, 0, 2.95), mat, Vector3(90, 0, 0), 10)
+	box(root, Vector3(5.5, 0.08, 0.9), Vector3(0, -0.15, -0.3), mat)
+	box(root, Vector3(2.0, 0.06, 0.6), Vector3(0, 0.0, 2.7), mat)
+	box(root, Vector3(0.07, 0.9, 0.7), Vector3(0, -0.5, 2.7), mat)
+	box(root, Vector3(0.1, 0.4, 0.8), Vector3(0, 0.55, 1.9), mat)
+	cyl(root, 0.28, 0.3, 1.5, Vector3(0, 0.9, 2.0), metal, Vector3(90, 0, 0), 10)
+	var g := Fx.glare(Color(1.0, 0.7, 0.36), 2.6, 2.4, 0.0034, 0.12, 0.3)
+	g.position = Vector3(0, 0.9, 2.9)
+	root.add_child(g)
+	var ex := Fx.exhaust(Color(1.0, 0.5, 0.15), 24, 0.3, 0.8)
+	ex.position = Vector3(0, 0.9, 2.9)
+	root.add_child(ex)
+	return root
+
+
 ## Molniya: a small plywood fixed-wing drone with a pusher prop.
 static func molniya() -> Node3D:
 	var root := Node3D.new()
@@ -548,10 +597,42 @@ static func kinzhal() -> Node3D:
 	return root
 
 
+## Zircon: a slim hypersonic missile behind a needle nose, wrapped in blue-white plasma.
+static func zircon() -> Node3D:
+	var root := Node3D.new()
+	var mat := Fx.solid(Color(0.72, 0.74, 0.76), 0.35, 0.5)
+	cyl(root, 0.34, 0.34, 6.4, Vector3.ZERO, mat, Vector3(90, 0, 0), 12)
+	cyl(root, 0.0, 0.34, 3.0, Vector3(0, 0, -4.7), mat, Vector3(-90, 0, 0), 12)
+	box(root, Vector3(0.5, 0.2, 2.0), Vector3(0, -0.4, 0.6), mat)
+	for i in 4:
+		var a := TAU * float(i) / 4.0 + PI * 0.25
+		box(root, Vector3(0.05, 0.8, 0.9), Vector3(cos(a) * 0.5, sin(a) * 0.5, 2.7), mat, Vector3(0, 0, rad_to_deg(a) + 90.0))
+	var g := Fx.glare(Color(0.7, 0.85, 1.0), 4.6, 7.0, 0.009, 0.5, 0.25)
+	g.position = Vector3(0, 0, -4.0)
+	root.add_child(g)
+	var ex := Fx.exhaust(Color(0.75, 0.85, 1.0), 60, 0.8, 2.4)
+	ex.position = Vector3(0, 0, 3.4)
+	root.add_child(ex)
+	return root
+
+
 ## S-300 fired at the ground: a long white SAM with its booster flame.
 static func s300_missile() -> Node3D:
 	var root := ballistic()
 	root.scale = Vector3(0.7, 0.7, 0.85)
+	return root
+
+
+## The 48N6 of an S-400 and the heavy S-500 round fired at the ground.
+static func s400_missile() -> Node3D:
+	var root := ballistic()
+	root.scale = Vector3(0.72, 0.72, 0.95)
+	return root
+
+
+static func s500_missile() -> Node3D:
+	var root := ballistic()
+	root.scale = Vector3(0.95, 0.95, 1.25)
 	return root
 
 
@@ -591,6 +672,10 @@ static func enemy_model(type: String) -> Node3D:
 			return gerbera()
 		"geran3":
 			return geran3()
+		"geran4":
+			return geran4()
+		"geran5":
+			return geran5()
 		"molniya":
 			return molniya()
 		"kalibr":
@@ -609,6 +694,12 @@ static func enemy_model(type: String) -> Node3D:
 			return kh22()
 		"oreshnik":
 			return oreshnik()
+		"zircon":
+			return zircon()
+		"s400":
+			return s400_missile()
+		"s500":
+			return s500_missile()
 	return shahed()
 
 
@@ -883,28 +974,42 @@ static func buk() -> Node3D:
 	return root
 
 
-## S-300PS TEL: 8x8 tractor with four vertical launch tubes raised over the tail.
-static func s300() -> Node3D:
+## S-300PS TEL: 8x8 tractor with four vertical launch tubes raised over the tail. The same
+## family, by `model`: 1 = an S-400 launcher (sand and green, longer tubes), 2 = an S-500 (a
+## longer 10x10 chassis carrying two fat canisters).
+static func s300(model := 0) -> Node3D:
 	var root := Node3D.new()
-	var green := Fx.paint(Color(0.2, 0.26, 0.2), 0.85, 0.15, 0.6)
-	var tube := Fx.paint(Color(0.42, 0.44, 0.4), 0.7, 0.2, 0.0)
+	var body: Color = [Color(0.2, 0.26, 0.2), Color(0.36, 0.36, 0.25), Color(0.16, 0.2, 0.19)][model]
+	var green := Fx.paint(body, 0.85, 0.15, 0.6)
+	var tube := Fx.paint(Color(0.42, 0.44, 0.4) if model < 2 else Color(0.3, 0.33, 0.31), 0.7, 0.2, 0.0)
 	var dark := Fx.solid(Color(0.11, 0.11, 0.12), 0.6)
 	var glass := Fx.solid(Color(0.1, 0.18, 0.22), 0.15, 0.4)
-	box(root, Vector3(3.6, 1.0, 11.0), Vector3(0, 1.45, 0), green)
+	var cap := Fx.solid(Color(0.6, 0.25, 0.15), 0.8)
+	# how much longer than the S-300 the chassis and the tubes are
+	var more: float = [0.0, 0.8, 2.2][model]
+	box(root, Vector3(3.6, 1.0, 11.0 + more), Vector3(0, 1.45, more * 0.5), green)
 	box(root, Vector3(3.4, 1.8, 2.8), Vector3(0, 2.8, -4.2), green)
 	box(root, Vector3(3.2, 0.9, 0.12), Vector3(0, 3.1, -5.58), glass, Vector3(-14, 0, 0))
-	_wheels(root, 1.8, [-3.6, -2.2, 3.0, 4.4], 0.85)
-	box(root, Vector3(3.2, 0.5, 4.4), Vector3(0, 2.0, 2.6), dark)
-	var rig := _weapon_rig(root, Vector3(0, 2.2, 4.3), 0.3)
+	_wheels(root, 1.8, [-3.6, -2.2, 3.0, 4.4] if model < 2 else [-3.6, -2.2, 2.0, 3.4, 4.8], 0.85)
+	box(root, Vector3(3.2, 0.5, 4.4 + more), Vector3(0, 2.0, 2.6 + more * 0.5), dark)
+	var rig := _weapon_rig(root, Vector3(0, 2.2, 4.3 + more), 0.3)
 	var turret: Node3D = rig[0]
 	var pitch: Node3D = rig[1]
 	box(turret, Vector3(3.2, 0.6, 1.2), Vector3(0, -0.2, 0), dark)
-	for sx in [-0.95, 0.95]:
-		for sz in [-0.95, 0.95]:
-			cyl(pitch, 0.42, 0.42, 7.4, Vector3(sx, 0.2, sz - 3.2), tube, Vector3(90, 0, 0), 12)
-			cyl(pitch, 0.44, 0.3, 0.5, Vector3(sx, 0.2, sz - 6.9), Fx.solid(Color(0.6, 0.25, 0.15), 0.8), Vector3(90, 0, 0), 12)
+	var length := 7.4 + more
+	if model == 2:
+		for sx in [-0.85, 0.85]:
+			cyl(pitch, 0.74, 0.74, length, Vector3(sx, 0.55, 0.5 - length * 0.5), tube, Vector3(90, 0, 0), 14)
+			for k in 4:
+				cyl(pitch, 0.79, 0.79, 0.16, Vector3(sx, 0.55, -0.6 - k * (length - 1.6) / 3.0), dark, Vector3(90, 0, 0), 14)
+			cyl(pitch, 0.76, 0.5, 0.6, Vector3(sx, 0.55, 0.2 - length), cap, Vector3(90, 0, 0), 14)
+	else:
+		for sx in [-0.95, 0.95]:
+			for sz in [-0.95, 0.95]:
+				cyl(pitch, 0.42, 0.42, length, Vector3(sx, 0.2, sz + 0.5 - length * 0.5), tube, Vector3(90, 0, 0), 12)
+				cyl(pitch, 0.44, 0.3, 0.5, Vector3(sx, 0.2, sz + 0.5 - length), cap, Vector3(90, 0, 0), 12)
 	box(pitch, Vector3(2.6, 0.3, 1.0), Vector3(0, 0.2, 0.6), dark)
-	root.set_meta("muzzle", node(pitch, Vector3(0, 0.2, -7.2)))
+	root.set_meta("muzzle", node(pitch, Vector3(0, 0.2, 0.2 - length)))
 	root.set_meta("idle_pitch", 1.2)
 	return root
 

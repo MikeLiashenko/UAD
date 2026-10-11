@@ -39,6 +39,27 @@ const LOCATIONS := {
 	},
 }
 
+# --- Tempo ---------------------------------------------------------------------
+## Time compression of everything that flies. The tables below are life-size — metres, real
+## ranges and ceilings, real speeds in m/s — and a night flown at those speeds over a 30 km city
+## is a long wait for a Shahed that takes minutes to arrive. So the clock of the air picture runs
+## TEMPO times faster: threats, interceptors, tracers, the drones and the F-16 all cover the
+## ground TEMPO times as fast and turn TEMPO times as quick, so every geometry stays what it is
+## in life (who catches whom, the lead in the sight, where an intercept happens) — only the wait
+## is shorter. Instruments show the real speed (see real_kmh).
+const TEMPO := 3.0
+
+
+## Muzzle or flight speed of a weapon's shot as it moves in the game, m/s.
+func shot_speed(wid: String) -> float:
+	return float(WEAPONS[wid].speed) * TEMPO
+
+
+## A speed of the game world as the real number for an instrument, km/h.
+func real_kmh(v: float) -> float:
+	return v / TEMPO * 3.6
+
+
 # --- Air-defense systems ------------------------------------------------------
 # eff = damage multiplier against each target type (0 = cannot engage).
 # "fcs" = fire-control computer: shows a lead indicator in the gunner sight.
@@ -97,19 +118,20 @@ const WEAPONS := {
 		"eff": {"scout": 1.0, "shahed": 1.0, "cruise": 0.9, "ballistic": 0.15},
 		"desc": "Советский комплекс малой дальности с собственным радаром: до 10 км. Дешёвые ракеты, но по баллистике почти бесполезен.",
 	},
+	# by reach the NASAMS comes before the IRIS-T, and costs less
+	"nasams": {
+		"name": "NASAMS (AMRAAM)", "short": "NASAMS", "kind": "missile", "class": "medium", "group": "missile", "unlock": 23000, "fcs": true,
+		"range": 25000.0, "range_bm": 12000.0, "ceil": 15000.0, "rate": 1.2, "damage": 220.0, "speed": 900.0, "turn": 3.0, "eye": 4.4,
+		"missile_price": 1800, "start_ammo": 6,
+		"eff": {"scout": 1.0, "shahed": 1.0, "cruise": 1.0, "ballistic": 0.25},
+		"desc": "Батарея пусковых контейнеров с ракетами AMRAAM: до 25 км. Большая зона и надёжность по крылатым ракетам.",
+	},
 	"iris": {
-		"name": "IRIS-T SLM", "short": "IRIS-T", "kind": "missile", "class": "medium", "group": "missile", "unlock": 22000, "fcs": true,
-		"range": 40000.0, "range_bm": 15000.0, "ceil": 20000.0, "rate": 1.1, "damage": 220.0, "speed": 1000.0, "turn": 3.2, "eye": 5.5,
-		"missile_price": 1800, "start_ammo": 8,
+		"name": "IRIS-T SLM", "short": "IRIS-T", "kind": "missile", "class": "medium", "group": "missile", "unlock": 28000, "fcs": true,
+		"range": 40000.0, "range_bm": 15000.0, "ceil": 20000.0, "rate": 1.1, "damage": 250.0, "speed": 1000.0, "turn": 3.2, "eye": 5.5,
+		"missile_price": 2200, "start_ammo": 8,
 		"eff": {"scout": 1.0, "shahed": 1.0, "cruise": 1.0, "ballistic": 0.35},
 		"desc": "ЗРК средней дальности: до 40 км по любым аэродинамическим целям, по баллистике — две-три ракеты вблизи.",
-	},
-	"nasams": {
-		"name": "NASAMS (AMRAAM)", "short": "NASAMS", "kind": "missile", "class": "medium", "group": "missile", "unlock": 27000, "fcs": true,
-		"range": 25000.0, "range_bm": 12000.0, "ceil": 15000.0, "rate": 1.2, "damage": 240.0, "speed": 900.0, "turn": 3.0, "eye": 4.4,
-		"missile_price": 2000, "start_ammo": 6,
-		"eff": {"scout": 1.0, "shahed": 1.0, "cruise": 1.0, "ballistic": 0.3},
-		"desc": "Батарея пусковых контейнеров с ракетами AMRAAM: до 25 км. Большая зона и надёжность по крылатым ракетам.",
 	},
 	"buk": {
 		"name": "«Бук-М1» (ЗРК)", "short": "БУК", "kind": "missile", "class": "long", "group": "missile", "unlock": 34000, "fcs": true,
@@ -131,6 +153,20 @@ const WEAPONS := {
 		"missile_price": 6000, "start_ammo": 6,
 		"eff": {"scout": 1.0, "shahed": 1.0, "cruise": 1.0, "ballistic": 1.0},
 		"desc": "Самое надёжное средство против баллистики: одна ракета — одна цель, до 35 км (по аэродинамическим целям до 60 км).",
+	},
+	"s400": {
+		"name": "С-400 «Триумф»", "short": "С-400", "kind": "missile", "class": "long", "group": "patriot", "unlock": 80000, "fcs": true,
+		"range": 250000.0, "range_bm": 60000.0, "ceil": 30000.0, "rate": 1.5, "damage": 420.0, "speed": 2000.0, "turn": 4.2, "eye": 6.4,
+		"missile_price": 7500, "start_ammo": 4,
+		"eff": {"scout": 1.0, "shahed": 1.0, "cruise": 1.0, "ballistic": 0.9},
+		"desc": "Трофейный дивизион: до 250 км по самолётам и ракетам, до 60 км по баллистике. «Кинжал» и «Циркон» встречает ещё на подлёте, но двумя ракетами. Низколетящие цели видит только из-за радиогоризонта.",
+	},
+	"s500": {
+		"name": "С-500 «Прометей»", "short": "С-500", "kind": "missile", "class": "long", "group": "patriot", "unlock": 130000, "fcs": true,
+		"range": 500000.0, "range_bm": 200000.0, "ceil": 200000.0, "rate": 1.8, "damage": 520.0, "speed": 3600.0, "turn": 4.5, "eye": 6.6,
+		"missile_price": 12000, "start_ammo": 4,
+		"eff": {"scout": 1.0, "shahed": 1.0, "cruise": 1.0, "ballistic": 1.0},
+		"desc": "Трофейный комплекс стратегической ПРО: до 500 км, потолок — ближний космос. Одной ракетой берёт любую баллистику и гиперзвук, и только он достаёт боевые блоки «Орешника». Ракеты очень дороги.",
 	},
 	# --- the F-16's own weapons (scripts/game/fighter.gd): not systems of the battery, so they are
 	# in neither WEAPON_ORDER nor AMMO_ORDER; the missiles are bought in the shop's aviation section
@@ -158,15 +194,15 @@ const WEAPONS := {
 ## An F-16 flight for interceptor sorties over the city (scripts/game/fighter.gd).
 const F16_PRICE := 40000
 ## Panel and shop order: barrels, then short range, then medium, then long.
-const WEAPON_ORDER := ["mg", "zu23", "gepard", "shilka", "igla", "avenger", "drone", "osa", "iris", "nasams", "buk", "s300", "patriot"]
+const WEAPON_ORDER := ["mg", "zu23", "gepard", "shilka", "igla", "avenger", "drone", "osa", "nasams", "iris", "buk", "s300", "patriot", "s400", "s500"]
 ## Systems whose shots are bought as ammunition.
-const AMMO_ORDER := ["igla", "avenger", "drone", "osa", "iris", "nasams", "buk", "s300", "patriot"]
+const AMMO_ORDER := ["igla", "avenger", "drone", "osa", "nasams", "iris", "buk", "s300", "patriot", "s400", "s500"]
 ## Control groups: how the battery panel and the shop are split up.
 const WEAPON_GROUPS := [
 	["manual", "РУЧНОЕ"],
 	["auto", "МАШИННОЕ"],
 	["missile", "РАКЕТНОЕ"],
-	["patriot", "PATRIOT"],
+	["patriot", "ПРО"],
 ]
 ## Shop sections, in order.
 const WEAPON_CLASSES := [
@@ -177,12 +213,16 @@ const WEAPON_CLASSES := [
 ]
 
 # --- Threats -----------------------------------------------------------------
-# Everything is in real units: speed in m/s, alt_min / alt_max = the flight altitude band in metres.
+# Everything is in real units: speed in m/s (flown TEMPO times faster, like everything in the air),
+# alt_min / alt_max = the flight altitude band in metres.
 # "kind" is the flight model and the column of the weapons' "eff" table (scout / shahed / cruise /
 # ballistic); the rest are the real weapons each city is attacked with (CityDef.raid):
-#   flight = [min, max] seconds of the last, visible leg of a ballistic arc; launch_dist /
-#   launch_alt = where the radar picks it up (metres from the target and above the ground),
+#   flight = [min, max] real seconds of the last, visible leg of a ballistic arc; launch_dist /
+#   launch_alt = where the radar picks it up (metres from the target and above the ground; a
+#   cruise missile without one shows up CRUISE_PICKUP out),
 #   glide = a glide bomb falling straight at its target, decoy = no warhead,
+#   swarm = how many come in a wave (× the usual: decoys in crowds, the jets in pairs),
+#   own_alt = keeps to its own altitude band instead of the Shahed layers,
 #   crush = how much of a house the warhead takes down (× the kind's), mirv = splits on impact,
 #   eff_mult = per weapon (or "*") multiplier of the weapons' efficiency against it.
 const ENEMIES := {
@@ -213,21 +253,40 @@ const ENEMIES := {
 	},
 	# --- drones -------------------------------------------------------------------
 	"gerbera": {
-		"kind": "shahed", "decoy": true,
+		"kind": "shahed", "decoy": true, "swarm": 1.5,
 		"name": "Ложная цель «Гербера»", "plural": "ЛОЖНЫЕ ЦЕЛИ «ГЕРБЕРА»", "abbr": "Л", "hp": 12.0, "speed": 44.0,
 		"alt_min": 300.0, "alt_max": 2500.0,
 		"reward": 400, "debris": 2, "debris_penalty": 150, "hit_damage": 0.2, "hit_cost": 300,
 		"radius": 3.5, "color": Color(0.85, 0.85, 0.6),
 	},
 	"geran3": {
-		"kind": "shahed",
+		"kind": "shahed", "swarm": 0.5,
 		"name": "Реактивный шахед «Герань-3»", "plural": "РЕАКТИВНЫЕ «ГЕРАНЬ-3»", "abbr": "Ш3", "hp": 32.0, "speed": 155.0,
 		"alt_min": 300.0, "alt_max": 2500.0,
 		"reward": 2600, "debris": 5, "debris_penalty": 600, "hit_damage": 3.0, "hit_cost": 3000,
 		"radius": 4.0, "color": Color(1.0, 0.6, 0.1),
 	},
+	"geran4": {
+		# a new airframe built for the jet: slower than the Geran-3 but far above the guns and the
+		# shoulder-launched missiles, and too fast for an interceptor drone to run down
+		"kind": "shahed", "swarm": 0.5, "own_alt": true,
+		"name": "Реактивный дрон «Герань-4»", "plural": "ВЫСОТНЫЕ «ГЕРАНЬ-4»", "abbr": "Ш4", "hp": 34.0, "speed": 110.0,
+		"alt_min": 2500.0, "alt_max": 5000.0,
+		"reward": 3200, "debris": 5, "debris_penalty": 600, "hit_damage": 3.2, "hit_cost": 3400,
+		"radius": 4.0, "color": Color(1.0, 0.7, 0.35),
+		"eff_mult": {"drone": 0.4},
+	},
+	"geran5": {
+		# not a flying wing any more: a six-metre fuselage with straight wings and a 90 kg warhead
+		"kind": "shahed", "swarm": 0.5, "own_alt": true, "crush": 1.4,
+		"name": "Дрон-ракета «Герань-5»", "plural": "ДРОНЫ-РАКЕТЫ «ГЕРАНЬ-5»", "abbr": "Ш5", "hp": 46.0, "speed": 150.0,
+		"alt_min": 200.0, "alt_max": 3000.0,
+		"reward": 4200, "debris": 6, "debris_penalty": 800, "hit_damage": 4.0, "hit_cost": 4800,
+		"radius": 4.5, "color": Color(1.0, 0.5, 0.05),
+		"eff_mult": {"mg": 0.6, "zu23": 0.7, "drone": 0.25},
+	},
 	"molniya": {
-		"kind": "shahed", "crush": 0.5,
+		"kind": "shahed", "crush": 0.5, "swarm": 1.5, "own_alt": true,
 		"name": "Дрон «Молния»", "plural": "ДРОНЫ «МОЛНИЯ»", "abbr": "М", "hp": 10.0, "speed": 30.0,
 		"alt_min": 80.0, "alt_max": 350.0,
 		"reward": 450, "debris": 2, "debris_penalty": 200, "hit_damage": 0.8, "hit_cost": 800,
@@ -242,7 +301,7 @@ const ENEMIES := {
 		"radius": 4.5, "color": Color(1.0, 0.5, 0.2),
 	},
 	"oniks": {
-		"kind": "cruise", "crush": 1.2,
+		"kind": "cruise", "crush": 1.2, "launch_dist": 45000.0,
 		"name": "Противокорабельная ракета «Оникс»", "plural": "ПКР «ОНИКС»", "abbr": "О", "hp": 55.0, "speed": 680.0,
 		"alt_min": 20.0, "alt_max": 60.0,
 		"reward": 8000, "debris": 7, "debris_penalty": 1100, "hit_damage": 4.5, "hit_cost": 7000,
@@ -250,7 +309,7 @@ const ENEMIES := {
 		"eff_mult": {"mg": 0.2, "zu23": 0.3, "gepard": 0.5, "shilka": 0.5, "igla": 0.4, "drone": 0.0},
 	},
 	"kh31p": {
-		"kind": "cruise",
+		"kind": "cruise", "launch_dist": 40000.0,
 		"name": "Противорадарная ракета Х-31П", "plural": "ПРОТИВОРАДАРНЫЕ Х-31П", "abbr": "31П", "hp": 40.0, "speed": 600.0,
 		"alt_min": 200.0, "alt_max": 1500.0,
 		"reward": 6000, "debris": 5, "debris_penalty": 800, "hit_damage": 3.0, "hit_cost": 5000,
@@ -279,7 +338,7 @@ const ENEMIES := {
 		"alt_min": 0.0, "alt_max": 0.0,
 		"reward": 16000, "debris": 8, "debris_penalty": 1500, "hit_damage": 7.0, "hit_cost": 13000,
 		"radius": 7.0, "color": Color(1.0, 0.1, 0.5),
-		"eff_mult": {"patriot": 1.0, "s300": 0.35, "*": 0.15},
+		"eff_mult": {"patriot": 1.0, "s500": 1.0, "s400": 0.6, "s300": 0.35, "*": 0.15},
 	},
 	"kh22": {
 		"kind": "ballistic", "flight": [48.0, 58.0], "launch_dist": 55000.0, "launch_alt": [21000.0, 24000.0], "crush": 1.3,
@@ -287,7 +346,7 @@ const ENEMIES := {
 		"alt_min": 0.0, "alt_max": 0.0,
 		"reward": 13000, "debris": 9, "debris_penalty": 1500, "hit_damage": 8.0, "hit_cost": 14000,
 		"radius": 7.5, "color": Color(1.0, 0.2, 0.1),
-		"eff_mult": {"patriot": 1.0, "*": 0.6},
+		"eff_mult": {"patriot": 1.0, "s500": 1.0, "s400": 1.0, "*": 0.6},
 	},
 	"oreshnik": {
 		"kind": "ballistic", "flight": [20.0, 24.0], "mirv": 6, "crush": 0.6,
@@ -295,9 +354,37 @@ const ENEMIES := {
 		"alt_min": 0.0, "alt_max": 0.0,
 		"reward": 0, "debris": 3, "debris_penalty": 500, "hit_damage": 1.5, "hit_cost": 4000,
 		"radius": 6.0, "color": Color(1.0, 0.9, 0.5),
-		"eff_mult": {"patriot": 0.12, "*": 0.0},
+		"eff_mult": {"patriot": 0.12, "s500": 0.5, "s400": 0.08, "*": 0.0},
+	},
+	"zircon": {
+		# a hypersonic cruise missile: Mach 7 in the stratosphere, then a shallow dive on the target
+		"kind": "ballistic", "flight": [34.0, 40.0], "launch_dist": 90000.0, "launch_alt": [28000.0, 34000.0],
+		"name": "Гиперзвуковая ракета «Циркон»", "plural": "ГИПЕРЗВУКОВЫЕ «ЦИРКОН» 3М22", "abbr": "ЦР", "hp": 95.0, "speed": 0.0,
+		"alt_min": 0.0, "alt_max": 0.0,
+		"reward": 18000, "debris": 8, "debris_penalty": 1500, "hit_damage": 7.5, "hit_cost": 14000,
+		"radius": 7.0, "color": Color(0.6, 0.8, 1.0),
+		"eff_mult": {"patriot": 0.85, "s500": 1.0, "s400": 0.55, "s300": 0.25, "*": 0.1},
+	},
+	"s400": {
+		# a 48N6 of the S-400 fired at the ground: further and faster than the old S-300 rounds
+		"kind": "ballistic", "flight": [32.0, 40.0], "launch_dist": 60000.0, "launch_alt": [22000.0, 28000.0],
+		"name": "Ракета С-400 по земле", "plural": "С-400 ПО НАЗЕМНЫМ ЦЕЛЯМ", "abbr": "С4", "hp": 70.0, "speed": 0.0,
+		"alt_min": 0.0, "alt_max": 0.0,
+		"reward": 9500, "debris": 7, "debris_penalty": 1200, "hit_damage": 5.0, "hit_cost": 9000,
+		"radius": 6.0, "color": Color(1.0, 0.4, 0.4),
+	},
+	"s500": {
+		# the heavy round of the S-500 lobbed at a city: it comes down from the edge of space
+		"kind": "ballistic", "flight": [36.0, 44.0], "launch_dist": 100000.0, "launch_alt": [55000.0, 70000.0], "crush": 1.2,
+		"name": "Ракета С-500 по земле", "plural": "С-500 ПО НАЗЕМНЫМ ЦЕЛЯМ", "abbr": "С5", "hp": 110.0, "speed": 0.0,
+		"alt_min": 0.0, "alt_max": 0.0,
+		"reward": 15000, "debris": 8, "debris_penalty": 1500, "hit_damage": 7.0, "hit_cost": 13000,
+		"radius": 7.0, "color": Color(1.0, 0.2, 0.35),
+		"eff_mult": {"patriot": 1.0, "s500": 1.0, "s400": 0.8, "s300": 0.4, "*": 0.2},
 	},
 }
+## Where the radars pick up a cruise missile that names no launch_dist, metres from its target.
+const CRUISE_PICKUP := 30000.0
 
 
 ## Efficiency of a weapon against a threat: the weapon's column for the flight model, times the

@@ -57,13 +57,13 @@ func time_left() -> float:
 func start_day() -> void:
 	phase = Phase.DAY
 	phase_time = 0.0
-	phase_len = 70.0 if GS.day == 1 else 95.0
+	phase_len = 55.0 if GS.day == 1 else 75.0
 	SFX.play_music("day")
 	schedule.clear()
 	# a destroyed recon post sends no scouts, a damaged one fewer
 	var scouts := int(round((1 + GS.day / 3) * Strikes.output(game.map.city, "scout")))
 	for i in scouts:
-		schedule.append({"t": 5.0 + i * 18.0, "type": "scout", "count": 1})
+		schedule.append({"t": 4.0 + i * 14.0, "type": "scout", "count": 1})
 	game.hud.alert(GS.t("ДЕНЬ %d — разведка противника в воздухе") % GS.day, Color(0.5, 0.9, 1.0))
 	game.hud.log_event(GS.t("Утро дня %d. Ищите и сбивайте разведчиков!") % GS.day, Color(0.5, 0.9, 1.0))
 
@@ -139,8 +139,9 @@ func start_night() -> void:
 	var d := GS.day
 	var m := GS.enemy_mult()
 	var final := d == GS.CAMPAIGN_NIGHTS and not GS.won
-	# the raids take longer over a life-size city: a Shahed needs minutes to cross a district
-	phase_len = minf(140.0 + 16.0 * d, 300.0) + (60.0 if final else 0.0)
+	# the waves follow each other closely: with the air picture running GS.TEMPO times faster than
+	# life a Shahed is on its target within a minute of the radars picking it up
+	phase_len = minf(95.0 + 11.0 * d, 210.0) + (45.0 if final else 0.0)
 	night_start_stats = GS.stats.duplicate()
 	schedule.clear()
 	_strike_results()
@@ -157,14 +158,11 @@ func start_night() -> void:
 		if w == "":
 			continue # every drone launch pad of the city is out
 		# decoys and the little Molniyas come in swarms, the jet Gerans in pairs
-		if GS.ENEMIES[w].get("decoy", false) or w == "molniya":
-			c = int(c * 1.5)
-		elif w == "geran3":
-			c = maxi(2, c / 2)
-		c = _left(w, c)
+		var wd: Dictionary = GS.ENEMIES[w]
+		c = _left(w, maxi(2, int(c * float(wd.get("swarm", 1.0)))))
 		if c <= 0:
 			continue
-		schedule.append({"t": 5.0 + span * float(i) / waves + _rng.randf_range(0.0, 6.0), "type": w, "count": c, "alt": _layer("shahed") if w != "molniya" else -1.0})
+		schedule.append({"t": 5.0 + span * float(i) / waves + _rng.randf_range(0.0, 6.0), "type": w, "count": c, "alt": -1.0 if wd.get("own_alt", false) else _layer("shahed")})
 	var cruise_from := int(city.raid_start.get("cruise", 3))
 	var ball_from := int(city.raid_start.get("ballistic", 5))
 	if d >= cruise_from:
@@ -273,6 +271,7 @@ func _process(delta: float) -> void:
 
 func _morning() -> void:
 	phase = Phase.MORNING
+	var night_s := int(phase_time)
 	phase_time = 0.0
 	SFX.stop_siren()
 	SFX.play_music("day")
@@ -282,6 +281,7 @@ func _morning() -> void:
 		game.hud.log_event(GS.t("Противник восстановил: %s") % GS.t(String(name)), Color(1.0, 0.7, 0.4))
 	var report := {
 		"day": GS.day,
+		"night_s": night_s,
 		"kills": int(s.kills) - int(ns.get("kills", 0)),
 		"roofs": int(s.roofs) - int(ns.get("roofs", 0)),
 		"impacts": int(s.impacts) - int(ns.get("impacts", 0)),

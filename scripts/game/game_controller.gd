@@ -435,7 +435,7 @@ func spawn_drone(pos: Vector3, dir: Vector3, tgt) -> void:
 	d.game = self
 	d.target = tgt
 	d.serial = _drone_seq
-	d.speed = 30.0
+	d.speed = 30.0 * GS.TEMPO
 	d.vel = (dir.normalized() + Vector3.UP * 0.35).normalized() * d.speed
 	d.position = pos
 	fx_root.add_child(d)
@@ -692,7 +692,8 @@ func record_clip(e) -> void:
 	night_clips.append({
 		"t": int(director.phase_time),
 		"p": [e.position.x, e.position.y, e.position.z],
-		"v": [e.vel.x, e.vel.y, e.vel.z],
+		# at its real speed: the replay is a phone video, shot and cut at the pace of life
+		"v": [e.vel.x / GS.TEMPO, e.vel.y / GS.TEMPO, e.vel.z / GS.TEMPO],
 		"type": String(e.type),
 		"variant": String(e.variant),
 		"by": String(e.last_hit_by),
@@ -833,8 +834,9 @@ func launch(type: String, count: int, at_base: bool, alt := -1.0, aim := "") -> 
 	var glide: bool = def.get("glide", false)
 	var corridor := not at_base and not glide and ((kind == "shahed" and _rng.randf() < 0.8) or (kind == "cruise" and _rng.randf() < 0.6))
 	var via_center := GS.base_pos + Vector3(_rng.randf_range(-1, 1), 0, _rng.randf_range(-1, 1)).normalized() * _rng.randf_range(150.0, 700.0)
-	# where the radars pick the raid up: drones a few minutes out from their target, missiles further
-	var out := clampf(float(def.speed) * 150.0, 6000.0, 14000.0) if kind == "shahed" else 24000.0
+	# where the radars pick the raid up: drones just under a minute out from their target, the
+	# missiles at their launch_dist (the fast ones come into view from further away)
+	var out := clampf(float(def.speed) * GS.TEMPO * 55.0, 6000.0, 20000.0) if kind == "shahed" else float(def.get("launch_dist", GS.CRUISE_PICKUP))
 	for i in count:
 		var start: Vector3
 		var ealt := alt * _rng.randf_range(0.85, 1.15) if alt > 0.0 else -1.0
@@ -1545,7 +1547,7 @@ func _kill_fx(e, airburst: bool, warhead: bool, reward: int, killer: String, cos
 		d.cosmetic = cosmetic
 		d.position = e.position + Vector3(_rng.randf_range(-2, 2), _rng.randf_range(-1, 1), _rng.randf_range(-2, 2))
 		var spread := 22.0 if airburst else 12.0
-		d.vel = e.vel * Debris.INERTIA + Vector3(_rng.randf_range(-spread, spread), _rng.randf_range(-4, 10), _rng.randf_range(-spread, spread))
+		d.vel = Debris.start_vel(e.vel) + Vector3(_rng.randf_range(-spread, spread), _rng.randf_range(-4, 10), _rng.randf_range(-spread, spread))
 		fx_root.add_child(d)
 	if not airburst and e.model != null:
 		# the airframe itself falls, burning and tumbling
@@ -1561,7 +1563,7 @@ func _kill_fx(e, airburst: bool, warhead: bool, reward: int, killer: String, cos
 		w.warhead = warhead
 		w.position = e.position
 		w.rotation = e.rotation
-		w.vel = e.vel * Debris.INERTIA + Vector3(0, 3, 0)
+		w.vel = Debris.start_vel(e.vel) + Vector3(0, 3, 0)
 		fx_root.add_child(w)
 
 

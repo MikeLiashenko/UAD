@@ -53,9 +53,12 @@ var _model: Node3D
 
 func _ready() -> void:
 	def = GS.WEAPONS[weapon_id]
-	max_speed = float(def.speed)
-	turn = float(def.turn)
-	battery = float(def.get("battery", 420.0))
+	# the air picture runs GS.TEMPO times faster than life: the drone covers the same ground on a
+	# charge, only sooner
+	max_speed = GS.shot_speed(weapon_id)
+	turn = float(def.turn) * GS.TEMPO
+	battery = float(def.get("battery", 420.0)) / GS.TEMPO
+	_climb /= GS.TEMPO
 	_model = Meshes.fpv_drone()
 	_model.scale = Vector3.ONE * 2.2
 	add_child(_model)
@@ -72,7 +75,7 @@ func cam_mount() -> Node3D:
 
 ## Battery left, 0..1 — the FPV console's fuel gauge.
 func charge() -> float:
-	return clampf(battery / maxf(float(def.get("battery", 420.0)), 1.0), 0.0, 1.0)
+	return clampf(battery * GS.TEMPO / maxf(float(def.get("battery", 420.0)), 1.0), 0.0, 1.0)
 
 
 func state_text() -> String:
@@ -226,7 +229,7 @@ func _process(delta: float) -> void:
 				_loiter -= delta
 				if retarget():
 					pass
-				elif _loiter <= 0.0 or battery < RTB_BATTERY:
+				elif _loiter <= 0.0 or battery < RTB_BATTERY / GS.TEMPO:
 					state = "rtb"
 				else:
 					var c := _loiter_at + Vector3(0, LOITER_ALT - _loiter_at.y, 0)
@@ -243,7 +246,7 @@ func _process(delta: float) -> void:
 				if d_home < 30.0:
 					_recover()
 					return
-		if state != "rtb" and battery < RTB_BATTERY and not _target_ok():
+		if state != "rtb" and battery < RTB_BATTERY / GS.TEMPO and not _target_ok():
 			state = "rtb"
 	if _climb > 0.0:
 		# climb-out: everything the rack sends up first gets some air under it
@@ -252,7 +255,7 @@ func _process(delta: float) -> void:
 	var ang := dir.angle_to(want)
 	if ang > 0.0001:
 		dir = dir.slerp(want, clampf(turn * delta / ang, 0.0, 1.0)).normalized()
-	speed = move_toward(speed, want_speed, ACCEL * delta)
+	speed = move_toward(speed, want_speed, ACCEL * GS.TEMPO * GS.TEMPO * delta)
 	vel = dir * speed
 	var p0 := position
 	position += vel * delta
