@@ -38,7 +38,8 @@ func aim_dir() -> Vector3:
 
 func enter() -> void:
 	active = true
-	yaw = game.rig.yaw
+	# MaxRealism: the seat is taken facing the way the player was looking on foot
+	yaw = game.walker.yaw if game.rl != null else game.rig.yaw
 	pitch = 0.35
 	zoom_fov = 70.0
 	fov = 70.0
@@ -99,6 +100,16 @@ func _process(delta: float) -> void:
 	var w = weapon()
 	if w == null:
 		return
+	# MaxRealism, a system with its own radar: the mouse turns the handwheels of the scope and the
+	# cabin window follows the azimuth cursor (or the tracked target)
+	var scope: bool = game.rl != null and game.rl.scope_on()
+	if scope:
+		var look: Vector3 = game.rl.scope_look()
+		var k := 1.0 - exp(-delta * 5.0)
+		yaw = lerp_angle(yaw, atan2(-look.x, -look.z), k)
+		pitch = lerpf(pitch, clampf(asin(clampf(look.y, -1.0, 1.0)), 0.05, 1.45), k)
+		zoom_fov = 70.0
+		nv = false
 	var dir := aim_dir()
 	var flat := Vector3(dir.x, 0, dir.z).normalized()
 	var eye: Vector3 = w.eye_pos() - flat * 3.5
@@ -110,7 +121,7 @@ func _process(delta: float) -> void:
 		so = Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)) * _shake * 0.6
 	cam.global_position = eye + so
 	cam.look_at(eye + dir * 100.0 + so * 3.0, Vector3.UP)
-	candidate = _find_candidate(dir)
+	candidate = game.rl.track if scope else _find_candidate(dir)
 	var conv := 1500.0
 	if candidate != null:
 		conv = cam.global_position.distance_to(candidate.position)
@@ -118,7 +129,10 @@ func _process(delta: float) -> void:
 	w.manual_dir = dir
 	w.manual_point = eye + dir * conv
 	w.trigger = trigger and String(w.def.kind) == "gun"
-	if String(w.def.kind) != "gun":
+	if scope:
+		lock = null
+		lock_ready = false
+	elif String(w.def.kind) != "gun":
 		if candidate != null and w.can_engage(candidate) and w.in_range(candidate):
 			if candidate != lock:
 				lock = candidate
@@ -128,6 +142,13 @@ func _process(delta: float) -> void:
 			if not lock_ready and lock_t >= LOCK_TIME:
 				lock_ready = true
 				SFX.play("click", -2.0, 1.8)
+			if game.rl != null:
+				# the seeker's tone is all the gunner gets: slow and low while it looks for the heat,
+				# quick and high once it holds the target
+				if lock_ready:
+					SFX.play("seeker", -7.0, 1.7, 0.13)
+				else:
+					SFX.play("seeker", -11.0, 0.8, 0.32)
 		else:
 			lock = null
 			lock_ready = false
@@ -154,13 +175,19 @@ func launch() -> void:
 	var w = weapon()
 	if w == null or String(w.def.kind) == "gun":
 		return
+	if game.rl != null and int(GS.ammo.get(w.id, 0)) <= 0:
+		game.rl.say_note(GS.t("РАКЕТ НЕТ"))
+		SFX.play("click", -6.0, 0.6)
+		return
 	if lock != null and lock_ready and is_instance_valid(lock) and not lock.dead:
-		if w.launch_at(lock):
+		if w.launch_at(lock, game.rl == null):
 			shake(0.5 if String(w.def.kind) == "missile" else 0.2)
 			lock_ready = false
 			lock_t = 0.0
 			if String(w.def.kind) == "drone":
 				game.hud.log_event(GS.t("Дрон пошёл на цель — [C] взять управление"), Color(0.5, 1.0, 0.8))
+	elif game.rl != null:
+		SFX.play("click", -6.0, 0.6) # no tone, no launch: the seeker has nothing
 	elif lock != null:
 		game.hud.alert(GS.t("ЗАХВАТ ЦЕЛИ… удерживайте прицел"), Color(1.0, 0.8, 0.3))
 	else:
@@ -170,6 +197,10 @@ func launch() -> void:
 func set_trigger(on: bool) -> void:
 	var w = weapon()
 	if w == null:
+		return
+	if game.rl != null and game.rl.scope_on():
+		if on:
+			game.rl.fire() # the fire button of a touch screen at the operator's console
 		return
 	if String(w.def.kind) == "gun":
 		trigger = on
@@ -182,6 +213,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event is InputEventMouse and (event as InputEventMouse).device == InputEvent.DEVICE_ID_EMULATION:
 		return # touch handled below; on-screen FIRE button fires
+	if game.rl != null and game.rl.console_input(event):
+		return # the operator's console took it: handwheels, lock, launch
 	var sens: float = float(GS.settings.sens) * fov / 70.0
 	var inv := -1.0 if bool(GS.settings.invert_y) else 1.0
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:

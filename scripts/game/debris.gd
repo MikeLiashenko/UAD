@@ -71,13 +71,19 @@ func _ready() -> void:
 		mesh = Fx.cube(Vector3(randf_range(0.8, 2.2), randf_range(0.5, 1.4), randf_range(0.8, 2.4)))
 		material_override = Fx.glow(Color(1.0, 0.42, 0.1), 3.5)
 		_spin = randf_range(3.0, 9.0)
-	# every piece draws its fall: a burning line that curves down to the ground. The airframe
-	# drags a column of fire and black smoke, a fragment a thin thread of sparks.
+	# the fall is drawn as a burning line that curves down to the ground: the airframe drags a
+	# column of fire and black smoke, a fragment a thin thread of sparks (one fragment in three:
+	# a dozen ribbons for every kill of a big raid is more than the eye needs)
+	if not wreck:
+		_burn = randf_range(1.2, 4.5)
+		_terminal = TERMINAL * randf_range(0.7, 1.15)
+		if randf() > 0.34:
+			return
 	var line := Trail.new()
 	_line = line
 	line.follow = self
 	line.back = 0.0
-	line.step = 12.0
+	line.step = 12.0 if wreck else 22.0
 	line.hot = Color(1.0, 0.5, 0.16, 0.95)
 	line.glow = Color(1.0, 0.52, 0.18)
 	if wreck:
@@ -90,8 +96,6 @@ func _ready() -> void:
 		line.smoke = Color(0.3, 0.28, 0.28, 0.55)
 		line.glow_energy = 2.6
 	else:
-		_burn = randf_range(1.2, 4.5)
-		_terminal = TERMINAL * randf_range(0.7, 1.15)
 		line.life = 2.4
 		line.hot_time = 0.5
 		line.glow_time = randf_range(0.3, 0.9)

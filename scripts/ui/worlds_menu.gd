@@ -234,6 +234,8 @@ func _row(w: Dictionary) -> Control:
 	var wname := String(w.get("name", GS.t("Мир")))
 	if bool(w.get("won", false)):
 		wname += "  ★"
+	if bool(w.get("realism", false)):
+		wname += "  · MaxRealism"
 	col.add_child(UiKit.label(wname, 21, UiKit.NEON if bool(w.get("won", false)) else Color(1, 1, 1)))
 	var diff := int(w.get("difficulty", 1))
 	var cid := String(w.get("city_id", "kyiv"))

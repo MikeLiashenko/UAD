@@ -23,6 +23,7 @@ const FireService = preload("res://scripts/game/fire_service.gd")
 const Reel = preload("res://scripts/game/reel.gd")
 const Hud = preload("res://scripts/ui/hud.gd")
 const RemotePlayers = preload("res://scripts/game/remote_players.gd")
+const Realism = preload("res://scripts/game/realism.gd")
 
 ## Every system gets its own spot around the base: guns close in, launchers further out,
 ## spread over a 320° arc so the western sector stays free for the fire station.
@@ -90,6 +91,11 @@ var overlay_open := false
 var mfg
 ## The F-16 flight for interceptor sorties [J].
 var fighter
+## MaxRealism (GS.realism): the session is played on foot (scripts/game/realism.gd); null otherwise.
+var rl
+## Where and facing what the next "walk" view puts the player (MaxRealism: beside the seat left).
+var walk_at := Vector3.INF
+var walk_yaw := NAN
 
 # Shared raid (see "Multiplayer" at the end). Host: numbers for the threats, kills and impacts
 # repeated in the snapshots, friends' damage counted so far and what they earned and paid, and who
@@ -174,6 +180,11 @@ func _ready() -> void:
 	hud = Hud.new()
 	hud.game = self
 	add_child(hud)
+	if GS.realism:
+		# before the director: its first calls already go out over the radio
+		rl = Realism.new()
+		rl.game = self
+		add_child(rl)
 	director = Director.new()
 	director.game = self
 	add_child(director)
@@ -202,6 +213,8 @@ func _ready() -> void:
 			net_apply_map.call_deferred(Net.map_state)
 		if not Net.raid.is_empty():
 			net_apply_raid.call_deferred(Net.raid)
+	if rl != null:
+		rl.begin()
 
 
 func _exit_tree() -> void:
@@ -221,6 +234,8 @@ func rebuild_hud() -> void:
 	hud.game = self
 	add_child(hud)
 	old.queue_free()
+	if rl != null:
+		rl.attach_hud()
 	hud._show_pause.call_deferred()
 
 
@@ -236,6 +251,10 @@ func set_view(v: String) -> void:
 		return
 	if v == "fpv" and (_fpv_drone == null or not is_instance_valid(_fpv_drone)):
 		return # the console needs a drone in the air: see enter_fpv()
+	if rl != null and not (v in ["walk", "base", "mfg", "post"]):
+		return # MaxRealism is fought from the ground
+	if rl == null and v == "post":
+		return # the command post console exists only there
 	var prev := view
 	# leave the previous view
 	if prev == "base":
@@ -288,6 +307,13 @@ func set_view(v: String) -> void:
 			hovered = null
 			locked = null
 			mfg.enter()
+		"post":
+			# MaxRealism: at the screen of the command post; the camera stays where the player stood
+			rig.set_process(false)
+			rig.set_process_unhandled_input(false)
+			range_ring.visible = false
+			hovered = null
+			locked = null
 		"walk":
 			rig.set_process(false)
 			rig.set_process_unhandled_input(false)
@@ -295,8 +321,12 @@ func set_view(v: String) -> void:
 			hovered = null
 			locked = null
 			var at: Vector3 = rig.target if prev == "top" else GS.base_pos + Vector3(0, 0, 44)
-			walker.enter(at, rig.yaw)
-			if auto_fire == 0:
+			if walk_at != Vector3.INF:
+				at = walk_at
+			walker.enter(at, rig.yaw if is_nan(walk_yaw) else walk_yaw)
+			walk_at = Vector3.INF
+			walk_yaw = NAN
+			if auto_fire == 0 and rl == null:
 				auto_fire = 1
 				hud.log_event(GS.t("Пока вы гуляете, ствольная ПВО и дроны работают автоматически"), Color(0.6, 1.0, 0.8))
 		_:
@@ -383,11 +413,13 @@ func refresh_capture() -> void:
 	walker.refresh_capture()
 	mfg.refresh_capture()
 	fighter.refresh_capture()
+	if rl != null:
+		rl.refresh_capture()
 
 
 ## Label3D markers are replaced by the sight / video overlay in the gunner and FPV views.
 func hide_markers() -> bool:
-	return view == "base" or view == "fpv" or _photo_busy
+	return rl != null or view == "base" or view == "fpv" or _photo_busy
 
 
 func zoom_view(f: float) -> void:
@@ -415,7 +447,7 @@ func shake(amount: float) -> void:
 ## Brief slow motion for spectacular kills in the gunner view.
 func slowmo() -> void:
 	# a shared raid runs on the host's clock: no bullet time in a multiplayer game
-	if _slowmo or not bool(GS.settings.slowmo) or view != "base" or Net.is_online():
+	if _slowmo or not bool(GS.settings.slowmo) or view != "base" or Net.is_online() or rl != null:
 		return
 	_slowmo = true
 	Engine.time_scale = _base_time_scale * 0.3
@@ -653,6 +685,8 @@ func spawn_missile(pos: Vector3, dir: Vector3, tgt, wid: String, carrier := Vect
 	m.position = pos
 	fx_root.add_child(m)
 	_net_note_launch(pos, tgt, wid)
+	if rl != null:
+		rl.missiles.append(m)
 	# launch: blast of smoke and a flash that lights the base
 	Fx.launch_flash(fx_root, pos, 1.0 if carrier == Vector3.ZERO else 0.5)
 	var puff := Node3D.new()
@@ -683,7 +717,8 @@ func spawn_missile(pos: Vector3, dir: Vector3, tgt, wid: String, carrier := Vect
 	var tw := puff.create_tween()
 	tw.tween_property(l, "light_energy", 0.0, 0.8)
 	tw.tween_callback(puff.queue_free).set_delay(5.5)
-	hud.log_event(GS.t("Пуск %s → %s") % [GS.t(String(GS.WEAPONS[wid].short)), GS.t(String(tgt.def.name))], Color(0.6, 0.9, 1.0))
+	if rl == null:
+		hud.log_event(GS.t("Пуск %s → %s") % [GS.t(String(GS.WEAPONS[wid].short)), GS.t(String(tgt.def.name))], Color(0.6, 0.9, 1.0))
 	if view == "base":
 		shake(0.4)
 
@@ -846,6 +881,7 @@ func launch(type: String, count: int, at_base: bool, alt := -1.0, aim := "") -> 
 	# where the radars pick the raid up: drones just under a minute out from their target, the
 	# missiles at their launch_dist (the fast ones come into view from further away)
 	var out := clampf(float(def.speed) * GS.TEMPO * 55.0, 6000.0, 20000.0) if kind == "shahed" else float(def.get("launch_dist", GS.CRUISE_PICKUP))
+	var first := Vector3.ZERO
 	for i in count:
 		var start: Vector3
 		var ealt := alt * _rng.randf_range(0.85, 1.15) if alt > 0.0 else -1.0
@@ -875,6 +911,8 @@ func launch(type: String, count: int, at_base: bool, alt := -1.0, aim := "") -> 
 		elif def.has("mirv"):
 			jitter = Vector3(_rng.randf_range(-400, 400), 0, _rng.randf_range(-400, 400))
 		e.setup(self, type, start, tgt_pos + jitter, tgt_name, ealt)
+		if i == 0:
+			first = start
 		e.strike_base = at_base
 		_net_seq += 1
 		e.net_id = _net_seq
@@ -885,6 +923,10 @@ func launch(type: String, count: int, at_base: bool, alt := -1.0, aim := "") -> 
 			e.via = via_center + Vector3(_rng.randf_range(-150, 150), 0, _rng.randf_range(-150, 150))
 		enemy_root.add_child(e)
 		enemies.append(e)
+	if rl != null:
+		# no "ALERT" banner here: an observation post calls the raid in — what, how many, where from
+		rl.raid_call(def, count, first, alt if kind != "ballistic" else 0.0)
+		return
 	if type == "scout":
 		hud.log_event(GS.t("Замечен разведчик «Орлан» — ищет вашу базу"), Color(0.4, 0.9, 1.0))
 		return
@@ -925,11 +967,24 @@ func enemy_destroyed(e) -> void:
 		"cruise":
 			airburst = _rng.randf() < 0.55
 			warhead = not airburst
+	if GS.training:
+		# a drill target bursts in the air: nothing of it comes down on the city
+		airburst = true
+		warhead = false
 	if Net.role == "host" and e.net_id >= 0:
 		var p: Vector3 = e.position
 		var v: Vector3 = e.vel
 		_net_event("k", e.net_id, [killer if killer != "" else Net.code(), _r(p.x), _r(p.y), _r(p.z), _r(v.x), _r(v.y), _r(v.z), 1 if airburst else 0, 1 if warhead else 0, reward])
 	_kill_fx(e, airburst, warhead, reward, killer, false)
+	if rl != null:
+		# no banner and no bullet time: the observers report the kill over the radio
+		rl.on_kill(e)
+		if rl.training != null:
+			rl.training.on_kill(e)
+		if view == "base":
+			shake(clampf(1.0 - cam.global_position.distance_to(e.position) / 4500.0, 0.04, 0.8))
+		_remove_enemy(e)
+		return
 	# gunner-view feedback
 	if killer != "":
 		_remove_enemy(e)
@@ -954,9 +1009,12 @@ func enemy_destroyed(e) -> void:
 func missile_missed(m, dist: float) -> void:
 	GS.stats.misses = int(GS.stats.get("misses", 0)) + 1
 	var short: String = GS.t(String(m.def.short))
+	if rl != null:
+		rl.radio(GS.t("Промах: ракета %s прошла мимо цели.") % short, Color(1.0, 0.7, 0.45))
+		return
 	Fx.float_text(fx_root, m.position, GS.t("ПРОМАХ"), Color(1.0, 0.55, 0.25))
 	hud.log_event(GS.t("Промах: ракета %s прошла в %d м от цели") % [short, int(dist)], Color(1.0, 0.55, 0.25))
-	if view == "base":
+	if view == "base" and rl == null:
 		hud.reticle.kill(GS.t("ПРОМАХ"), Color(1.0, 0.6, 0.3))
 
 
@@ -1008,6 +1066,12 @@ func collapse_fx(bi: int, lost: float) -> void:
 
 func enemy_impact(e) -> void:
 	var p: Vector3 = e.position
+	if GS.training:
+		# a drill target that got through: no warhead, it is simply taken off the range
+		Fx.ground_hit(fx_root, p)
+		play_3d("boom_small", p, -10.0)
+		_remove_enemy(e)
+		return
 	var friend_base: bool = e.strike_base and e.net_base_owner != ""
 	if Net.role == "host" and e.net_id >= 0:
 		var decoy: bool = e.def.get("decoy", false) and not e.strike_base
@@ -1087,6 +1151,8 @@ func enemy_left(e) -> void:
 
 
 func base_detected(_scout) -> void:
+	if GS.training:
+		return
 	GS.base_found = true
 	GS.state_changed.emit()
 	hud.alert(GS.t("⚠ РАЗВЕДЧИК ОБНАРУЖИЛ БАЗУ! Ночью ждите точный удар"), Color(1.0, 0.7, 0.2))
@@ -1099,7 +1165,8 @@ func on_enemy_crippled(_e) -> void:
 
 
 func on_manual_hit(_e) -> void:
-	hud.reticle.hit()
+	if rl == null:
+		hud.reticle.hit()
 
 
 func _remove_enemy(e) -> void:
@@ -1276,6 +1343,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if view == "watch" and GS.action_of(kc) != "view" and GS.action_of(kc) != "pause" and GS.action_of(kc) != "shop" and GS.action_of(kc) != "feed":
 		return # the battery is not ours to command while looking through a friend's eyes
+	if rl != null:
+		rl.key(kc) # MaxRealism: one key to take a seat or leave it, the rest is done on foot
+		return
 	# 1..9 pick a system straight from the battery, whichever tab it lives on
 	if kc >= KEY_1 and kc <= KEY_9:
 		if battery:
@@ -1371,7 +1441,7 @@ func _process(delta: float) -> void:
 		var vp := get_viewport()
 		hovered = pick_enemy(vp.get_mouse_position()) if not DisplayServer.is_touchscreen_available() else null
 	var focus_e = hovered if hovered != null else locked
-	if focus_e != null and is_instance_valid(focus_e) and not focus_e.dead:
+	if rl == null and focus_e != null and is_instance_valid(focus_e) and not focus_e.dead:
 		predict_info = predict_debris(focus_e)
 		predict_info["enemy"] = focus_e
 		predict_marker.visible = true
@@ -1510,7 +1580,7 @@ func check_game_over() -> void:
 		# Debt never ends the run mid-raid: the morning report writes part of it off first.
 		reason = GS.t("Финансирование прекращено: огромные долги за ремонт")
 	if reason != "":
-		if view != "top":
+		if view != "top" and rl == null:
 			set_view("top")
 		game_over = true
 		SFX.stop_siren()
@@ -1542,12 +1612,15 @@ func _kill_fx(e, airburst: bool, warhead: bool, reward: int, killer: String, cos
 	var note := GS.t("сбит") if not airburst else GS.t("подрыв БЧ в воздухе")
 	if killer == "" or killer == Net.code():
 		Fx.float_text(fx_root, e.position, "+" + GS.fmt_money(reward), Color(0.3, 1.0, 0.5))
-		hud.log_event(GS.t("Сбит: %s (%s)  +%s") % [what, note, GS.fmt_money(reward)], Color(0.35, 1.0, 0.55))
+		if rl == null:
+			hud.log_event(GS.t("Сбит: %s (%s)  +%s") % [what, note, GS.fmt_money(reward)], Color(0.35, 1.0, 0.55))
 	else:
 		var col := _color_of(killer)
 		Fx.float_text(fx_root, e.position, _nick_of(killer), col)
 		hud.log_event(GS.t("%s сбил: %s (%s)") % [_nick_of(killer), what, note], col)
 	var n: int = int(e.def.debris) + (4 if airburst else 0)
+	if GS.training:
+		n = 0 # a drill target leaves nothing to fall on the city
 	for i in n:
 		var d := Debris.new()
 		d.game = self

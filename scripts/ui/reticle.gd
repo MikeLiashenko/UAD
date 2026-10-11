@@ -36,7 +36,7 @@ func _process(delta: float) -> void:
 	_t += delta
 	_hit_t = maxf(0.0, _hit_t - delta)
 	_kill_t = maxf(0.0, _kill_t - delta)
-	visible = bv != null and bv.active
+	visible = bv != null and bv.active and not (game.rl != null and game.rl.scope_on())
 	if visible:
 		queue_redraw()
 
@@ -127,6 +127,9 @@ func _draw() -> void:
 	_txt(Vector2(c.x - 360, c.y + 5), "×%.1f" % (70.0 / bv.fov), 18, col)
 	# --- targets
 	var fcs: bool = bool(w.def.fcs)
+	if game.rl != null:
+		_draw_real(w, cam, c, kind, fcs)
+		return
 	for e in game.enemies:
 		if e.dead or cam.is_position_behind(e.position):
 			continue
@@ -188,3 +191,22 @@ func _draw() -> void:
 		for i in lines.size():
 			_txt(Vector2(c.x - 300, c.y - 90 + i * 34), lines[i], 30 if i == 0 else 22, kc, HORIZONTAL_ALIGNMENT_CENTER, 600)
 	_txt(Vector2(c.x - 400, 150), GS.t("ЛКМ — огонь/пуск · ПКМ/колесо — зум · %s — ночной прицел · %s — вид сверху · 1-9 или %s/%s — ПВО · %s — дрон · Alt — курсор") % [GS.key_label("night"), GS.key_label("view"), GS.key_label("weapon_prev"), GS.key_label("weapon_next"), GS.key_label("fpv")], 12, Color(col.r, col.g, col.b, 0.6), HORIZONTAL_ALIGNMENT_CENTER, 800)
+
+
+## MaxRealism: the sight shows what a real one shows. Nothing is drawn on the targets; a gun
+## with a radar and a computer (Gepard, Shilka) still gets its lead mark for the threat it
+## ranges, and the readout is the ammunition only.
+func _draw_real(w, cam: Camera3D, c: Vector2, kind: String, fcs: bool) -> void:
+	var col := NEON
+	var cand = bv.candidate
+	if kind == "gun" and fcs and cand != null and is_instance_valid(cand) and not cand.dead and w.in_range(cand):
+		var lp: Vector3 = Bullet.lead(w.muzzle.global_position, cand.position, cand.vel, GS.shot_speed(w.id))
+		if not cam.is_position_behind(lp):
+			var ls := cam.unproject_position(lp)
+			draw_arc(ls, 7.0, 0, TAU, 16, Color(1.0, 0.85, 0.3), 2.0)
+			draw_circle(ls, 1.5, Color(1.0, 0.85, 0.3))
+	var ammo := GS.t("лента") if kind == "gun" else "×%d" % int(GS.ammo.get(w.id, 0))
+	var state := ""
+	if kind != "gun" and w.cooldown > 0.0:
+		state = GS.t(" · ПЕРЕЗАРЯДКА")
+	_txt(Vector2(c.x - 250, c.y + 112.0), "%s  %s%s" % [GS.t(String(w.def.short)), ammo, state], 15, Color(col.r, col.g, col.b, 0.8), HORIZONTAL_ALIGNMENT_CENTER, 500)

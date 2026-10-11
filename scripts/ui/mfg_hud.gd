@@ -40,7 +40,10 @@ func _draw() -> void:
 	var cam: Camera3D = mg.cam
 	# --- the radio call, top centre
 	var tip = mg.tip
-	if tip != null and is_instance_valid(tip) and not tip.dead:
+	var real: bool = game.rl != null
+	if real:
+		pass # MaxRealism: the radio is the common net (scripts/ui/realism_hud.gd), nothing is marked
+	elif tip != null and is_instance_valid(tip) and not tip.dead:
 		var d: float = Vector2(tip.position.x - mg.pos.x, tip.position.z - mg.pos.z).length()
 		var line := GS.t("📻 РАДИО: %s · %.1f км · выс. %d м · пролёт через %d с") % [GS.t(String(tip.def.name)), d * 0.001, int(tip.position.y), int(mg.tip_eta)]
 		if mg.tip_eta < 1.0 and mg.pos.distance_to(mg.tip_point) > 40.0:
@@ -63,7 +66,7 @@ func _draw() -> void:
 			draw_line(c + q * 22.0, c + q * 40.0, col, 2.0)
 		draw_circle(c, 2.0, col)
 		for e in game.enemies:
-			if e.dead or cam.is_position_behind(e.position):
+			if real or e.dead or cam.is_position_behind(e.position):
 				continue
 			var dist: float = cam.global_position.distance_to(e.position)
 			if dist > 900.0:
@@ -85,11 +88,14 @@ func _draw() -> void:
 	var heat_col: Color = RED if mg.overheated else (AMBER if mg.heat > 0.6 else Color(0.4, 0.85, 1.0))
 	_bar(top + Vector2(0, 92), 170, mg.heat, heat_col, GS.t("НАГРЕВ СТВОЛА"))
 	var auto_on: bool = int(game.auto_fire) >= 1
-	_txt(top + Vector2(0, 128), GS.t("Экипаж стреляет сам [%s]: %s") % [GS.key_label("auto"), GS.t("ДА") if auto_on else GS.t("НЕТ")], 13, NEON if auto_on else Color(0.6, 0.75, 0.7))
+	if not real:
+		_txt(top + Vector2(0, 128), GS.t("Экипаж стреляет сам [%s]: %s") % [GS.key_label("auto"), GS.t("ДА") if auto_on else GS.t("НЕТ")], 13, NEON if auto_on else Color(0.6, 0.75, 0.7))
 	# --- hints, bottom
 	var hint := GS.t("W/S — газ/тормоз · A/D — руль · мышь — осмотреться · ЛКМ — к пулемёту и огонь · Пробел — сменить место · %s — выйти из машины") % GS.key_label("mfg")
 	if mg.seat == "gun":
 		hint = GS.t("мышь — прицел · ЛКМ — огонь очередями · ПКМ — зум · Пробел — за руль · %s — выйти из машины") % GS.key_label("mfg")
+	if real:
+		hint = GS.t("W/S — газ/тормоз · A/D — руль · Пробел — к пулемёту и обратно · ЛКМ — огонь · %s — выйти из машины") % GS.key_label("use")
 	if DisplayServer.is_touchscreen_available():
 		hint = GS.t("левая половина — руль и газ · правая — обзор · кнопки — пулемёт и огонь")
 	_txt(Vector2(40, sz.y - 22), hint, 13, Color(0.75, 1.0, 0.88, 0.85), HORIZONTAL_ALIGNMENT_CENTER, sz.x - 80.0)

@@ -132,7 +132,7 @@ func _process(delta: float) -> void:
 		target = null
 	# [F] mode 1 = barrels and drones only, mode 2 = the SAM launchers join in as well.
 	var auto_mode: int = int(game.auto_fire)
-	var can_auto: bool = auto_mode >= 2 or (auto_mode >= 1 and (def.kind == "gun" or def.kind == "drone")) or (game.autotest and def.kind == "missile")
+	var can_auto: bool = auto_mode >= 2 or (auto_mode >= 1 and (def.kind == "gun" or def.kind == "drone")) or (game.autotest and def.kind == "missile" and not GS.realism)
 	_retarget -= delta
 	if can_auto and (target == null or auto_assigned) and _retarget <= 0.0:
 		# re-evaluated periodically so auto-fire stops when the debris zone becomes unsafe
@@ -194,7 +194,7 @@ func launch_at(e, announce := true) -> bool:
 	if cooldown > 0.0:
 		return false
 	var is_drone: bool = def.kind == "drone"
-	if e != null and is_instance_valid(e) and e.inbound >= e.hp:
+	if not GS.realism and e != null and is_instance_valid(e) and e.inbound >= e.hp:
 		# Interceptors already in flight will finish this target: don't burn another one.
 		if announce:
 			var txt := GS.t("ЦЕЛЬ УЖЕ ПЕРЕХВАЧЕНА — дрон не потрачен") if is_drone else GS.t("ЦЕЛЬ УЖЕ ПЕРЕХВАЧЕНА — ракета не потрачена")

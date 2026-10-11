@@ -12,6 +12,10 @@ extends Node
 ##   --view=base|fpv [--aimbot] [--weapon=id]   gunner / FPV drone view; aimbot tracks threats
 ##   --fpv-at=SECONDS           jump to the FPV drone console mid-raid
 ##   --parade=id,id,…           (with --autotest) those threat models in a row over the battery
+##   --fpsprobe=FROM,TO         frame rate between those seconds: average, the slow frames, where the
+##                              time goes (script, render CPU, GPU), draw calls and triangles
+##   --gfxoff=a,b,…             switch parts of the picture off for a measurement: msaa, ssr, ssil,
+##                              ssao, vfog, shadows, glow, lamps (their real lights), scale=0.67
 ##   --fxstage                  (with --autotest) night at once and a staged raid on the battery,
 ##                              the same every run: the sky effects for the shot list
 ##   --crush=X,Z                collapse and set fire to the building at X,Z (fire-service test)
@@ -155,6 +159,9 @@ func _ready() -> void:
 			show_create_world()
 		"game":
 			_start_autotest()
+		"training":
+			# the MaxRealism range (--train-bot walks through its lessons by itself)
+			start_training()
 		_:
 			show_menu()
 
@@ -316,7 +323,9 @@ func show_worlds() -> void:
 	_show(w, "menu")
 
 
-func show_create_world() -> void:
+func show_create_world(real := false) -> void:
+	if real:
+		pending_world["realism"] = true # straight from the training range
 	_end_game()
 	map.set_labels_visible(false)
 	map.set_night(1.0)
@@ -342,8 +351,9 @@ func show_map_select(params := {}) -> void:
 
 ## New world from the map screen: create, save immediately, start day 1.
 func create_world(pos: Vector3, loc: int) -> void:
-	GS.new_world(String(pending_world.get("name", GS.ctext("defense"))), int(pending_world.get("difficulty", 1)), pos, loc, map.city_id)
-	if bool(pending_world.get("guest", false)):
+	var guest := bool(pending_world.get("guest", false))
+	GS.new_world(String(pending_world.get("name", GS.ctext("defense"))), int(pending_world.get("difficulty", 1)), pos, loc, map.city_id, bool(pending_world.get("realism", false)) and not guest)
+	if guest:
 		if Net.role != "guest":
 			show_worlds() # the host closed the world while we were choosing
 			return
@@ -453,6 +463,8 @@ func _process(delta: float) -> void:
 	_fit_near()
 	if _args.has("fxstage") and game and is_instance_valid(game):
 		_fx_stage(delta)
+	if _args.has("fpsprobe"):
+		_fps_probe(delta)
 	if _args.has("lockfirst") and game and is_instance_valid(game) and not game.enemies.is_empty():
 		# test hook: the first target is the selected one (the target card of the top view)
 		game.locked = game.enemies[0]
@@ -464,6 +476,8 @@ func _process(delta: float) -> void:
 		game.locked = near
 	if _args.has("aimbot") and game and is_instance_valid(game) and game.view == "base" and not game.enemies.is_empty():
 		_aimbot()
+	if game and is_instance_valid(game) and game.rl != null:
+		_realism_hooks(delta)
 	if _args.has("f16input") and game and is_instance_valid(game) and game.view == "fighter":
 		_f16_input(delta)
 	elif _args.has("aimbot") and game and is_instance_valid(game) and game.view == "fighter":
@@ -806,24 +820,41 @@ func _aimbot() -> void:
 
 
 # --- Automated test harness ------------------------------------------------------------
-func _start_autotest() -> void:
-	var want := {"river": GS.Loc.RIVER, "forest": GS.Loc.FOREST, "city": GS.Loc.CITY, "field": GS.Loc.FIELD}
-	var loc_want: int = want.get(String(_args.get("loc", "river")), GS.Loc.RIVER)
-	var pos := Vector3.ZERO
-	var found := false
+## The spot of the wanted kind nearest to the heart of the city.
+func _find_spot(loc_want: int) -> Vector3:
 	var r := 0.0
 	var mf: Vector3 = map.city.map_focus
-	while r < map.half * 0.9 and not found:
+	while r < map.half * 0.9:
 		var a := 0.0
 		while a < TAU:
 			var p := mf + Vector3(cos(a) * r, 0, sin(a) * r)
 			if map.location_at(p.x, p.z) == loc_want:
-				pos = p
-				found = true
-				break
+				return p
 			a += 0.2
 		r += 150.0
-	GS.new_world("autotest", 1, pos, loc_want, map.city_id)
+	return Vector3.ZERO
+
+
+## The training range of the MaxRealism mode (scripts/game/training.gd): a position on the
+## riverside of the city on screen with a pickup, an Igla crew and an S-300. Never saved.
+func start_training() -> void:
+	const Training = preload("res://scripts/game/training.gd")
+	GS.new_world(GS.t("Учебный полигон"), 0, _find_spot(GS.Loc.RIVER), GS.Loc.RIVER, map.city_id, true)
+	GS.world_id = "" # never written to disk
+	GS.training = true
+	GS.unlocked = {}
+	for id in Training.KIT:
+		GS.unlocked[id] = true
+		if GS.AMMO_ORDER.has(id):
+			GS.ammo[id] = 40
+	_start_session()
+
+
+func _start_autotest() -> void:
+	var want := {"river": GS.Loc.RIVER, "forest": GS.Loc.FOREST, "city": GS.Loc.CITY, "field": GS.Loc.FIELD}
+	var loc_want: int = want.get(String(_args.get("loc", "river")), GS.Loc.RIVER)
+	var pos := _find_spot(loc_want)
+	GS.new_world("autotest", 1, pos, loc_want, map.city_id, _args.has("realism"))
 	GS.world_id = "" # never written to disk
 	_start_session()
 	var ids := String(_args.get("weapons", "mg,gepard,drone,iris,patriot")).split(",")
@@ -875,6 +906,138 @@ func _start_autotest() -> void:
 	print("UAD: autotest base at ", pos, " loc=", loc_want)
 
 
+## --fpsprobe / --gfxoff: what the frame rate is and what it is spent on. The measured viewport is
+## the off-screen one of a capture run when there is one (the window is 64 pixels there).
+var _probe := {"on": false, "done": false, "frames": [], "procs": [], "cpu": 0.0, "gpu": 0.0, "n": 0, "draws": 0, "prims": 0, "objs": 0}
+
+
+func _fps_probe(delta: float) -> void:
+	if bool(_probe.done):
+		return
+	var span := String(_args.fpsprobe).split(",")
+	var from := float(span[0])
+	var to := float(span[1]) if span.size() > 1 else from + 10.0
+	var vp: Viewport = _shot_vp if _shot_vp != null else get_viewport()
+	if not bool(_probe.on):
+		if _clock < from - 2.0:
+			return
+		_probe.on = true
+		RenderingServer.viewport_set_measure_render_time(vp.get_viewport_rid(), true)
+		if _args.has("gfxoff"):
+			_gfx_off(vp)
+		return
+	if _clock < from:
+		return
+	(_probe.frames as Array).append(delta / maxf(Engine.time_scale, 0.001))
+	_probe.cpu += RenderingServer.viewport_get_measured_render_time_cpu(vp.get_viewport_rid()) + RenderingServer.get_frame_setup_time_cpu()
+	_probe.gpu += RenderingServer.viewport_get_measured_render_time_gpu(vp.get_viewport_rid())
+	(_probe.procs as Array).append(Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0)
+	_probe.draws += int(RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME))
+	_probe.prims += int(RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME))
+	_probe.objs += int(RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_OBJECTS_IN_FRAME))
+	_probe.n += 1
+	if _clock < to:
+		return
+	_probe.done = true
+	var fr: Array = _probe.frames
+	fr.sort()
+	var total := 0.0
+	for f in fr:
+		total += float(f)
+	var n := float(maxi(int(_probe.n), 1))
+	var slow: float = fr[int(fr.size() * 0.99)] if fr.size() > 0 else 0.0
+	var pr: Array = _probe.procs
+	pr.sort()
+	_probe_stream()
+	print("UAD FPS %s q=%d size=%s off=[%s]: avg=%.1f median=%.1f low1%%=%.1f | frame %.1f ms: game step %.1f ms, render cpu %.1f ms, gpu %.1f ms | draws=%d objects=%d tris=%.2fM" % [
+		RenderingServer.get_current_rendering_method(), int(GS.settings.quality), str(vp.get_visible_rect().size), String(_args.get("gfxoff", "")),
+		float(fr.size()) / maxf(total, 0.001), 1.0 / maxf(float(fr[fr.size() / 2]), 0.0001), 1.0 / maxf(slow, 0.0001),
+		float(fr[fr.size() / 2]) * 1000.0, float(pr[pr.size() / 2]), _probe.cpu / n, _probe.gpu / n,
+		int(_probe.draws / n), int(_probe.objs / n), float(_probe.prims) / n / 1.0e6])
+
+
+## What the detail stream holds now: instances and triangles by kind, near and mid sets apart.
+func _probe_stream() -> void:
+	for pair in [["near", map.stream._near], ["mid", map.stream._mid]]:
+		var sets: Dictionary = pair[1]
+		var by := {}
+		for t in sets:
+			if not (sets[t] as Node3D).visible:
+				continue
+			for c in (sets[t] as Node).get_children():
+				var mmi := c as MultiMeshInstance3D
+				if mmi == null:
+					continue
+				var mesh: Mesh = mmi.multimesh.mesh
+				var tris := 0
+				for si in mesh.get_surface_count():
+					var arr := mesh.surface_get_arrays(si)
+					var idx = arr[Mesh.ARRAY_INDEX]
+					tris += (idx.size() if idx != null and idx.size() > 0 else (arr[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()) / 3
+				var key := "%d tris%s" % [tris, " +shadow" if mmi.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF else ""]
+				var e: Array = by.get(key, [0, 0])
+				e[0] += mmi.multimesh.instance_count
+				e[1] += mmi.multimesh.instance_count * tris
+				by[key] = e
+		var keys := by.keys()
+		keys.sort_custom(func(a, b) -> bool: return int(by[a][1]) > int(by[b][1]))
+		var parts := []
+		for k in keys:
+			parts.append("%s × %d = %.2fM" % [k, int(by[k][0]), float(by[k][1]) / 1.0e6])
+		print("UAD STREAM %s tiles=%d: %s" % [pair[0], sets.size(), "; ".join(parts)])
+
+
+func _gfx_off(vp: Viewport) -> void:
+	var env: Environment = map.env
+	for what in String(_args.gfxoff).split(","):
+		match what:
+			"msaa":
+				vp.msaa_3d = Viewport.MSAA_DISABLED
+			"msaa2":
+				vp.msaa_3d = Viewport.MSAA_2X
+			"msaa4":
+				vp.msaa_3d = Viewport.MSAA_4X
+			"ssr":
+				env.ssr_enabled = false
+			"ssil":
+				env.ssil_enabled = false
+			"ssao":
+				env.ssao_enabled = false
+			"vfog":
+				env.volumetric_fog_enabled = false
+			"glow":
+				env.glow_enabled = false
+			"haze":
+				Game.Fx.no_haze = true
+			"trails":
+				const Trail = preload("res://scripts/game/trail.gd")
+				Trail.off = true
+			"sparks":
+				Game.Fx.no_sparks = true
+			"lamps":
+				map.forward = false
+			"life":
+				for b in [map.b_traffic, map.b_cars, map.b_people, map.b_detail, map.b_props]:
+					b.set_visible(false)
+			"lights":
+				map.b_lights.set_visible(false)
+			"build":
+				map.b_build.set_visible(false)
+				map.b_roof.set_visible(false)
+			"stream":
+				map.stream.visible = false
+			"shadows":
+				map._sun.shadow_enabled = false
+				RenderingServer.global_shader_parameter_set("lamp_real", Vector4(0, 0, 0, 0))
+			_:
+				if what.begins_with("scale="):
+					vp.scaling_3d_scale = float(what.substr(6))
+				elif what.begins_with("fsr="):
+					vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR2
+					vp.msaa_3d = Viewport.MSAA_DISABLED
+					vp.scaling_3d_scale = float(what.substr(4))
+
+
 ## --fxstage: night falls at once and the battery is raided on a fixed timetable, from a fixed
 ## side and close in, so that a shot list finds launches, trails and intercepts in the sky at
 ## known seconds. [second, weapon, count, altitude, kilometres out].
@@ -901,6 +1064,8 @@ func _fx_stage(delta: float) -> void:
 	_fx_t += delta
 	GS.base_hp = 100.0
 	GS.city = 100.0
+	if String(_args.fxstage) == "calm": # --fxstage=calm: the night without a raid
+		return
 	if _fx_i >= FX_STAGE.size():
 		if game.enemies.is_empty() or _fx_t > 30.0:
 			_fx_t = 0.0 # the raid starts over
@@ -969,7 +1134,7 @@ func _switch_selftest() -> void:
 
 ## Round trip: create → save → list → load → verify → delete.
 func _save_selftest() -> void:
-	GS.new_world(GS.t("Тестовый мир"), 2, Vector3(123, 0, -45), GS.Loc.RIVER, "odesa")
+	GS.new_world(GS.t("Тестовый мир"), 2, Vector3(123, 0, -45), GS.Loc.RIVER, "odesa", true)
 	GS.money = 77777
 	GS.day = 5
 	GS.unlocked["gepard"] = true
@@ -979,8 +1144,9 @@ func _save_selftest() -> void:
 	var found := GS.list_worlds().any(func(w) -> bool: return String(w.id) == id)
 	GS.money = 0
 	GS.day = 1
+	GS.realism = false
 	var ok := GS.load_world(id)
-	var good := ok and found and GS.city_id == "odesa" and GS.money == 77777 and GS.day == 5 and GS.difficulty == 2 and GS.unlocked.has("gepard") and GS.damaged == [3, 17, 42] and GS.base_pos.is_equal_approx(Vector3(123, 0, -45))
+	var good := ok and found and GS.realism and GS.city_id == "odesa" and GS.money == 77777 and GS.day == 5 and GS.difficulty == 2 and GS.unlocked.has("gepard") and GS.damaged == [3, 17, 42] and GS.base_pos.is_equal_approx(Vector3(123, 0, -45))
 	GS.delete_world(id)
 	var gone := not GS.list_worlds().any(func(w) -> bool: return String(w.id) == id)
 	print("UAD SAVETEST: listed=%s loaded=%s fields_ok=%s deleted=%s" % [found, ok, good, gone])
@@ -1641,5 +1807,139 @@ func _print_summary() -> void:
 			print("UAD MFG: hp=%d wrecked=%s pos=%s kills=%d" % [int(game.mfg.hp), game.mfg.wrecked, game.mfg.pos, int(GS.stats.kills)])
 	if game and game.view == "walk":
 		print("UAD WALK: pos=%s on_floor=%s" % [str(game.walker.pos), game.walker.on_floor])
+	if game and game.rl != null:
+		var rl = game.rl
+		print("UAD RL: view=%s seat=%s scope=%s track=%s blips=%d locks=%d shots=%d kills=%d misses=%d radio=%d near=%s" % [game.view, game.selected_weapon, rl.scope_on(), rl.track != null, rl.blips.size(), int(_rl.locks), int(_rl.shots), int(GS.stats.kills), int(GS.stats.get("misses", 0)), rl.radio_log.size(), str(rl.near.get("id", "-"))])
+		for r in rl.radio_log:
+			print("   radio: ", r.text)
+		if rl.training != null:
+			print("UAD TRAIN: lesson %d of %d finished=%s" % [rl.training.step + 1, rl.training.total(), rl.training.finished])
 	if game:
 		print("UAD RIG: target=%s dist=%.1f pitch=%.2f tdist=%.1f tpitch=%.2f proc=%s" % [str(game.rig.target), game.rig.dist, game.rig.pitch, game.rig._t_dist, game.rig._t_pitch, game.rig.is_processing()])
+
+
+## Test hooks of a MaxRealism session: --rl-sit=<system|post> takes a seat, --rl-bot works the
+## operator's console (the cursor on the nearest echo, lock, two rounds), --train-bot goes through
+## the lessons of the training range (--screen=training).
+var _rl := {"sat": false, "fired": {}, "locks": 0, "shots": 0, "t": 0.0, "step": -1}
+
+
+func _realism_hooks(delta: float) -> void:
+	var rl = game.rl
+	if _args.has("rl-sit") and not bool(_rl.sat) and _clock >= 2.0:
+		_rl.sat = true
+		var where := String(_args["rl-sit"])
+		if where == "post":
+			rl.enter_post()
+		elif where == "truck":
+			game.set_view("mfg")
+		else:
+			rl.sit(where)
+		print("UAD RL sit %s -> view=%s scope=%s scale=%.0f" % [where, game.view, rl.scope_on(), rl.scope_scale])
+	if _args.has("rl-bot") and rl.scope_on():
+		_scope_bot(delta, 2)
+	if _args.has("train-bot") and rl.training != null:
+		_train_bot(delta)
+
+
+## The operator: the gate on the nearest echo the seat's system can reach, lock, `rounds` launches,
+## and again if the target is still there a while later.
+func _scope_bot(delta: float, rounds: int) -> void:
+	var rl = game.rl
+	_rl.t = float(_rl.t) - delta
+	if rl.track == null:
+		var w = rl.weapon()
+		var best = null
+		var bd := INF
+		for e in game.enemies:
+			if e.dead or not rl.blips.has(e.get_instance_id()):
+				continue
+			if w != null and (not w.can_engage(e) or not w.in_range(e)):
+				continue
+			var d: float = e.position.distance_to(GS.base_pos)
+			if d < bd:
+				bd = d
+				best = e
+		if best == null:
+			return
+		var bp: Vector2 = rl.blips[best.get_instance_id()].pos
+		rl.scope_az = rl.az_of(bp)
+		rl.scope_rng = bp.length()
+		rl.lock()
+		if rl.track != null:
+			_rl.locks = int(_rl.locks) + 1
+		return
+	if game.view != "base" or rounds <= 0:
+		return
+	var id: int = rl.track.get_instance_id()
+	var n := int(_rl.fired.get(id, 0))
+	if n < rounds:
+		var before: int = rl.salvo
+		rl.fire()
+		if rl.salvo > before:
+			_rl.fired[id] = n + 1
+			_rl.shots = int(_rl.shots) + 1
+			_rl.t = 8.0
+	elif float(_rl.t) <= 0.0:
+		_rl.fired[id] = 0 # they all passed by: another pair
+
+
+## Stands the walker next to a station, on the inner side.
+func _tb_goto(p: Vector3, hull: float) -> void:
+	var out := p - GS.base_pos
+	out.y = 0.0
+	out = out.normalized() if out.length() > 0.1 else Vector3(0, 0, 1)
+	game.walker.pos = p - out * (hull + 0.8)
+
+
+func _train_bot(delta: float) -> void:
+	var rl = game.rl
+	var tr = rl.training
+	if tr.finished:
+		return
+	if tr.step != int(_rl.step):
+		_rl.step = tr.step
+		print("UAD TRAIN lesson %d at t=%.1f view=%s enemies=%d" % [tr.step + 1, _clock, game.view, game.enemies.size()])
+	if _args.has("train-stop") and tr.step >= int(_args["train-stop"]):
+		game.walker.test_forward = false
+		return # --train-stop=N: the bot leaves lesson N (counted from 0) alone, for a look at it
+	var near_id := String(rl.near.get("id", ""))
+	match int(tr.step):
+		0:
+			game.walker.test_forward = true
+		1:
+			game.walker.test_forward = false
+			_tb_goto(game.weapons["mg"].global_position, rl._hull("mg"))
+		2:
+			if near_id == "mg":
+				rl.use()
+		3:
+			if game.view == "base" and not game.enemies.is_empty():
+				_aimbot()
+		4:
+			if game.view == "base" and String(game.selected_weapon) != "igla":
+				rl.use()
+			elif game.view == "walk":
+				_tb_goto(game.weapons["igla"].global_position, rl._hull("igla"))
+				if near_id == "igla":
+					rl.use()
+			elif not game.enemies.is_empty():
+				_aimbot()
+		5:
+			if game.view == "base":
+				rl.use()
+			elif game.view == "walk":
+				game.walker.pos = rl.post_pos() + Vector3(0, 0, -1.0)
+				if near_id == "post":
+					rl.use()
+		6:
+			_scope_bot(delta, 0)
+		7:
+			if game.view == "post":
+				rl.use()
+			elif game.view == "walk":
+				_tb_goto(game.weapons["s300"].global_position, rl._hull("s300"))
+				if near_id == "s300":
+					rl.use()
+		8, 9:
+			_scope_bot(delta, 2)

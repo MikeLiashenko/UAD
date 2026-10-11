@@ -6,6 +6,9 @@ const Sparks = preload("res://scripts/game/sparks.gd")
 
 ## No floating captions ("+$1 300", "ПРОМАХ") over the effects: for pictures of the sky.
 static var quiet := false
+## Test switches (--gfxoff=haze / sparks): bursts without the lit haze around them, without sparks.
+static var no_haze := false
+static var no_sparks := false
 
 static var _mats := {}
 static var _meshes := {}
@@ -298,7 +301,7 @@ static func explosion(parent: Node, pos: Vector3, size := 1.0, color := Color(1.
 	flash.material_override = fm
 	root.add_child(flash)
 	# the haze around the burst lights up (a puff the size of a drone leaving its rail lights nothing)
-	var hazy := 1.0 if s >= 0.4 else 0.0
+	var hazy := 1.0 if s >= 0.4 and not no_haze else 0.0
 	var halo := MeshInstance3D.new()
 	halo.mesh = quad()
 	halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -343,6 +346,8 @@ static func explosion(parent: Node, pos: Vector3, size := 1.0, color := Color(1.
 	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(ring)
 	# fragments: splinters that are gone in a second, then the embers arcing over and raining down
+	if no_sparks:
+		many = 0.0
 	Sparks.burst(root, pos, _spark_count(40.0 * many), 170.0 * s, 1.1, 16.0, 2.0, 0.08, 0.5, Color(1.0, 0.95, 0.8), Color(1.0, 0.62, 0.25), 4.0)
 	Sparks.burst(root, pos, _spark_count((56.0 if big else 26.0) * many), 78.0 * s, 4.6 if big else 3.6, 12.0, 0.62, 0.5, 0.75,
 		Color(1.0, 0.86, 0.55), color.lerp(Color(1.0, 0.4, 0.08), 0.6), 3.2, 0.2)
@@ -445,6 +450,8 @@ static func exhaust(color: Color, amount := 30, life := 0.35, size := 1.0) -> CP
 
 
 static func float_text(parent: Node, pos: Vector3, text: String, color: Color) -> void:
+	if GS.realism:
+		return # nothing is written on the sky there
 	if quiet:
 		return
 	var l := Label3D.new()

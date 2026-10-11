@@ -65,6 +65,8 @@ func _ready() -> void:
 	_streams["siren"] = _to_wav(_gen_siren())
 	_streams["buzz"] = _to_wav(_gen_buzz(), true)
 	_streams["prop"] = _to_wav(_gen_prop())
+	_streams["radio"] = _to_wav(_gen_radio())
+	_streams["seeker"] = _to_wav(_gen_tone(0.14, 640.0, 5.0, 0.2))
 	set_music_volume(clampf(float(GS.settings.music), 0.0, 1.0))
 
 
@@ -255,6 +257,22 @@ func _gen_cash() -> PackedFloat32Array:
 		if i >= offset:
 			v += b[i - offset]
 		s[i] = v
+	return s
+
+
+func _gen_radio() -> PackedFloat32Array:
+	# a handset keying up: a click and a short burst of hiss
+	var dur := 0.2
+	var n := int(dur * RATE)
+	var s := PackedFloat32Array()
+	s.resize(n)
+	var lp := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		var noise := _rng.randf_range(-1.0, 1.0)
+		lp += (noise - lp) * 0.35
+		var hiss := (noise - lp) * 0.22 * minf(t * 200.0, 1.0) * clampf((dur - t) * 40.0, 0.0, 1.0)
+		s[i] = hiss + sin(TAU * 1900.0 * t) * exp(-t * 180.0) * 0.25
 	return s
 
 

@@ -491,6 +491,7 @@ const KEY_ACTIONS := [
 	["fighter", "Вылет истребителя F-16", KEY_J],
 	["warp", "Ускорение времени ×1 / ×2 / ×4 / ×8", KEY_BRACKETRIGHT],
 	["photo", "Фото без интерфейса", KEY_F12],
+	["use", "MaxRealism: занять место / встать", KEY_E],
 ]
 
 
@@ -556,6 +557,11 @@ var world_name := ""
 ## Which city the world defends (scripts/world/cities.gd).
 var city_id := "kyiv"
 var world_created := 0
+## MaxRealism world (scripts/game/realism.gd): the ground view only, the player walks from one
+## system to the next and works each by hand, the radar is a scope and a missile may miss.
+var realism := false
+## The training range of the MaxRealism mode (scripts/game/training.gd): never saved.
+var training := false
 var difficulty := 1
 var money := 0
 var unlocked := {}
@@ -637,9 +643,11 @@ func _make_font() -> Font:
 	return f
 
 
-func new_world(wname: String, diff: int, pos: Vector3, loc: int, cid := "kyiv") -> void:
+func new_world(wname: String, diff: int, pos: Vector3, loc: int, cid := "kyiv", real := false) -> void:
 	world_id = "w%d_%d" % [Time.get_unix_time_from_system(), randi() % 100000]
 	world_name = wname
+	realism = real
+	training = false
 	city_id = cid if Cities.has(cid) else Cities.DEFAULT
 	world_created = int(Time.get_unix_time_from_system())
 	difficulty = diff
@@ -768,7 +776,19 @@ func detect_multiplier() -> float:
 
 
 func enemy_mult() -> float:
-	return float(DIFFICULTY[difficulty].enemies)
+	return float(DIFFICULTY[difficulty].enemies) * (REALISM_ENEMIES if realism else 1.0)
+
+
+## MaxRealism: one person on foot cannot be at every system at once, so the raids are thinner.
+const REALISM_ENEMIES := 0.7
+## MaxRealism: the chance of one interceptor against a target it is fully effective against.
+const REALISM_PK := 0.8
+
+
+## MaxRealism: the chance that one interceptor brings its target down. Missiles deal no hit
+## points there — a round either kills or passes by, which is why they are fired in pairs.
+func kill_chance(wid: String, e) -> float:
+	return clampf(eff(wid, e) * REALISM_PK, 0.0, 0.95)
 
 
 ## Fines and repair costs are scaled down on the easier settings.
@@ -794,7 +814,7 @@ func save_world() -> void:
 		"version": SAVE_VERSION, "id": world_id, "name": world_name,
 		"city_id": city_id, "map_ver": int(city_def().version),
 		"created": world_created, "last_played": int(Time.get_unix_time_from_system()),
-		"difficulty": difficulty, "money": money, "unlocked": unlocked, "ammo": ammo,
+		"realism": realism, "difficulty": difficulty, "money": money, "unlocked": unlocked, "ammo": ammo,
 		"city": city, "base_hp": base_hp, "day": day, "base_found": base_found,
 		"detection": detection, "camo": camo, "crews": crews, "base_pos": [base_pos.x, base_pos.z],
 		"base_loc": base_loc, "stats": stats, "damaged": damaged, "crushed": crushed, "won": won,
@@ -841,6 +861,8 @@ func load_world(id: String) -> bool:
 	# a world saved on an older layout of its city: building indices point elsewhere now
 	var same_map: bool = int(d.get("map_ver", 1)) == int(city_def().version)
 	world_created = int(d.get("created", 0))
+	realism = bool(d.get("realism", false))
+	training = false
 	difficulty = clampi(int(d.get("difficulty", 1)), 0, 2)
 	money = int(d.get("money", 0))
 	unlocked = {}

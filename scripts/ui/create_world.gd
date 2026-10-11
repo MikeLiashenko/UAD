@@ -1,5 +1,6 @@
 extends Control
-## "Create new world": name, city and difficulty, then the base position is picked on the city map.
+## "Create new world": name, city, difficulty and mode (the usual game or MaxRealism), then the
+## base position is picked on the city map.
 
 const UiKit = preload("res://scripts/ui/ui_kit.gd")
 const Cities = preload("res://scripts/world/cities.gd")
@@ -12,6 +13,10 @@ var _diff_desc: Label
 var _city := "kyiv"
 var _city_btns := {}
 var _city_desc: Label
+## MaxRealism: the ground view only, every system is walked to and worked by hand.
+var _real := false
+var _mode_btns: Array = []
+var _mode_desc: Label
 ## The name field still holds the suggested name (so switching the city renames the world too).
 var _auto_name := true
 
@@ -73,6 +78,33 @@ func _ready() -> void:
 	_diff_desc = UiKit.label("", 14, Color(0.65, 0.88, 0.78), HORIZONTAL_ALIGNMENT_CENTER)
 	v.add_child(_diff_desc)
 	_set_diff(int(main.pending_world.get("difficulty", 1)))
+	v.add_child(UiKit.label(GS.t("Режим"), 16, UiKit.AMBER))
+	var mh := UiKit.hbox(8)
+	v.add_child(mh)
+	for spec in [[false, GS.t("Обычный")], [true, "MaxRealism"]]:
+		var b := Button.new()
+		b.text = String(spec[1])
+		b.toggle_mode = true
+		b.focus_mode = Control.FOCUS_NONE
+		b.custom_minimum_size = Vector2(180, 46)
+		b.add_theme_font_size_override("font_size", 18)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.pressed.connect(_set_mode.bind(bool(spec[0])))
+		mh.add_child(b)
+		_mode_btns.append(b)
+	var tb := Button.new()
+	tb.text = GS.t("Обучение")
+	tb.tooltip_text = GS.t("Учебный полигон MaxRealism: инструктор проведёт по всем местам — пулемёт, «Игла», радар, пульт С-300")
+	tb.focus_mode = Control.FOCUS_NONE
+	tb.custom_minimum_size = Vector2(150, 46)
+	tb.add_theme_font_size_override("font_size", 18)
+	tb.pressed.connect(func() -> void: main.start_training())
+	mh.add_child(tb)
+	_mode_desc = UiKit.label("", 14, Color(0.65, 0.88, 0.78), HORIZONTAL_ALIGNMENT_CENTER)
+	_mode_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_mode_desc.custom_minimum_size = Vector2(600, 58)
+	v.add_child(_mode_desc)
+	_set_mode(bool(main.pending_world.get("realism", false)))
 	var spacer := Control.new()
 	spacer.custom_minimum_size = Vector2(0, 8)
 	v.add_child(spacer)
@@ -105,11 +137,21 @@ func _set_diff(i: int) -> void:
 	_diff_desc.text = GS.t("%s · стартовый бюджет %s") % [GS.t(String(GS.DIFFICULTY[i].desc)), GS.fmt_money(int(GS.DIFFICULTY[i].money))]
 
 
+func _set_mode(real: bool) -> void:
+	_real = real
+	for k in _mode_btns.size():
+		(_mode_btns[k] as Button).button_pressed = (k == 1) == real
+	if real:
+		_mode_desc.text = GS.t("Только вид с земли. Никаких меток на целях и кнопок систем: к каждой машине нужно подойти и занять место. О пусках сообщает радио, цели — точки на радаре, ракета может промахнуться. Сначала пройдите обучение.")
+	else:
+		_mode_desc.text = GS.t("Карта сверху, панель батареи, метки целей — игра, как она есть.")
+
+
 func _next() -> void:
 	var n := _name.text.strip_edges()
 	if n == "":
 		n = GS.ctext("defense", _city)
-	main.show_map_select({"name": n, "difficulty": _diff, "city": _city})
+	main.show_map_select({"name": n, "difficulty": _diff, "city": _city, "realism": _real})
 
 
 func _unhandled_input(event: InputEvent) -> void:

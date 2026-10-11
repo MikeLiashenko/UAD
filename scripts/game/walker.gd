@@ -7,6 +7,10 @@ const EYE := 1.7
 const WALK := 4.5
 const RUN := 11.0
 const JUMP := 6.5
+## MaxRealism: walking and running pace of a person, and a hop of half a metre.
+const REAL_WALK := 2.2
+const REAL_RUN := 5.8
+const REAL_JUMP := 3.3
 const GRAVITY := 20.0
 const RADIUS := 0.45
 
@@ -93,6 +97,8 @@ func _blocked_point(x: float, z: float, y: float) -> bool:
 		if map.is_deck(bi):
 			return false
 		return y < map.fp_center[bi].y - 0.3
+	if game.rl != null and game.rl.blocks(x, z):
+		return true # MaxRealism: nobody walks through a launcher
 	return map.water_dist(x, z) < 0.0
 
 
@@ -126,13 +132,15 @@ func _process(delta: float) -> void:
 	var fwd := Vector3(-sin(yaw), 0, -cos(yaw))
 	var right := Vector3(cos(yaw), 0, -sin(yaw))
 	var running := Input.is_key_pressed(KEY_SHIFT) or _move_vec.length() > 0.95
-	var wish := (fwd * input.y + right * input.x) * (RUN if running else WALK)
+	# MaxRealism: a soldier in kit, not a tourist on wheels
+	var real: bool = game.rl != null
+	var wish := (fwd * input.y + right * input.x) * ((REAL_RUN if real else RUN) if running else (REAL_WALK if real else WALK))
 	var k := 1.0 - exp(-delta * (12.0 if on_floor else 2.0))
 	vel.x = lerpf(vel.x, wish.x, k)
 	vel.z = lerpf(vel.z, wish.z, k)
 	var jump := Input.is_key_pressed(KEY_SPACE)
 	if jump and not _jump_held and on_floor:
-		vel.y = JUMP
+		vel.y = REAL_JUMP if real else JUMP
 		on_floor = false
 	_jump_held = jump
 	vel.y -= GRAVITY * delta

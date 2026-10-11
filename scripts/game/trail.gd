@@ -11,7 +11,7 @@ extends MeshInstance3D
 
 const Shaders = preload("res://scripts/world/shaders.gd")
 
-const MAX_POINTS := 300
+const MAX_POINTS := 170
 ## A new point after this much of a turn, radians — keeps a tight spiral round.
 const TURN := 0.03
 ## A turn sharper than this between two points is rounded off, radians.
@@ -58,9 +58,15 @@ var _end := 0.0
 var _curl := 1.0
 
 static var _shader: Shader
+## Test switch (--gfxoff=trails): no ribbons at all.
+static var off := false
 
 
 func _ready() -> void:
+	if off:
+		queue_free()
+		set_process(false)
+		return
 	top_level = true
 	global_transform = Transform3D.IDENTITY
 	mesh = _mesh

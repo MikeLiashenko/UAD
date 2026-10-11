@@ -75,6 +75,11 @@ var _players_btn: Button
 var _mfg_ui: Control
 ## Buttons of the F-16 sortie (touch screens, Alt + mouse): missiles, afterburner, back home.
 var _fighter_ui: Control
+## Panels a MaxRealism session never shows (the budget, the round radar, the event feed).
+var _status_panel: Control
+var _radar: Control
+## Frame of the last alert: in MaxRealism the feed line that repeats it is not said twice.
+var _alert_frame := -1
 
 
 func _ready() -> void:
@@ -305,6 +310,11 @@ func on_view_changed() -> void:
 		_fighter_ui.visible = air
 	if zoom_box:
 		zoom_box.visible = not walk and not fpv and not mfg and not air
+	if GS.realism:
+		# MaxRealism: no budget, no radar in the corner, no battery panel — the picture and the radio
+		for c in [_status_panel, _radar, log_box, alert_lbl, _weapons_panel, _walk_ui, _mfg_ui, zoom_box]:
+			if c != null:
+				c.visible = false
 	refresh()
 
 
@@ -313,6 +323,7 @@ func _build_status() -> void:
 	var p := UiKit.panel(Vector2(290, 0))
 	p.position = Vector2(12, 12)
 	root.add_child(p)
+	_status_panel = p
 	var v := UiKit.vbox(4)
 	p.add_child(v)
 	v.add_child(UiKit.label(GS.t("БЮДЖЕТ"), 13, Color(0.5, 0.8, 0.65)))
@@ -358,6 +369,7 @@ func _build_radar() -> void:
 	radar.offset_top = 12
 	radar.offset_bottom = 266
 	root.add_child(radar)
+	_radar = radar
 	log_box = UiKit.vbox(2)
 	log_box.anchor_left = 1.0
 	log_box.anchor_right = 1.0
@@ -608,6 +620,11 @@ func _on_weapon_btn(id: String) -> void:
 
 
 func alert(text: String, color := UiKit.RED) -> void:
+	if game.rl != null:
+		# MaxRealism: no banner across the screen, the call comes over the radio
+		_alert_frame = Engine.get_process_frames()
+		game.rl.radio(text, color.lerp(Color(0.9, 0.92, 0.86), 0.55))
+		return
 	if _alerts.size() > 3:
 		_alerts.pop_front()
 	_alerts.append([text, color])
@@ -628,6 +645,10 @@ func _next_alert() -> void:
 
 
 func log_event(text: String, color := Color(0.7, 1.0, 0.85)) -> void:
+	if game.rl != null:
+		if _alert_frame != Engine.get_process_frames():
+			game.rl.radio(text, color.lerp(Color(0.9, 0.92, 0.86), 0.55))
+		return
 	var l := UiKit.label(text, 14, color)
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -749,8 +770,10 @@ func _show_pause() -> void:
 	var v: VBoxContainer = m[1]
 	v.add_child(UiKit.glow_label(GS.t("ПАУЗА"), 40, UiKit.NEON))
 	v.add_child(UiKit.button(GS.t("Продолжить"), toggle_pause))
-	v.add_child(UiKit.button(GS.t("Магазин"), open_shop))
-	v.add_child(UiKit.button(GS.t("Лента города [%s]") % GS.key_label("feed"), open_feed))
+	if not GS.realism:
+		# MaxRealism: supplies and the feed are at the command post
+		v.add_child(UiKit.button(GS.t("Магазин"), open_shop))
+		v.add_child(UiKit.button(GS.t("Лента города [%s]") % GS.key_label("feed"), open_feed))
 	v.add_child(UiKit.button(GS.t("Настройки"), _show_settings))
 	var note := GS.t("Мир «%s». Автосохранение — каждое утро.") % GS.world_name
 	if Net.role == "guest":
@@ -759,12 +782,16 @@ func _show_pause() -> void:
 		note = GS.t("Вы в гостях у %s. Здесь ничего не сохраняется — ваши миры остаются как были.") % hn
 		note += GS.t("\nСетевая игра не останавливается: пока вы в паузе, друзья продолжают.")
 	else:
-		if GS.world_id != "":
+		if GS.world_id != "" and not GS.realism:
 			if Net.role == "host":
 				v.add_child(UiKit.button(GS.t("Закрыть мир для друзей"), _close_world))
 			else:
 				v.add_child(UiKit.button(GS.t("Открыть для друзей"), _open_world))
-		v.add_child(UiKit.button(GS.t("Сохранить и выйти в меню"), func() -> void: game.main.exit_to_menu()))
+		v.add_child(UiKit.button(GS.t("Закончить обучение") if GS.training else GS.t("Сохранить и выйти в меню"), func() -> void: game.main.exit_to_menu()))
+		if GS.training:
+			note = GS.t("Учебный полигон: здесь ничего не сохраняется.")
+		elif GS.realism:
+			note += " " + GS.t("MaxRealism: %s — занять место или встать. Снабжение, удары и лента города — с командного пункта.") % GS.key_label("use")
 		if Net.role == "host":
 			note += GS.t("\nМир открыт для друзей · ваш код %s · игроков %d/%d") % [Net.fmt_code(Net.code()), Net.players.size(), Net.MAX_PLAYERS]
 			if Net.players.size() > 1:

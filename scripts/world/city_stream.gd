@@ -5,6 +5,12 @@ extends Node3D
 ## parked cars, balconies, fences, people, every tree). The radii and the amount depend on the
 ## graphics level (CityMap.QUALITY). On Max / UltraMax (Forward+) the nearest street lamps are real
 ## lights with shadows.
+##
+## A near set is drawn at one of three levels of detail, by how far its tile is from the camera
+## (LOD_NEAR / LOD_MID): the trees with every spray of leaves and the cars with their curved bodies
+## only where they can be told from simpler ones, and shadows only there. A tree is 1500 triangles
+## close up and 90 from afar — with every tree and car of a 1.3 km circle at full detail and in
+## the shadow maps the picture cost over a hundred million triangles a frame.
 
 const CityGen = preload("res://scripts/world/city_gen.gd")
 const Batch = preload("res://scripts/world/batch.gd")
@@ -16,6 +22,15 @@ const TILE := 500.0
 ## Tiles made at once on the worker threads, and tiles put on the scene per frame.
 const MAX_TASKS := 10
 const MAX_APPLY := 3
+## Tiles nearer than this are drawn in full; out to LOD_MID with simpler trees and cars and no
+## shadows; beyond that with the simplest ones. (Distance to the tile's square, see _tile_dist.)
+const LOD_NEAR := 300.0
+const LOD_MID := 750.0
+## The meshes of a kind at the three levels.
+const LODS := {
+	"tree": ["tree", "tree_m", "tree_lo"], "pine": ["pine", "pine_m", "pine_lo"],
+	"car": ["car", "car_m", "car_lo"], "tcar": ["tcar", "car_m", "car_lo"],
+}
 
 var map
 ## Loaded sets: tile → Node3D.
@@ -32,6 +47,7 @@ var _t := 0.0
 var _scan := 0.0
 var _wanted_missing := 0
 var _off := false
+var _cam_pos := Vector3.ZERO
 
 var _mesh := {}
 var _mat := {}
@@ -56,6 +72,7 @@ func _ready() -> void:
 func _setup_assets() -> void:
 	var hi: bool = map.quality >= 3
 	_mesh = {
+		"tree_m": Meshes.deciduous_mesh(1), "pine_m": Meshes.conifer_mesh(1), "car_m": Meshes.car_mesh(1), "car_lo": Meshes.car_mesh(0),
 		"lamp": Fx.quad(), "tlight": Fx.quad(),
 		"pole": Meshes.lamp_post_mesh(),
 		"tree": Meshes.deciduous_mesh(3 if hi else (2 if map.quality >= 2 else 1)), "pine": Meshes.conifer_mesh(3 if hi else (2 if map.quality >= 2 else 1)),
@@ -159,6 +176,9 @@ func _update_wanted() -> void:
 	if cam == null:
 		return
 	var cp := cam.global_position
+	_cam_pos = cp
+	for t in _near:
+		_set_lod(_near[t], _tile_dist(t, cp))
 	var qd: Dictionary = map.quality_def()
 	var near_r: float = qd.near
 	var mid_r: float = qd.mid
@@ -237,6 +257,8 @@ func _apply_results() -> void:
 		if int(r[2]) != _ver:
 			continue
 		var node := _build_set(t, r[3], near)
+		if near:
+			_set_lod(node, _tile_dist(t, _cam_pos))
 		var d := _near if near else _mid
 		if d.has(t):
 			(d[t] as Node).queue_free()
@@ -271,16 +293,46 @@ func _build_set(t: int, dec: CityGen.Decor, near: bool) -> Node3D:
 		if kind == 2 and not life:
 			continue
 		var id := String(s[0])
-		var mmi := MultiMeshInstance3D.new()
-		mmi.multimesh = Batch.make_multimesh(_mesh[id], buf)
-		mmi.material_override = _mat[id.trim_suffix("_lo")]
-		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadows and kind == 1 else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		if kind != 1:
-			# sprites grow and traffic moves in the vertex shader: the automatic box would be too small
-			var m := 60.0 if kind == 0 else 260.0
-			mmi.custom_aabb = AABB(Vector3(x0 - m, -10.0, z0 - m), Vector3(TILE + m * 2.0, 420.0, TILE + m * 2.0))
-		root.add_child(mmi)
+		# a near set keeps the heavy kinds at every level of detail; _set_lod shows one of them
+		var levels: Array = LODS.get(id, [id]) if near else [id if id != "tcar" else "car_m"]
+		for li in levels.size():
+			var mmi := MultiMeshInstance3D.new()
+			mmi.multimesh = Batch.make_multimesh(_mesh[levels[li]], buf)
+			mmi.material_override = _mat[id.trim_suffix("_lo")]
+			var casts: bool = shadows and kind == 1 and li == 0
+			mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if casts else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			if levels.size() > 1:
+				mmi.set_meta("lod", li)
+				mmi.visible = li == 0
+			elif casts:
+				mmi.set_meta("casts", true)
+			if kind != 1:
+				# sprites grow and traffic moves in the vertex shader: the automatic box would be too small
+				var m := 60.0 if kind == 0 else 260.0
+				mmi.custom_aabb = AABB(Vector3(x0 - m, -10.0, z0 - m), Vector3(TILE + m * 2.0, 420.0, TILE + m * 2.0))
+			root.add_child(mmi)
 	return root
+
+
+## Shows a near set at the level of detail its distance asks for. A set leaves a level a little
+## later than it entered it, so a camera hovering on the line does not make it flicker.
+func _set_lod(node: Node3D, d: float) -> void:
+	var was := int(node.get_meta("ring", -1))
+	var ring := 0 if d < LOD_NEAR else (1 if d < LOD_MID else 2)
+	if was >= 0 and ring > was and d < (LOD_NEAR if was == 0 else LOD_MID) * 1.12:
+		ring = was
+	if ring == was:
+		return
+	node.set_meta("ring", ring)
+	for c in node.get_children():
+		var g := c as GeometryInstance3D
+		if g == null:
+			continue
+		if g.has_meta("lod"):
+			g.visible = int(g.get_meta("lod")) == ring
+		elif g.has_meta("casts"):
+			# lamp posts, fences and kiosks throw shadows only near the camera
+			g.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if ring <= 1 else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 
 ## Forward+: the street lamps nearest to the camera become real lights.
@@ -320,6 +372,11 @@ func _update_lights() -> void:
 	var fwd := -cam.global_transform.basis.z
 	var cand: Array = []
 	for t in _lamps:
+		# only the tiles within a lamp's reach: a camera high over the city has none, and going
+		# through the tens of thousands of lamps of the whole near circle four times a second was
+		# a hitch each time
+		if _tile_dist(t, cp) > 340.0:
+			continue
 		var a: PackedFloat32Array = _lamps[t]
 		for i in a.size() / 8:
 			var o := i * 8

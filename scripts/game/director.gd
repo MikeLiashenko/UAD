@@ -34,6 +34,11 @@ func _ready() -> void:
 	if follower:
 		SFX.play_music("day")
 		return
+	if GS.training:
+		# the training range: an endless day, the instructor launches the targets
+		phase_len = 1.0e9
+		SFX.play_music("day")
+		return
 	start_day()
 
 
@@ -201,6 +206,11 @@ func start_night() -> void:
 			var bb := _weapon("ballistic", maxi(d, ball_from))
 			if _left(bb, 1) > 0:
 				schedule.append({"t": span * 0.5, "type": bb, "count": 1, "base": true})
+	if GS.realism:
+		# a ballistic missile leaves seconds; the early warning gives the time to walk to a console
+		for s in schedule.duplicate():
+			if s.has("type") and GS.kind_of(String(s.type)) == "ballistic":
+				schedule.append({"t": maxf(1.0, float(s.t) - 28.0), "warn": true})
 	schedule.sort_custom(func(a, b) -> bool: return float(a.t) < float(b.t))
 	SFX.play_music("night")
 	SFX.play_siren()
@@ -248,7 +258,10 @@ func _process(delta: float) -> void:
 
 	while not schedule.is_empty() and float(schedule[0].t) <= phase_time:
 		var s: Dictionary = schedule.pop_front()
-		if s.has("alert"):
+		if s.has("warn"):
+			game.hud.alert(GS.t("Угроза баллистики! Займите место за пультом комплекса."), Color(1.0, 0.85, 0.3))
+			SFX.play("alert", -4.0)
+		elif s.has("alert"):
 			game.hud.alert(GS.t(String(s.alert)), Color(1.0, 0.85, 0.3))
 			game.hud.log_event(GS.t(String(s.alert)), Color(1.0, 0.85, 0.3))
 			SFX.play("alert", 0.0)

@@ -314,7 +314,7 @@ func _process(delta: float) -> void:
 	for lamp in _lamps:
 		lamp.visible = lit
 	# at the gun the truck's own shield, barrel and muzzle glare would fill the picture
-	unit.model.visible = not (active and seat == "gun")
+	unit.model.visible = not (active and (seat == "gun" or game.rl != null))
 	if not active:
 		return
 	refresh_capture()
@@ -424,6 +424,14 @@ func _camera(delta: float) -> void:
 		cam.fov = lerpf(cam.fov, 32.0 if zoomed else 70.0, 1.0 - exp(-delta * 10.0))
 		return
 	var yaw := heading + cam_yaw
+	if game.rl != null:
+		# MaxRealism: the driver's own eyes, not a camera flying behind the truck
+		var lp := clampf(cam_pitch - 0.28, -0.5, 0.9)
+		var seat_eye := pos + Vector3(0, 1.55, 0) + _fwd(heading) * 0.4
+		cam.global_position = seat_eye + so * 0.3
+		cam.look_at(seat_eye + Vector3(-sin(yaw) * cos(lp), sin(lp), -cos(yaw) * cos(lp)), Vector3.UP)
+		cam.fov = lerpf(cam.fov, 72.0, 1.0 - exp(-delta * 4.0))
+		return
 	var back := _fwd(yaw)
 	var want := pos - back * cos(cam_pitch) * 17.0 + Vector3(0, 3.0 + sin(cam_pitch) * 17.0, 0)
 	# keep the camera out of the buildings around the truck
@@ -469,7 +477,7 @@ func _radio(delta: float) -> void:
 		if Vector2(tip_point.x, tip_point.z).distance_to(p) > 30.0:
 			tip_point = _drivable_near(Vector3(p.x, 0.0, p.y))
 	var show: bool = tip != null and seat == "drive" and tip_point.distance_to(pos) > 25.0
-	_pillar.visible = show
+	_pillar.visible = show and game.rl == null
 	if show:
 		_pillar.position = tip_point + Vector3(0, 80.0, 0)
 
@@ -576,7 +584,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif mb.button_index == MOUSE_BUTTON_RIGHT and mb.pressed and seat == "gun":
 			zoomed = not zoomed
 	elif event is InputEventKey and (event as InputEventKey).pressed and not (event as InputEventKey).echo:
-		if (event as InputEventKey).keycode == KEY_SPACE or (event as InputEventKey).keycode == KEY_E:
+		# MaxRealism keeps E for getting out (scripts/game/realism.gd)
+		if (event as InputEventKey).keycode == KEY_SPACE or ((event as InputEventKey).keycode == KEY_E and game.rl == null):
 			get_viewport().set_input_as_handled()
 			switch_seat()
 	elif event is InputEventScreenTouch:

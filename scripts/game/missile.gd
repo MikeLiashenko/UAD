@@ -20,6 +20,7 @@ var boost := 0.35
 var _trail: CPUParticles3D
 var _done := false
 var _committed := 0.0
+var _age := 0.0
 ## A friend's missile drawn on our screen (multiplayer): flies at the same threat, deals no damage.
 var cosmetic := false
 
@@ -74,7 +75,7 @@ func _ready() -> void:
 	_orient()
 	if cosmetic:
 		return
-	if _target_ok():
+	if _target_ok() and not GS.realism:
 		_committed = float(def.damage) * GS.eff(weapon_id, target)
 		target.inbound += _committed
 	if target and target.has_method("evade"):
@@ -94,6 +95,7 @@ func _process(delta: float) -> void:
 	if _done:
 		return
 	life -= delta
+	_age += delta
 	boost -= delta
 	speed = minf(max_speed, speed + max_speed * 1.3 * GS.TEMPO * delta)
 	var dir := vel.normalized()
@@ -122,7 +124,8 @@ func _process(delta: float) -> void:
 			position = target.position
 			_detonate(true)
 			return
-	if life <= 0.0 or position.y < 0.5 or (position.y < 400.0 and position.y < game.map.ground_height(position.x, position.z)):
+	# a roof right beside the launcher does not stop a round that is still leaving its rail
+	if life <= 0.0 or position.y < 0.5 or (_age > 0.6 and position.y < 400.0 and position.y < game.map.ground_height(position.x, position.z)):
 		_detonate(false)
 
 
@@ -162,7 +165,13 @@ func _detonate(hit: bool) -> void:
 		return
 	if _target_ok():
 		target.inbound = maxf(0.0, target.inbound - _committed)
-	if hit and _target_ok():
+	if GS.realism and _target_ok():
+		# no hit points here: the round either brings the target down or passes by
+		if hit and randf() < GS.kill_chance(weapon_id, target):
+			target.take_damage(target.hp + 1.0, weapon_id)
+		else:
+			game.missile_missed(self, position.distance_to(target.position))
+	elif hit and _target_ok():
 		var eff: float = GS.eff(weapon_id, target)
 		target.take_damage(float(def.damage) * eff, weapon_id)
 		if eff < 0.5 and not target.dead:
