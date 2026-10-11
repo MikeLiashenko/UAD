@@ -12,7 +12,7 @@ const VERSION_BASE := 11
 const STAGE := "Alpha"
 const BUILD := 18
 const DATE := "2026-10-11"
-const COMMIT := "eca8431"
+const COMMIT := "529a3ea"
 
 
 ## "v1.1.3 Alpha" for the given build number (this build by default).
