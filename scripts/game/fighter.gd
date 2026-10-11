@@ -100,7 +100,7 @@ func owned() -> bool:
 
 
 func _touch() -> bool:
-	return DisplayServer.is_touchscreen_available()
+	return GS.touch()
 
 
 ## Why the jet cannot go up now, or "".

@@ -33,6 +33,8 @@ var _owned_sig := ""
 var _walk_ui: Control
 var _fpv_ui: Control
 var zoom_box: VBoxContainer
+## Touch screens, the map view: hold buttons that rotate and tilt the camera.
+var turn_box: GridContainer
 
 var root: Control
 var money_lbl: Label
@@ -81,6 +83,8 @@ var _status_panel: Control
 var _radar: Control
 ## Frame of the last alert: in MaxRealism the feed line that repeats it is not said twice.
 var _alert_frame := -1
+## The finger holding the fire button of a touch screen (-1: none).
+var _fire_touch := -1
 
 
 func _ready() -> void:
@@ -160,7 +164,7 @@ func _build_walk_ui() -> void:
 	dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_walk_ui.add_child(dot)
 	var hint := UiKit.label(GS.t("ПРОГУЛКА · WASD — идти · Shift — бегом · Пробел — прыжок · мышь — осмотреться · %s — назад к ПВО · %s — пауза") % [GS.key_label("walk"), GS.key_label("pause")], 14, Color(0.75, 1.0, 0.9), HORIZONTAL_ALIGNMENT_CENTER)
-	if DisplayServer.is_touchscreen_available():
+	if GS.touch():
 		hint.text = GS.t("ПРОГУЛКА · левая половина экрана — идти · правая — осмотреться")
 	hint.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
 	hint.add_theme_constant_override("outline_size", 5)
@@ -293,7 +297,7 @@ func on_view_changed() -> void:
 			vname = GS.t("F-16")
 		view_btn.text = GS.t("ВИД [%s]: %s") % [GS.key_label("view"), vname]
 	if fire_btn:
-		fire_btn.visible = (base or fpv or mfg or air) and DisplayServer.is_touchscreen_available()
+		fire_btn.visible = (base or fpv or mfg or air) and GS.touch()
 		fire_btn.text = GS.t("РАЗГОН") if fpv else (GS.t("ПУШКА") if air else GS.t("ОГОНЬ"))
 	if target_panel:
 		target_panel.visible = false
@@ -311,9 +315,16 @@ func on_view_changed() -> void:
 		_fighter_ui.visible = air
 	if zoom_box:
 		zoom_box.visible = not walk and not fpv and not mfg and not air
+	if turn_box:
+		turn_box.visible = game.view == "top" and GS.touch() and not GS.realism
+		if not turn_box.visible and game.rig != null:
+			game.rig.turn = 0.0
+			game.rig.tilt = 0.0
+		# the zoom buttons stand under the camera pad, clear of the battery panel
+		zoom_box.offset_top = 214 if turn_box.visible else 90
 	if GS.realism:
 		# MaxRealism: no budget, no radar in the corner, no battery panel — the picture and the radio
-		for c in [_status_panel, _radar, log_box, alert_lbl, _weapons_panel, _walk_ui, _mfg_ui, zoom_box]:
+		for c in [_status_panel, _radar, log_box, alert_lbl, _weapons_panel, _walk_ui, _mfg_ui, zoom_box, fire_btn]:
 			if c != null:
 				c.visible = false
 	refresh()
@@ -529,6 +540,32 @@ func _build_touch_buttons() -> void:
 		var f: float = spec[1]
 		b.pressed.connect(func() -> void: game.zoom_view(f))
 		v.add_child(b)
+	# touch screens: the camera of the map view is also turned and tilted with hold buttons
+	# (the gestures are two fingers turning about each other and sliding up or down together)
+	turn_box = GridContainer.new()
+	turn_box.columns = 2
+	turn_box.add_theme_constant_override("h_separation", 8)
+	turn_box.add_theme_constant_override("v_separation", 8)
+	turn_box.anchor_left = 1.0
+	turn_box.anchor_right = 1.0
+	turn_box.anchor_top = 0.5
+	turn_box.anchor_bottom = 0.5
+	turn_box.offset_left = -124
+	turn_box.offset_right = -12
+	turn_box.offset_top = 90
+	turn_box.visible = false
+	root.add_child(turn_box)
+	for spec in [["⟲", "turn", -1.0], ["⟳", "turn", 1.0], ["▲", "tilt", 1.0], ["▼", "tilt", -1.0]]:
+		var b := Button.new()
+		b.text = spec[0]
+		b.custom_minimum_size = Vector2(52, 52)
+		b.add_theme_font_size_override("font_size", 24)
+		b.focus_mode = Control.FOCUS_NONE
+		var prop: String = spec[1]
+		var dir: float = spec[2]
+		b.button_down.connect(func() -> void: game.rig.set(prop, dir))
+		b.button_up.connect(func() -> void: game.rig.set(prop, 0.0))
+		turn_box.add_child(b)
 	# hold-to-fire button for touch screens in the gunner view
 	fire_btn = Button.new()
 	fire_btn.text = GS.t("ОГОНЬ")
@@ -547,6 +584,14 @@ func _build_touch_buttons() -> void:
 	fire_btn.offset_bottom = -150
 	fire_btn.button_down.connect(func() -> void: game.set_trigger(true))
 	fire_btn.button_up.connect(func() -> void: game.set_trigger(false))
+	if GS.touch():
+		# pressed by whichever finger lands on it (see _fire_input), not by the emulated mouse;
+		# and moved clear of the zoom buttons, which it used to reach under
+		fire_btn.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		fire_btn.offset_left = -250
+		fire_btn.offset_right = -110
+		fire_btn.offset_top = -330
+		fire_btn.offset_bottom = -190
 	fire_btn.visible = false
 	root.add_child(fire_btn)
 
@@ -958,6 +1003,8 @@ func _close_world() -> void:
 
 ## Y / N answer the oldest join request (checked before the game's own keys: N is night vision).
 func _input(event: InputEvent) -> void:
+	if _fire_input(event):
+		return
 	if _req_cards.is_empty() or not (event is InputEventKey) or not event.pressed or event.echo:
 		return
 	var kc := (event as InputEventKey).keycode
@@ -1324,3 +1371,29 @@ func show_game_over(reason: String) -> void:
 	if GS.world_id != "":
 		v.add_child(UiKit.button(GS.t("Повторить с последнего утра"), func() -> void: game.main.play_world(GS.world_id)))
 	v.add_child(UiKit.button(GS.t("Главное меню"), func() -> void: game.main.show_menu()))
+
+
+## The hold-to-fire button answers the finger that is on it, whichever it is. As a plain Button it
+## heard only the first finger on the screen (controls live on the emulated mouse), so it could
+## not be pressed while another finger was already aiming.
+func _fire_input(event: InputEvent) -> bool:
+	if fire_btn == null or not GS.touch():
+		return false
+	if event is InputEventScreenTouch:
+		var st := event as InputEventScreenTouch
+		if st.pressed and _fire_touch < 0 and fire_btn.is_visible_in_tree() and not get_tree().paused and fire_btn.get_global_rect().get_center().distance_to(st.position) <= fire_btn.size.x * 0.56:
+			_fire_touch = st.index
+			fire_btn.modulate = Color(1.5, 1.3, 1.2)
+			game.set_trigger(true)
+			get_viewport().set_input_as_handled()
+			return true
+		if not st.pressed and st.index == _fire_touch:
+			_fire_touch = -1
+			fire_btn.modulate = Color(1, 1, 1)
+			game.set_trigger(false)
+			get_viewport().set_input_as_handled()
+			return true
+	elif event is InputEventScreenDrag and (event as InputEventScreenDrag).index == _fire_touch:
+		get_viewport().set_input_as_handled()
+		return true
+	return false

@@ -54,7 +54,7 @@ func exit() -> void:
 
 
 func refresh_capture() -> void:
-	if not active or DisplayServer.is_touchscreen_available():
+	if not active or GS.touch():
 		if active:
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		return

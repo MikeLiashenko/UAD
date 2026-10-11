@@ -96,7 +96,7 @@ func _draw() -> void:
 		hint = GS.t("мышь — прицел · ЛКМ — огонь очередями · ПКМ — зум · Пробел — за руль · %s — выйти из машины") % GS.key_label("mfg")
 	if real:
 		hint = GS.t("W/S — газ/тормоз · A/D — руль · Пробел — к пулемёту и обратно · ЛКМ — огонь · %s — выйти из машины") % GS.key_label("use")
-	if DisplayServer.is_touchscreen_available():
+	if GS.touch():
 		hint = GS.t("левая половина — руль и газ · правая — обзор · кнопки — пулемёт и огонь")
 	_txt(Vector2(40, sz.y - 22), hint, 13, Color(0.75, 1.0, 0.88, 0.85), HORIZONTAL_ALIGNMENT_CENTER, sz.x - 80.0)
 

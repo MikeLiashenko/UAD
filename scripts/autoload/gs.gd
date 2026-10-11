@@ -495,6 +495,15 @@ const KEY_ACTIONS := [
 ]
 
 
+## Test switch (-- --touch): the interface of a touch screen on a computer without one.
+var force_touch := false
+
+
+## The game is played with fingers: on-screen sticks and buttons instead of keys and a mouse.
+func touch() -> bool:
+	return force_touch or DisplayServer.is_touchscreen_available()
+
+
 ## Keycode currently bound to an action (falls back to the default).
 func key_of(action: String) -> int:
 	var bound: Dictionary = settings.get("keys", {})

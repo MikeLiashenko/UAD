@@ -217,7 +217,7 @@ func _draw() -> void:
 		for i in lines.size():
 			_txt(Vector2(c.x - 300, c.y - 90 + i * 34), lines[i], 32 if i == 0 else 22, kc, HORIZONTAL_ALIGNMENT_CENTER, 600)
 	var hint := GS.t("мышь — куда лететь (кольцо) · W/S — тяга · A/D, стрелки — поворот · Shift/ЛКМ — разгон · %s — следующий дрон · %s — на базу · %s — ночная камера · %s — пульт выкл · Alt — курсор") % [GS.key_label("fpv_next"), GS.key_label("fpv_home"), GS.key_label("night"), GS.key_label("fpv")]
-	if DisplayServer.is_touchscreen_available():
+	if GS.touch():
 		hint = GS.t("свайп — куда лететь (кольцо) · ромб — точка встречи с целью · «РАЗГОН» — ускорение · «СЛЕД.» — другой дрон · «НАЗАД» — выйти")
 	_txt(Vector2(40, sz.y - 26), hint, 13, Color(col.r, col.g, col.b, 0.75), HORIZONTAL_ALIGNMENT_CENTER, sz.x - 80.0)
 	_static(q)

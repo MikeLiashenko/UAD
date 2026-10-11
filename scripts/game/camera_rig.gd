@@ -1,6 +1,8 @@
 extends Node
 ## Orbit camera around a ground focus point. Mouse: LMB-drag pan, RMB-drag rotate, wheel zoom.
-## Keyboard: WASD/arrows pan, Q/E rotate, +/- zoom. Touch: drag pan, pinch zoom.
+## Keyboard: WASD/arrows pan, Q/E rotate, +/- zoom. Touch: drag pan, pinch zoom, two fingers
+## turning about each other rotate, two fingers sliding up or down together tilt; the HUD of a
+## touch screen also has hold buttons for the same (turn / tilt).
 ## A short LMB press/release without dragging is reported as `clicked` (target selection).
 
 signal clicked(pos: Vector2)
@@ -25,6 +27,14 @@ var _press := Vector2.ZERO
 var _touches := {}
 var _pinch := 0.0
 var _shake := 0.0
+## Held on-screen buttons of a touch screen: rotate (-1 left, 1 right) and tilt (-1 down, 1 up).
+var turn := 0.0
+var tilt := 0.0
+## The two-finger gesture in progress: the angle of the line between the fingers at the last
+## event, and the last vertical step of each finger with its time (index -> [dy, msec]).
+var _twist := 0.0
+var _twisting := false
+var _steps := {}
 
 
 func _ready() -> void:
@@ -74,6 +84,8 @@ func _process(delta: float) -> void:
 		zoom(1.0 - delta * 1.5)
 	if Input.is_key_pressed(KEY_MINUS) or Input.is_key_pressed(KEY_KP_SUBTRACT):
 		zoom(1.0 + delta * 1.5)
+	_t_yaw += turn * 1.4 * delta
+	_t_pitch += tilt * 0.8 * delta
 	_t_target.x = clampf(_t_target.x, -bounds, bounds)
 	_t_target.z = clampf(_t_target.z, -bounds, bounds)
 	_t_pitch = clampf(_t_pitch, 0.06, 1.35)
@@ -132,6 +144,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			_touches.erase(st.index)
 		_pinch = 0.0
+		_twisting = false
+		_steps.clear()
+		if _touches.size() >= 2:
+			# the second finger is down: the gesture is measured from where the two stand now
+			var pts: Array = _touches.values()
+			_pinch = (pts[0] as Vector2).distance_to(pts[1] as Vector2)
+			_twist = ((pts[1] as Vector2) - (pts[0] as Vector2)).angle()
+			_twisting = true
 	elif event is InputEventScreenDrag:
 		var sd := event as InputEventScreenDrag
 		_touches[sd.index] = sd.position
@@ -142,5 +162,18 @@ func _unhandled_input(event: InputEvent) -> void:
 			if _pinch > 0.0 and d > 1.0:
 				zoom(_pinch / d)
 			_pinch = d
+			# the fingers turn about each other: the map turns with them
+			var ang: float = ((pts[1] as Vector2) - (pts[0] as Vector2)).angle()
+			if _twisting and d > 40.0:
+				_t_yaw += angle_difference(_twist, ang)
+			_twist = ang
+			_twisting = true
+			# both slide the same way, up or down: the camera tilts (down — more from above)
+			var now := Time.get_ticks_msec()
+			for k in _steps:
+				var other: Array = _steps[k]
+				if k != sd.index and now - int(other[1]) < 150 and float(other[0]) * sd.relative.y > 0.0:
+					_t_pitch += sd.relative.y * 0.0025
+			_steps[sd.index] = [sd.relative.y, now]
 	elif event is InputEventMagnifyGesture:
 		zoom(1.0 / (event as InputEventMagnifyGesture).factor)

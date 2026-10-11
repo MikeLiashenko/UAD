@@ -218,6 +218,8 @@ func _parse_args() -> void:
 		Engine.time_scale = float(_args.speed)
 	if _args.has("nomarkers"):
 		GS.settings.markers = false
+	if _args.has("touch"):
+		GS.force_touch = true # the interface of a touch screen (sticks, on-screen buttons)
 	if _args.has("quality"):
 		# test hook: the graphics level of this run only (the settings file is not touched)
 		GS.settings.quality = int(_args.quality)
@@ -478,6 +480,24 @@ func _process(delta: float) -> void:
 		_aimbot()
 	if game and is_instance_valid(game) and game.rl != null:
 		_realism_hooks(delta)
+	if _args.has("twisttest") and game and is_instance_valid(game) and game.view == "top" and _clock >= 3.0:
+		_twist_selftest()
+	if _args.has("firetouch") and game and is_instance_valid(game) and game.view == "base" and _clock >= 3.0:
+		# --touch --firetouch (the usual game, --view=base): one finger aims, another holds the fire button
+		var fb: Vector2 = game.hud.fire_btn.get_global_rect().get_center()
+		var mid := get_viewport().get_visible_rect().size * 0.5
+		match int(_tt.stage):
+			0:
+				_finger(0, mid, true)
+				_slide(0, mid, Vector2(60, 0))
+				_finger(1, fb, true)
+			4:
+				print("UAD FIRETOUCH button shown=%s held by the second finger: trigger=%s" % [game.hud.fire_btn.is_visible_in_tree(), game.base_view.trigger])
+				_finger(1, fb, false)
+			8:
+				print("UAD FIRETOUCH released: trigger=%s" % game.base_view.trigger)
+				_finger(0, mid + Vector2(60, 0), false)
+		_tt.stage = int(_tt.stage) + 1
 	if _args.has("f16input") and game and is_instance_valid(game) and game.view == "fighter":
 		_f16_input(delta)
 	elif _args.has("aimbot") and game and is_instance_valid(game) and game.view == "fighter":
@@ -1846,6 +1866,8 @@ func _realism_hooks(delta: float) -> void:
 		_args.erase("rl-order")
 	if _args.has("rl-bot") and rl.scope_on():
 		_scope_bot(delta, 2)
+	if _args.has("rl-touchtest"):
+		_touch_selftest()
 	if _args.has("train-bot") and rl.training != null:
 		_train_bot(delta)
 
@@ -1951,3 +1973,131 @@ func _train_bot(delta: float) -> void:
 					rl.use()
 		8, 9:
 			_scope_bot(delta, 2)
+
+
+## --touch --rl-touchtest (MaxRealism): fingers fed through the input system — a thumb on the
+## stick, a second finger on the seat button, then aiming with one finger while another holds
+## the fire button. Every step prints what the game made of it.
+var _tt := {"stage": 0, "t": 0.0, "p0": Vector3.ZERO, "yaw0": 0.0}
+
+
+func _finger(index: int, at: Vector2, down: bool) -> void:
+	var ev := InputEventScreenTouch.new()
+	ev.index = index
+	ev.position = get_viewport().get_final_transform() * at
+	ev.pressed = down
+	Input.parse_input_event(ev)
+
+
+func _slide(index: int, at: Vector2, by: Vector2) -> void:
+	var ev := InputEventScreenDrag.new()
+	ev.index = index
+	var xf := get_viewport().get_final_transform()
+	ev.position = xf * (at + by)
+	ev.relative = xf.basis_xform(by)
+	Input.parse_input_event(ev)
+
+
+func _touch_button(id: String) -> Vector2:
+	for b in game.rl.hud._btns:
+		if String(b.id) == id:
+			if b.has("rect"):
+				var rc: Rect2 = b.rect
+				return rc.get_center()
+			return b.c
+	return Vector2(-1, -1)
+
+
+func _touch_selftest() -> void:
+	var rl = game.rl
+	var sz := get_viewport().get_visible_rect().size
+	var stick := Vector2(160, sz.y - 180)
+	if _clock - float(_tt.t) < 0.6 or _clock < 2.0:
+		return
+	_tt.t = _clock
+	match int(_tt.stage):
+		0:
+			_tt.p0 = game.walker.pos
+			_finger(0, stick, true)
+			_slide(0, stick, Vector2(0, -60))
+		1:
+			print("UAD TOUCH stick: walked %.1f m with the thumb down" % game.walker.pos.distance_to(_tt.p0))
+			_tb_goto(game.weapons["mg"].global_position, rl._hull("mg"))
+		2:
+			var b := _touch_button("use")
+			print("UAD TOUCH seat button on screen=%s near=%s buttons=%d" % [b.x >= 0.0, str(rl.near.get("id", "-")), rl.hud._btns.size()])
+			_finger(1, b, true)
+			_finger(1, b, false)
+		3:
+			print("UAD TOUCH seat taken with a second finger: view=%s (thumb still on the stick)" % game.view)
+			_finger(0, stick + Vector2(0, -60), false)
+			_tt.yaw0 = game.base_view.yaw
+			_finger(0, sz * 0.5, true)
+			_slide(0, sz * 0.5, Vector2(80, 0))
+		4:
+			var f := _touch_button("fire")
+			_finger(1, f, true)
+		5:
+			print("UAD TOUCH aim %.2f rad with one finger, fire held by another: trigger=%s" % [absf(game.base_view.yaw - float(_tt.yaw0)), game.base_view.trigger])
+			_finger(1, _touch_button("fire"), false)
+			_finger(0, sz * 0.5 + Vector2(80, 0), false)
+		6:
+			print("UAD TOUCH fire released: trigger=%s" % game.base_view.trigger)
+			var u := _touch_button("use")
+			_finger(0, u, true)
+			_finger(0, u, false)
+		7:
+			print("UAD TOUCH up again: view=%s" % game.view)
+	_tt.stage = int(_tt.stage) + 1
+
+
+## --touch --twisttest (the usual game, the map view): two fingers turn about each other, slide
+## down together, then pinch. Prints how the camera answered and which way the picture turned.
+func _twist_selftest() -> void:
+	var rig = game.rig
+	var a := Vector2(480, 330)
+	var b := Vector2(760, 330)
+	var east: Vector3 = rig.target + Vector3(400, 0, 0)
+	if _clock - float(_tt.t) < 0.9:
+		return
+	_tt.t = _clock
+	var on_screen := (cam.unproject_position(east) - cam.unproject_position(rig.target)).angle()
+	match int(_tt.stage):
+		0:
+			_tt.yaw0 = on_screen
+			_tt.p0 = Vector3(rig._t_yaw, rig._t_pitch, rig._t_dist)
+			_finger(0, a, true)
+			_finger(1, b, true)
+			for i in 8:
+				var from := a + (b - a).rotated(0.05 * i)
+				var to := a + (b - a).rotated(0.05 * (i + 1))
+				_slide(1, from, to - from)
+			b = a + (b - a).rotated(0.4)
+			_finger(1, b, false)
+			_finger(0, a, false)
+		1:
+			print("UAD TWIST fingers turned 0.40 rad clockwise: camera yaw %+.2f, the picture turned %+.2f rad" % [rig._t_yaw - _tt.p0.x, angle_difference(float(_tt.yaw0), on_screen)])
+			_tt.p0 = Vector3(rig._t_yaw, rig._t_pitch, rig._t_dist)
+			_finger(0, a, true)
+			_finger(1, b, true)
+			for i in 6:
+				_slide(0, a + Vector2(0, 10 * i), Vector2(0, 10))
+				_slide(1, b + Vector2(0, 10 * i), Vector2(0, 10))
+			_finger(0, a + Vector2(0, 60), false)
+			_finger(1, b + Vector2(0, 60), false)
+		2:
+			print("UAD TWIST both fingers slid 60 px down: pitch %+.2f, yaw %+.2f, distance x%.2f" % [rig._t_pitch - _tt.p0.y, rig._t_yaw - _tt.p0.x, rig._t_dist / _tt.p0.z])
+			_tt.p0 = Vector3(rig._t_yaw, rig._t_pitch, rig._t_dist)
+			_finger(0, a, true)
+			_finger(1, b, true)
+			for i in 6:
+				_slide(1, b + Vector2(20 * i, 0), Vector2(20, 0))
+			_finger(0, a, false)
+			_finger(1, b + Vector2(120, 0), false)
+		3:
+			print("UAD TWIST fingers spread apart: distance x%.2f, pitch %+.2f, yaw %+.2f" % [rig._t_dist / _tt.p0.z, rig._t_pitch - _tt.p0.y, rig._t_yaw - _tt.p0.x])
+			game.hud.turn_box.get_child(1).button_down.emit()
+		4:
+			print("UAD TWIST rotate button held 0.9 s: yaw %+.2f, shown=%s" % [rig._t_yaw - _tt.p0.x, game.hud.turn_box.visible])
+			game.hud.turn_box.get_child(1).button_up.emit()
+	_tt.stage = int(_tt.stage) + 1

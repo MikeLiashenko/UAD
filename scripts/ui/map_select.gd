@@ -222,6 +222,32 @@ func _update_friends() -> void:
 			_friends.erase(c)
 
 
+## Two fingers pinch the map in and out. A touch screen has no wheel, and the magnify gesture of
+## the engine is switched off in the project; the first finger still pans as the emulated mouse.
+var _touches := {}
+var _pinch := 0.0
+
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch:
+		var st := event as InputEventScreenTouch
+		if st.pressed:
+			_touches[st.index] = st.position
+		else:
+			_touches.erase(st.index)
+		_pinch = 0.0
+	elif event is InputEventScreenDrag:
+		var sd := event as InputEventScreenDrag
+		_touches[sd.index] = sd.position
+		if _touches.size() >= 2:
+			_moved = true # not a tap: nothing is picked when the fingers lift
+			var pts: Array = _touches.values()
+			var d: float = (pts[0] as Vector2).distance_to(pts[1] as Vector2)
+			if _pinch > 0.0 and d > 1.0:
+				_t_height = clampf(_t_height * _pinch / d, 500.0, 45000.0)
+			_pinch = d
+
+
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
@@ -242,7 +268,7 @@ func _gui_input(event: InputEvent) -> void:
 		var mm := event as InputEventMouseMotion
 		if mm.position.distance_to(_press) > 10.0:
 			_moved = true
-		if _moved:
+		if _moved and _touches.size() < 2:
 			focus -= Vector3(mm.relative.x, 0, mm.relative.y) * height * 0.0016
 	elif event is InputEventMagnifyGesture:
 		_t_height = clampf(_t_height / (event as InputEventMagnifyGesture).factor, 500.0, 45000.0)

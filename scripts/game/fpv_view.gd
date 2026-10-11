@@ -72,7 +72,7 @@ func _ready() -> void:
 
 
 func _touch() -> bool:
-	return DisplayServer.is_touchscreen_available()
+	return GS.touch()
 
 
 ## Link range in world units: past this distance the drone flies on its own.

@@ -116,7 +116,7 @@ func _draw() -> void:
 	# --- right: stores and fuel
 	# under the flight data: the right side belongs to the event log
 	var r := Vector2(40, c.y + 85)
-	var touch := DisplayServer.is_touchscreen_available()
+	var touch := GS.touch()
 	var dim := Color(0.5, 0.6, 0.55)
 	_txt(r, "AIM-9X ×%d" % int(fg.loaded.aim9), 18, HUD if int(fg.loaded.aim9) > 0 else dim)
 	_txt(r + Vector2(0, 26), "AIM-120 ×%d" % int(fg.loaded.aim120), 18, HUD if int(fg.loaded.aim120) > 0 else dim)
@@ -152,7 +152,7 @@ func _draw() -> void:
 
 ## What to press now, in big letters under the centre.
 func _prompt(c: Vector2, t: float) -> void:
-	var touch := DisplayServer.is_touchscreen_available()
+	var touch := GS.touch()
 	var p := Vector2(c.x - 350, c.y + 180)
 	var kind: String = fg.auto_kind()
 	if kind != "":

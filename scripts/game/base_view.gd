@@ -25,7 +25,7 @@ var _saved_fov := 62.0
 
 
 func _touch() -> bool:
-	return DisplayServer.is_touchscreen_available()
+	return GS.touch()
 
 
 func weapon():

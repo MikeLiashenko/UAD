@@ -80,7 +80,7 @@ func _ready() -> void:
 
 
 func _touch() -> bool:
-	return DisplayServer.is_touchscreen_available()
+	return GS.touch()
 
 
 ## The truck, built the first time it is needed; it stays in the city afterwards.

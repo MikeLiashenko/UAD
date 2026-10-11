@@ -56,11 +56,14 @@ var radio_log: Array = []
 var note := ""
 var note_t := 0.0
 var _greeted := false
+## Played with fingers: the overlay draws a stick and buttons, hints name them instead of keys.
+var touch := false
 ## Paid orders on the road: [{kind, id, n, t}] — t is the seconds left until the column arrives.
 var orders: Array = []
 
 
 func _ready() -> void:
+	touch = GS.touch()
 	attach_hud()
 	if GS.training:
 		training = Training.new()
@@ -89,7 +92,10 @@ func begin() -> void:
 	if not _greeted and not GS.training:
 		_greeted = true
 		radio(GS.t("Позиция на связи. Расчёты стволов на местах, огонь по готовности."))
-		radio(GS.t("Снабжение, радар и приказы — на командном пункте: зелёная кабина у мачты с красным огнём. Там %s.") % GS.key_label("shop"), Color(0.75, 0.82, 0.76))
+		if touch:
+			radio(GS.t("Снабжение, радар и приказы — на командном пункте: зелёная кабина у мачты с красным огнём."), Color(0.75, 0.82, 0.76))
+		else:
+			radio(GS.t("Снабжение, радар и приказы — на командном пункте: зелёная кабина у мачты с красным огнём. Там %s.") % GS.key_label("shop"), Color(0.75, 0.82, 0.76))
 
 
 # --- Stations ------------------------------------------------------------------------------------
@@ -588,7 +594,7 @@ func crews_free() -> bool:
 func refresh_capture() -> void:
 	if game.view != "post":
 		return
-	if DisplayServer.is_touchscreen_available():
+	if GS.touch():
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		return
 	var free: bool = get_tree().paused or Input.is_key_pressed(KEY_ALT) or game.game_over or game.wants_cursor()

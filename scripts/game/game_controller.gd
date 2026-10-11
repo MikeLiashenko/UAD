@@ -1441,7 +1441,7 @@ func _process(delta: float) -> void:
 		Net.set_local(GS.base_pos, GS.base_loc, cam.global_transform, cam.fov, view)
 	if view == "top":
 		var vp := get_viewport()
-		hovered = pick_enemy(vp.get_mouse_position()) if not DisplayServer.is_touchscreen_available() else null
+		hovered = pick_enemy(vp.get_mouse_position()) if not GS.touch() else null
 	var focus_e = hovered if hovered != null else locked
 	if rl == null and focus_e != null and is_instance_valid(focus_e) and not focus_e.dead:
 		predict_info = predict_debris(focus_e)

@@ -14,43 +14,25 @@ const CASE := Color(0.07, 0.085, 0.075, 1.0)
 
 var game
 var rl
-var _use_btn: Button
-var _lock_btn: Button
+## Touch screens: the buttons of the seat the player is in ({id, text} with a centre and a radius,
+## or with a rect) and the fingers resting on them (touch index -> id). A Button control hears
+## only the first finger on the screen — it lives on the emulated mouse — so with a thumb on the
+## stick nothing else could be pressed; these are hit-tested for every finger (see _input).
+var _btns: Array = []
+var _held := {}
 
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	if DisplayServer.is_touchscreen_available():
-		_use_btn = _touch_btn(GS.t("МЕСТО"), -330, func() -> void: rl.use())
-		_lock_btn = _touch_btn(GS.t("ЗАХВАТ"), -490, func() -> void: rl.lock())
-
-
-## A round button over the fire button of the game HUD, for touch screens.
-func _touch_btn(text: String, left: float, cb: Callable) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.focus_mode = Control.FOCUS_NONE
-	b.add_theme_font_size_override("font_size", 20)
-	b.add_theme_stylebox_override("normal", UiKit.sbox(Color(0.1, 0.12, 0.1, 0.75), DIM, 2, 60, 6))
-	b.add_theme_stylebox_override("pressed", UiKit.sbox(Color(0.25, 0.3, 0.25, 0.9), INK, 2, 60, 6))
-	b.anchor_left = 1.0
-	b.anchor_right = 1.0
-	b.anchor_top = 1.0
-	b.anchor_bottom = 1.0
-	b.offset_left = left
-	b.offset_right = left + 120.0
-	b.offset_top = -270
-	b.offset_bottom = -150
-	b.pressed.connect(cb)
-	add_child(b)
-	return b
 
 
 func _process(_delta: float) -> void:
-	if _use_btn != null:
-		_use_btn.visible = game.view != "walk" or not rl.near.is_empty()
-		_lock_btn.visible = rl.scope_on()
+	if rl.touch:
+		var live: bool = not get_tree().paused and not game.game_over
+		_btns = _layout(size) if live else []
+		if not live:
+			_release_all()
 	queue_redraw()
 
 
@@ -85,6 +67,8 @@ func _draw() -> void:
 			_draw_prompt(sz)
 	if rl.note_t > 0.0:
 		_txt(Vector2(sz.x * 0.5 - 500, sz.y * 0.5 + 120), rl.note, 17, Color(AMBER.r, AMBER.g, AMBER.b, clampf(rl.note_t, 0.0, 1.0)), HORIZONTAL_ALIGNMENT_CENTER, 1000)
+	if rl.touch:
+		_draw_touch(sz)
 
 
 # --- On foot ----------------------------------------------------------------------------------
@@ -119,14 +103,17 @@ func _draw_prompt(sz: Vector2) -> void:
 			verb = GS.t("к пульту")
 		"truck":
 			verb = GS.t("сесть за руль")
-	_txt(Vector2(sz.x * 0.5 - 400, sz.y * 0.5 + 86), "%s — %s: %s" % [GS.key_label("use"), verb, String(rl.near.name)], 18, INK, HORIZONTAL_ALIGNMENT_CENTER, 800)
+	var what := "%s: %s" % [verb, String(rl.near.name)]
+	if not rl.touch:
+		what = "%s — %s" % [GS.key_label("use"), what]
+	_txt(Vector2(sz.x * 0.5 - 400, sz.y * 0.5 + 86), what, 18, INK, HORIZONTAL_ALIGNMENT_CENTER, 800)
 
 
 ## At a gun or an infrared launcher the sight is drawn by the reticle; here only the keys.
 func _draw_seat_hint(sz: Vector2) -> void:
 	var w = game.base_view.weapon()
-	if w == null:
-		return
+	if w == null or rl.touch:
+		return # on a touch screen the buttons say it all
 	var fire := GS.t("ЛКМ — огонь") if String(w.def.kind) == "gun" else GS.t("держите цель в кольце до ровного тона · ЛКМ — пуск")
 	_txt(Vector2(40, sz.y - 22), GS.t("%s · ПКМ / колесо — кратность · %s — ночной прицел · %s — встать") % [fire, GS.key_label("night"), GS.key_label("use")], 13, Color(DIM.r, DIM.g, DIM.b, 0.85), HORIZONTAL_ALIGNMENT_CENTER, sz.x - 80.0)
 
@@ -285,15 +272,15 @@ func _draw_console(sz: Vector2) -> void:
 	if rl.console_t > 0.0:
 		_txt(Vector2(panel.position.x, panel.position.y + 24.0), rl.console_msg, 16, Color(AMBER.r, AMBER.g, AMBER.b, clampf(rl.console_t, 0.0, 1.0)), HORIZONTAL_ALIGNMENT_CENTER, pw)
 	var hint := GS.t("мышь ↔ азимут · мышь ↕ дальность · ПКМ — захват / сброс · ЛКМ — пуск · колесо — шкала · %s — встать") % GS.key_label("use")
-	if DisplayServer.is_touchscreen_available():
-		hint = GS.t("ведите пальцем: ↔ азимут, ↕ дальность · ЗАХВАТ · ОГОНЬ — пуск")
+	if rl.touch:
+		hint = GS.t("ведите пальцем по экрану: ↔ азимут, ↕ дальность")
 	_txt(Vector2(panel.end.x + 20.0, sz.y - 22), hint, 13, Color(DIM.r, DIM.g, DIM.b, 0.85), HORIZONTAL_ALIGNMENT_LEFT, sz.x - panel.end.x - 40.0)
 
 
 ## The command post: the surveillance scope and the state board. The whole screen is the console.
 func _draw_post(sz: Vector2) -> void:
 	var r := _post_radius(sz)
-	var c := Vector2(sz.x * 0.5, sz.y * 0.5 + 10.0)
+	var c := Vector2(sz.x * 0.5, sz.y * 0.5 + (-14.0 if rl.touch else 10.0))
 	_scope(c, r, true)
 	if rl.console_t > 0.0:
 		_txt(Vector2(c.x - r, c.y - r - 46.0), rl.console_msg, 16, Color(AMBER.r, AMBER.g, AMBER.b, clampf(rl.console_t, 0.0, 1.0)), HORIZONTAL_ALIGNMENT_CENTER, r * 2.0)
@@ -323,7 +310,7 @@ func _draw_post(sz: Vector2) -> void:
 	var found := GS.t("РАСКРЫТА — ЖДИТЕ УДАР") if GS.base_found else GS.t("не обнаружена")
 	_row(Vector2(x, y), GS.t("МАСКИРОВКА"), found, AMBER if GS.base_found else INK, w)
 	y += 24.0
-	_row(Vector2(x, y), GS.t("РАСЧЁТЫ [%s]") % GS.key_label("auto"), GS.t("ОГОНЬ ПО ГОТОВНОСТИ") if rl.crews_free() else GS.t("НЕ СТРЕЛЯТЬ"), INK if rl.crews_free() else AMBER, w)
+	_row(Vector2(x, y), GS.t("РАСЧЁТЫ") if rl.touch else GS.t("РАСЧЁТЫ [%s]") % GS.key_label("auto"), GS.t("ОГОНЬ ПО ГОТОВНОСТИ") if rl.crews_free() else GS.t("НЕ СТРЕЛЯТЬ"), INK if rl.crews_free() else AMBER, w)
 	y += 38.0
 	_txt(Vector2(x, y), GS.t("НА ПОЗИЦИИ"), 14, DIM)
 	y += 22.0
@@ -335,6 +322,8 @@ func _draw_post(sz: Vector2) -> void:
 		y += 21.0
 		if y > sz.y - 90.0:
 			break
+	if rl.touch:
+		return # the row of buttons along the bottom stands for the keys
 	var keys := GS.t("%s — снабжение · %s — удары по точкам пуска · %s — лента города · %s — приказ расчётам · %s — встать") % [GS.key_label("shop"), GS.key_label("strikes"), GS.key_label("feed"), GS.key_label("auto"), GS.key_label("use")]
 	_txt(Vector2(40, sz.y - 44), keys, 14, INK, HORIZONTAL_ALIGNMENT_CENTER, sz.x - 80.0)
 	_txt(Vector2(40, sz.y - 22), GS.t("мышь ↔ азимут · мышь ↕ дальность · ПКМ — взять отметку на сопровождение · колесо — шкала"), 13, Color(DIM.r, DIM.g, DIM.b, 0.85), HORIZONTAL_ALIGNMENT_CENTER, sz.x - 80.0)
@@ -357,10 +346,14 @@ func _draw_training(sz: Vector2) -> float:
 	elif game.view == "base" and rl.scope_on():
 		at.x = _console_radius(sz) * 2.0 + 96.0
 		w = minf(w, sz.x - at.x - 24.0)
+	var low: bool = game.view == "base" and not rl.scope_on()
+	if low and rl.touch:
+		# the bottom right corner belongs to the buttons
+		at.x = 24.0
+		w = minf(w, sz.x - 24.0 - 340.0)
 	var h := 40.0
 	for i in lines.size():
 		h += GS.font.get_multiline_string_size(lines[i], HORIZONTAL_ALIGNMENT_LEFT, w - 36.0, 17 if i == 0 else 15).y + 4.0
-	var low: bool = game.view == "base" and not rl.scope_on()
 	if low:
 		at.y = sz.y - h - 44.0 # at a sight the sky is where the targets are: the card goes down
 	draw_rect(Rect2(at, Vector2(w, h)), Color(0.04, 0.05, 0.045, 0.86))
@@ -370,3 +363,167 @@ func _draw_training(sz: Vector2) -> float:
 	for i in lines.size():
 		y += _para(Vector2(at.x + 18.0, y), lines[i], 17 if i == 0 else 15, INK if i == 0 else Color(INK.r, INK.g, INK.b, 0.85), w - 36.0) + 4.0
 	return 0.0 if low else at.y + h
+
+
+# --- Touch screens --------------------------------------------------------------------------------
+## The buttons of the seat the player is in: round ones in the bottom right corner (the left half
+## of the screen is the stick), a row along the bottom at the command post, the pause on top.
+func _layout(sz: Vector2) -> Array:
+	var out := [{"id": "pause", "c": Vector2(sz.x - 46.0, 46.0), "r": 28.0, "text": "❚❚"}]
+	match String(game.view):
+		"walk":
+			if not rl.near.is_empty():
+				out.append({"id": "use", "c": sz + Vector2(-130, -150), "r": 62.0, "text": GS.t("МЕСТО")})
+		"base":
+			var w = game.base_view.weapon()
+			var gun: bool = w != null and String(w.def.kind) == "gun"
+			out.append({"id": "fire", "c": sz + Vector2(-112, -128), "r": 70.0, "text": GS.t("ОГОНЬ") if gun else GS.t("ПУСК"), "hot": true})
+			out.append({"id": "use", "c": sz + Vector2(-262, -64), "r": 44.0, "text": GS.t("ВСТАТЬ")})
+			out.append({"id": "zoom_in", "c": sz + Vector2(-60, -262), "r": 36.0, "text": "+"})
+			out.append({"id": "zoom_out", "c": sz + Vector2(-146, -262), "r": 36.0, "text": "−"})
+			if rl.scope_on():
+				out.append({"id": "lock", "c": sz + Vector2(-258, -176), "r": 56.0, "text": GS.t("ЗАХВАТ")})
+			else:
+				out.append({"id": "nv", "c": sz + Vector2(-250, -172), "r": 44.0, "text": GS.t("НОЧЬ")})
+		"mfg":
+			var driving: bool = game.mfg.seat == "drive"
+			out.append({"id": "fire", "c": sz + Vector2(-112, -128), "r": 70.0, "text": GS.t("ОГОНЬ"), "hot": true})
+			out.append({"id": "seat", "c": sz + Vector2(-258, -176), "r": 56.0, "text": GS.t("ПУЛЕМЁТ") if driving else GS.t("РУЛЬ")})
+			out.append({"id": "use", "c": sz + Vector2(-262, -64), "r": 44.0, "text": GS.t("ВЫЙТИ")})
+		"post":
+			var row := [["shop", GS.t("СНАБЖЕНИЕ"), 150.0], ["crew", GS.t("РАСЧЁТЫ"), 126.0], ["lock", GS.t("ЗАХВАТ"), 124.0],
+				["zoom_out", "−", 62.0], ["zoom_in", "+", 62.0], ["use", GS.t("ВСТАТЬ"), 120.0]]
+			if not GS.training:
+				row.insert(1, ["strikes", GS.t("УДАРЫ"), 110.0])
+				row.insert(2, ["feed", GS.t("ЛЕНТА"), 110.0])
+			var total := 10.0 * (row.size() - 1)
+			for b in row:
+				total += float(b[2])
+			var x := (sz.x - total) * 0.5
+			for b in row:
+				out.append({"id": String(b[0]), "rect": Rect2(x, sz.y - 62.0, float(b[2]), 50.0), "text": String(b[1])})
+				x += float(b[2]) + 10.0
+	return out
+
+
+## The button under a finger ("" when it is on none); a little generous around the edge.
+func _hit(p: Vector2) -> String:
+	for b in _btns:
+		if b.has("rect"):
+			var rc: Rect2 = b.rect
+			if rc.grow(6.0).has_point(p):
+				return String(b.id)
+		elif p.distance_to(b.c) <= float(b.r) * 1.15:
+			return String(b.id)
+	return ""
+
+
+## Fingers are taken before the game sees them: one that lands on a button belongs to the button
+## until it is lifted, and never turns the head or moves the stick.
+func _input(event: InputEvent) -> void:
+	if not rl.touch:
+		return
+	if event is InputEventScreenTouch:
+		var st := event as InputEventScreenTouch
+		if st.pressed:
+			var id := _hit(st.position)
+			if id == "":
+				return
+			_held[st.index] = id
+			get_viewport().set_input_as_handled()
+			_press(id, true)
+		elif _held.has(st.index):
+			var was := String(_held[st.index])
+			_held.erase(st.index)
+			get_viewport().set_input_as_handled()
+			_press(was, false)
+	elif event is InputEventScreenDrag and _held.has((event as InputEventScreenDrag).index):
+		get_viewport().set_input_as_handled()
+
+
+func _press(id: String, on: bool) -> void:
+	if id == "fire":
+		game.set_trigger(on) # held for a gun, one launch a press for everything else
+		return
+	if not on:
+		return
+	SFX.play("click", -10.0)
+	match id:
+		"use":
+			rl.use()
+		"pause":
+			game.hud.toggle_pause()
+		"lock":
+			rl.lock()
+		"zoom_in":
+			if rl.scope_on():
+				rl.step_scale(-1)
+			else:
+				game.base_view.zoom(0.6)
+		"zoom_out":
+			if rl.scope_on():
+				rl.step_scale(1)
+			else:
+				game.base_view.zoom(1.67)
+		"nv":
+			game.base_view.nv = not game.base_view.nv
+		"seat":
+			game.mfg.switch_seat()
+		"shop":
+			game.hud.open_shop()
+		"strikes":
+			game.hud.open_strikes()
+		"feed":
+			game.hud.open_feed()
+		"crew":
+			rl.crew_order()
+
+
+## A window opened or the game ended with fingers still down.
+func _release_all() -> void:
+	if _held.values().has("fire"):
+		game.set_trigger(false)
+	_held.clear()
+
+
+func _draw_touch(sz: Vector2) -> void:
+	# the stick: where the thumb is, or a faint ring where it is expected
+	var origin := Vector2(150.0, sz.y - 170.0)
+	var vec := Vector2.ZERO
+	var shown := false
+	var on := false
+	if game.view == "walk":
+		shown = true
+		on = int(game.walker._move_touch) >= 0
+		if on:
+			origin = game.walker._move_origin
+			vec = game.walker._move_vec
+	elif game.view == "mfg" and game.mfg.seat == "drive":
+		shown = true
+		on = int(game.mfg._touch_move) >= 0
+		if on:
+			origin = game.mfg._touch_origin
+			vec = game.mfg._touch_vec
+	if shown and not get_tree().paused:
+		draw_arc(origin, 90.0, 0, TAU, 48, Color(INK.r, INK.g, INK.b, 0.55 if on else 0.2), 2.0)
+		draw_circle(origin + Vector2(vec.x, -vec.y) * 90.0, 30.0, Color(INK.r, INK.g, INK.b, 0.4 if on else 0.12))
+	var held := _held.values()
+	for b in _btns:
+		var down: bool = held.has(b.id)
+		var edge: Color = Color(0.92, 0.45, 0.35) if b.get("hot", false) else DIM
+		if down:
+			edge = INK
+		var fill := Color(0.22, 0.26, 0.22, 0.8) if down else Color(0.05, 0.065, 0.055, 0.5)
+		var text := String(b.text)
+		if b.has("rect"):
+			var rc: Rect2 = b.rect
+			draw_rect(rc, fill)
+			draw_rect(rc, edge, false, 2.0)
+			_txt(Vector2(rc.position.x, rc.get_center().y + (9.0 if text.length() <= 2 else 5.0)), text, 26 if text.length() <= 2 else 15, INK, HORIZONTAL_ALIGNMENT_CENTER, rc.size.x)
+		else:
+			var c: Vector2 = b.c
+			var r: float = b.r
+			draw_circle(c, r, fill)
+			draw_arc(c, r, 0, TAU, 40, edge, 2.0)
+			var fs := 28 if text.length() <= 2 else (17 if r >= 54.0 else 13)
+			_txt(Vector2(c.x - r, c.y + fs * 0.36), text, fs, INK, HORIZONTAL_ALIGNMENT_CENTER, r * 2.0)
