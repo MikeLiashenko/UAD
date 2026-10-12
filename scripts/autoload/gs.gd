@@ -492,6 +492,7 @@ const KEY_ACTIONS := [
 	["warp", "Ускорение времени ×1 / ×2 / ×4 / ×8", KEY_BRACKETRIGHT],
 	["photo", "Фото без интерфейса", KEY_F12],
 	["use", "MaxRealism: занять место / встать", KEY_E],
+	["alarm", "Воздушная тревога: объявить / отбой", KEY_L],
 ]
 
 

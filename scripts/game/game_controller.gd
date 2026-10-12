@@ -925,9 +925,13 @@ func launch(type: String, count: int, at_base: bool, alt := -1.0, aim := "") -> 
 			e.via = via_center + Vector3(_rng.randf_range(-150, 150), 0, _rng.randf_range(-150, 150))
 		enemy_root.add_child(e)
 		enemies.append(e)
+	if type != "scout" and not director.is_night():
+		set_warp(1) # a strike in broad daylight is not slept through on a fast clock
 	if rl != null:
 		# no "ALERT" banner here: an observation post calls the raid in — what, how many, where from
 		rl.raid_call(def, count, first, alt if kind != "ballistic" else 0.0)
+		if type != "scout":
+			_alarm_reminder()
 		return
 	if type == "scout":
 		hud.log_event(GS.t("Замечен разведчик «Орлан» — ищет вашу базу"), Color(0.4, 0.9, 1.0))
@@ -941,6 +945,98 @@ func launch(type: String, count: int, at_base: bool, alt := -1.0, aim := "") -> 
 	hud.alert(GS.t("⚠ ТРЕВОГА: ПУСК %s!") % label, Color(1.0, 0.25, 0.25))
 	hud.log_event(GS.t("Пуск: %s → %s%s") % [label, tgt_name, alt_txt], Color(1.0, 0.45, 0.35))
 	SFX.play("alert", -4.0)
+	_alarm_reminder()
+
+
+# --- Air-raid alarm ------------------------------------------------------------------------------
+## The air-raid alarm over the city: the siren howls and the people go down to the shelters. The
+## director declares it at dusk; at any other hour it is the player's own call (the "alarm" key,
+## the button of the HUD) — a strike in the daytime brings no siren with it. A hit on a city that
+## was not warned costs ALARM_FINE times more. In a shared world the alarm is the host's.
+const ALARM_FINE := 1.5
+## Seconds the city needs to reach the shelters once the siren is on.
+const ALARM_SHELTER := 10.0
+## A daytime alarm is called off by itself this long after the sky is clear.
+const ALARM_CLEAR := 20.0
+var alarm := false
+## Seconds the alarm has been on.
+var alarm_t := 0.0
+var _alarm_idle := 0.0
+
+
+func set_alarm(on: bool, announce := true) -> void:
+	if on == alarm:
+		return
+	alarm = on
+	alarm_t = 0.0
+	_alarm_idle = 0.0
+	if on:
+		SFX.play_siren()
+		if announce:
+			hud.alert(GS.t("ВОЗДУШНАЯ ТРЕВОГА! Всем в укрытия"), Color(1.0, 0.3, 0.3))
+			hud.log_event(GS.t("Объявлена воздушная тревога: через %d с люди будут в укрытиях.") % int(ALARM_SHELTER), Color(1.0, 0.45, 0.35))
+	else:
+		SFX.stop_siren()
+		if announce:
+			hud.alert(GS.t("ОТБОЙ ВОЗДУШНОЙ ТРЕВОГИ"), Color(0.5, 1.0, 0.6))
+			hud.log_event(GS.t("Отбой воздушной тревоги."), Color(0.5, 1.0, 0.6))
+	hud.refresh()
+
+
+## The player's alarm button: declares the alarm, or calls it off.
+func toggle_alarm() -> void:
+	if game_over or GS.training or director == null or director.phase == Director.Phase.MORNING:
+		return
+	if Net.role == "guest":
+		hud.alert(GS.t("Воздушную тревогу объявляет хозяин мира"), Color(1.0, 0.75, 0.35))
+		return
+	set_alarm(not alarm)
+
+
+## The alarm has been on long enough: the people are in the shelters.
+func sheltered() -> bool:
+	return alarm and alarm_t >= ALARM_SHELTER
+
+
+## Seconds until the people are in the shelters (0 when they are; meaningless without an alarm).
+func shelter_left() -> float:
+	return maxf(0.0, ALARM_SHELTER - alarm_t)
+
+
+## What a hit on the city costs on top: nothing with the people in the shelters.
+func _alarm_fine() -> float:
+	if sheltered():
+		return 1.0
+	var why := GS.t("Тревога объявлена поздно — люди не успели в укрытия: ущерб ×%.1f") if alarm else GS.t("Тревогу не объявили — люди не в укрытиях: ущерб ×%.1f")
+	hud.log_event(why % ALARM_FINE, Color(1.0, 0.5, 0.3))
+	return ALARM_FINE
+
+
+## A launch with no alarm over the city: the player is told what the button is for.
+func _alarm_reminder() -> void:
+	if alarm or Net.role == "guest" or GS.training:
+		return
+	if GS.touch():
+		hud.log_event(GS.t("Тревога не объявлена: нажмите кнопку «ТРЕВОГА», чтобы люди ушли в укрытия"), Color(1.0, 0.8, 0.4))
+	else:
+		hud.log_event(GS.t("Тревога не объявлена: нажмите %s, чтобы люди ушли в укрытия") % GS.key_label("alarm"), Color(1.0, 0.8, 0.4))
+
+
+func _tick_alarm(delta: float) -> void:
+	if not alarm:
+		return
+	alarm_t += delta
+	if Net.role == "guest" or director == null or director.phase != Director.Phase.DAY:
+		return
+	# in the daytime the all-clear comes by itself once nothing but scouts is left in the air
+	var threat := false
+	for e in enemies:
+		if not e.dead and String(e.type) != "scout":
+			threat = true
+			break
+	_alarm_idle = 0.0 if threat else _alarm_idle + delta
+	if _alarm_idle >= ALARM_CLEAR:
+		set_alarm(false)
 
 
 func enemy_destroyed(e) -> void:
@@ -1118,7 +1214,7 @@ func enemy_impact(e) -> void:
 		if bi >= 0:
 			var kind: int = map.building_kind(bi)
 			var base_cost := maxf(float(GS.HOME_HIT_COST), float(e.def.hit_cost) * 0.6)
-			var cost := _split_cost(int(base_cost * float(GS.KIND_PENALTY[kind]) * GS.penalty_mult()), "h")
+			var cost := _split_cost(int(base_cost * float(GS.KIND_PENALTY[kind]) * GS.penalty_mult() * _alarm_fine()), "h")
 			GS.add_money(-cost)
 			GS.city = maxf(0.0, GS.city - 3.0 - float(e.def.hit_damage) * 0.25)
 			GS.stats.homes = int(GS.stats.get("homes", 0)) + 1
@@ -1130,7 +1226,7 @@ func enemy_impact(e) -> void:
 		else:
 			hud.log_event(GS.t("%s промахнулся и упал на пустырь — без жертв") % what_hit, Color(0.6, 1.0, 0.7))
 	else:
-		var cost := _split_cost(int(float(e.def.hit_cost) * GS.penalty_mult()), "i")
+		var cost := _split_cost(int(float(e.def.hit_cost) * GS.penalty_mult() * _alarm_fine()), "i")
 		GS.city = maxf(0.0, GS.city - float(e.def.hit_damage))
 		GS.add_money(-cost)
 		GS.stats.impacts = int(GS.stats.impacts) + 1
@@ -1380,6 +1476,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			hud.open_strikes()
 		"warp":
 			cycle_warp()
+		"alarm":
+			toggle_alarm()
 		"photo":
 			take_photo()
 		"feed":
@@ -1469,6 +1567,7 @@ func _process(delta: float) -> void:
 		else:
 			pivot.rotation = Vector3(0.55 + 0.25 * sin(_t * 0.23 + i * 2.0), sin(_t * 0.3 + i * 1.7) * 1.2 + i * PI, 0)
 	camo_node.visible = GS.camo
+	_tick_alarm(delta)
 	_warp_t -= delta / maxf(Engine.time_scale, 0.001)
 	if warp > 1 and _warp_t <= 0.0:
 		_warp_t = 0.4
@@ -1740,7 +1839,7 @@ func net_snapshot() -> Dictionary:
 		if not sub.is_empty():
 			acks[code] = sub
 	return {"ph": int(director.phase), "pt": snappedf(director.phase_time, 0.01), "pl": snappedf(director.phase_len, 0.01),
-		"day": GS.day, "city": snappedf(GS.city, 0.1), "e": es, "k": ks, "i": im, "bank": _net_bank, "a": acks}
+		"day": GS.day, "city": snappedf(GS.city, 0.1), "al": 1 if alarm else 0, "e": es, "k": ks, "i": im, "bank": _net_bank, "a": acks}
 
 
 ## Host: buildings state for the guests (sent when it changes).
@@ -1774,6 +1873,8 @@ func net_apply_raid(r: Dictionary) -> void:
 	if Net.role != "guest":
 		return
 	director.net_follow(r)
+	if r.has("al"):
+		set_alarm(int(r.al) == 1) # the host's alarm, declared or called off since the last snapshot
 	var city := float(r.get("city", GS.city))
 	if absf(city - GS.city) > 0.01:
 		GS.city = city

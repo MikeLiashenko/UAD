@@ -94,8 +94,10 @@ func begin() -> void:
 		radio(GS.t("Позиция на связи. Расчёты стволов на местах, огонь по готовности."))
 		if touch:
 			radio(GS.t("Снабжение, радар и приказы — на командном пункте: зелёная кабина у мачты с красным огнём."), Color(0.75, 0.82, 0.76))
+			radio(GS.t("Воздушную тревогу городу объявляете вы: кнопка «ТРЕВОГА» вверху экрана. Днём сирену никто не включит за вас."), Color(0.75, 0.82, 0.76))
 		else:
 			radio(GS.t("Снабжение, радар и приказы — на командном пункте: зелёная кабина у мачты с красным огнём. Там %s.") % GS.key_label("shop"), Color(0.75, 0.82, 0.76))
+			radio(GS.t("Воздушную тревогу городу объявляете вы: %s, с любого места. Днём сирену никто не включит за вас.") % GS.key_label("alarm"), Color(0.75, 0.82, 0.76))
 
 
 # --- Stations ------------------------------------------------------------------------------------
@@ -549,6 +551,8 @@ func key(kc: int) -> void:
 			game.hud.toggle_pause()
 		"photo":
 			game.take_photo()
+		"alarm":
+			game.toggle_alarm() # over the radio, from wherever the player stands or sits
 		"night":
 			if game.view == "base" and not scope_on():
 				game.base_view.nv = not game.base_view.nv

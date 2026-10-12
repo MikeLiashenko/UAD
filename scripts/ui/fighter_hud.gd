@@ -105,7 +105,8 @@ func _draw() -> void:
 		draw_line(lp + Vector2(0, 13), lp + Vector2(0, 19), RED, 2.2)
 	_prompt(c, t)
 	# --- left: speed, altitude, throttle
-	var l := Vector2(40, c.y - 95)
+	# on a low screen the column starts under the status panel and the alarm button
+	var l := Vector2(40, maxf(c.y - 95, game.hud.left_column_top() + 20.0))
 	_txt(l, GS.t("СКОРОСТЬ"), 12, Color(HUD.r, HUD.g, HUD.b, 0.7))
 	_txt(l + Vector2(0, 28), GS.t("%d км/ч") % int(fg.speed * 3.6), 24, HUD)
 	_txt(l + Vector2(0, 62), GS.t("ВЫСОТА"), 12, Color(HUD.r, HUD.g, HUD.b, 0.7))
@@ -115,7 +116,7 @@ func _draw() -> void:
 	_txt(l + Vector2(0, 134), GS.t("ФОРСАЖ") if fg.burner else GS.t("ТЯГА %d%%") % int(fg.throttle * 100.0), 13, AMBER if fg.burner else HUD)
 	# --- right: stores and fuel
 	# under the flight data: the right side belongs to the event log
-	var r := Vector2(40, c.y + 85)
+	var r := l + Vector2(0, 180)
 	var touch := GS.touch()
 	var dim := Color(0.5, 0.6, 0.55)
 	_txt(r, "AIM-9X ×%d" % int(fg.loaded.aim9), 18, HUD if int(fg.loaded.aim9) > 0 else dim)

@@ -85,6 +85,11 @@ var _radar: Control
 var _alert_frame := -1
 ## The finger holding the fire button of a touch screen (-1: none).
 var _fire_touch := -1
+## The air-raid alarm (GameController.toggle_alarm): its button under the status panel, on screen
+## in every view, and the line of the panel that says where the people are.
+var alarm_btn: Button
+var alarm_lbl: Label
+var _alarm_styles: Array = []
 
 
 func _ready() -> void:
@@ -124,6 +129,7 @@ func _ready() -> void:
 	_build_weapons()
 	_build_target_info()
 	_build_touch_buttons()
+	_build_alarm()
 	flash_rect = UiKit.full_rect(ColorRect.new()) as ColorRect
 	flash_rect.color = Color(1.0, 0.92, 0.8, 0.0)
 	flash_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -324,7 +330,7 @@ func on_view_changed() -> void:
 		zoom_box.offset_top = 214 if turn_box.visible else 90
 	if GS.realism:
 		# MaxRealism: no budget, no radar in the corner, no battery panel — the picture and the radio
-		for c in [_status_panel, _radar, log_box, alert_lbl, _weapons_panel, _walk_ui, _mfg_ui, zoom_box, fire_btn]:
+		for c in [_status_panel, _radar, log_box, alert_lbl, _weapons_panel, _walk_ui, _mfg_ui, zoom_box, fire_btn, alarm_btn]:
 			if c != null:
 				c.visible = false
 	refresh()
@@ -353,6 +359,9 @@ func _build_status() -> void:
 	fire_lbl = UiKit.label("", 14, Color(1.0, 0.6, 0.3))
 	fire_lbl.visible = false
 	v.add_child(fire_lbl)
+	alarm_lbl = UiKit.label("", 14, Color(1.0, 0.4, 0.35))
+	alarm_lbl.visible = false
+	v.add_child(alarm_lbl)
 
 
 func _bar(parent: Control, title: String) -> ProgressBar:
@@ -596,6 +605,58 @@ func _build_touch_buttons() -> void:
 	root.add_child(fire_btn)
 
 
+## The alarm button stands under the status panel, clear of every view's own controls.
+func _build_alarm() -> void:
+	alarm_btn = Button.new()
+	alarm_btn.custom_minimum_size = Vector2(190, 46) if GS.touch() else Vector2(170, 38)
+	alarm_btn.add_theme_font_size_override("font_size", 17 if GS.touch() else 14)
+	alarm_btn.focus_mode = Control.FOCUS_NONE
+	alarm_btn.position = Vector2(12, 240)
+	_alarm_styles = [UiKit.sbox(Color(0.3, 0.05, 0.03, 0.85), Color(1.0, 0.35, 0.25), 2, 6, 6), UiKit.sbox(Color(0.75, 0.12, 0.08, 0.95), Color(1.0, 0.75, 0.6), 3, 6, 6)]
+	alarm_btn.add_theme_color_override("font_color", Color(1.0, 0.9, 0.85))
+	# A real mouse presses it here; a finger — whichever lands on it, also while others aim or
+	# steer — in _alarm_input. The mouse a finger is turned into is left out, or one tap would count
+	# twice; the button still swallows it, so the map under it is not clicked.
+	alarm_btn.gui_input.connect(func(event: InputEvent) -> void:
+		var mb := event as InputEventMouseButton
+		if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT and mb.device != InputEvent.DEVICE_ID_EMULATION:
+			_alarm_press())
+	alarm_btn.visible = not GS.realism
+	root.add_child(alarm_btn)
+
+
+## Where the left edge of the screen is free again: under the status panel and the alarm button.
+func left_column_top() -> float:
+	if alarm_btn != null and alarm_btn.visible:
+		return alarm_btn.position.y + alarm_btn.size.y
+	return _status_panel.position.y + _status_panel.size.y if _status_panel.visible else 0.0
+
+
+func _alarm_press() -> void:
+	SFX.play("click", -8.0)
+	game.toggle_alarm()
+
+
+func _update_alarm() -> void:
+	if alarm_btn == null or GS.realism:
+		return
+	var on: bool = game.alarm
+	alarm_btn.visible = game.view != "watch"
+	alarm_btn.position = Vector2(12, _status_panel.position.y + _status_panel.size.y + 8.0)
+	var key := "" if GS.touch() else " [%s]" % GS.key_label("alarm")
+	alarm_btn.text = (GS.t("🔕 ОТБОЙ ТРЕВОГИ") if on else GS.t("📢 ТРЕВОГА")) + key
+	# the button of a declared alarm beats like the siren
+	var lit: bool = on and absf(sin(_t * 3.0)) > 0.5
+	if alarm_btn.get_meta("lit", -1) != int(lit):
+		alarm_btn.set_meta("lit", int(lit))
+		for st in ["normal", "hover", "pressed"]:
+			alarm_btn.add_theme_stylebox_override(st, _alarm_styles[1 if lit or st == "pressed" else 0])
+	alarm_lbl.visible = on
+	if on:
+		var left := int(ceil(game.shelter_left()))
+		alarm_lbl.text = GS.t("📢 ТРЕВОГА · люди в укрытиях") if left <= 0 else GS.t("📢 ТРЕВОГА · в укрытиях через %d с") % left
+
+
 # --- Updates --------------------------------------------------------------------------
 func _on_money(_v: int) -> void:
 	refresh()
@@ -734,7 +795,8 @@ func _process(delta: float) -> void:
 		detect_lbl.text = GS.t("Маскировка базы: %d%%%s") % [int(hidden), GS.t(" · сеть") if GS.camo else ""]
 		detect_lbl.add_theme_color_override("font_color", Color(0.6, 1.0, 0.8))
 	_update_fires()
-	nv_rect.visible = (game.view == "base" and game.base_view.nv) or (game.view == "fpv" and game.fpv_view.nv)
+	_update_alarm()
+	nv_rect.visible =(game.view == "base" and game.base_view.nv) or (game.view == "fpv" and game.fpv_view.nv)
 	_update_target_info()
 	if int(_t * 4.0) != int((_t - delta) * 4.0):
 		refresh()
@@ -1003,7 +1065,7 @@ func _close_world() -> void:
 
 ## Y / N answer the oldest join request (checked before the game's own keys: N is night vision).
 func _input(event: InputEvent) -> void:
-	if _fire_input(event):
+	if _fire_input(event) or _alarm_input(event):
 		return
 	if _req_cards.is_empty() or not (event is InputEventKey) or not event.pressed or event.echo:
 		return
@@ -1397,3 +1459,17 @@ func _fire_input(event: InputEvent) -> bool:
 		get_viewport().set_input_as_handled()
 		return true
 	return false
+
+
+## The alarm button under a finger: one tap of any finger, the first on the screen or not.
+func _alarm_input(event: InputEvent) -> bool:
+	if alarm_btn == null or not (event is InputEventScreenTouch):
+		return false
+	var st := event as InputEventScreenTouch
+	if not st.pressed or not alarm_btn.is_visible_in_tree() or get_tree().paused or _overlay != null:
+		return false
+	if not alarm_btn.get_global_rect().grow(6.0).has_point(st.position):
+		return false
+	_alarm_press()
+	get_viewport().set_input_as_handled()
+	return true

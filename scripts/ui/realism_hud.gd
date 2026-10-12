@@ -311,6 +311,13 @@ func _draw_post(sz: Vector2) -> void:
 	_row(Vector2(x, y), GS.t("МАСКИРОВКА"), found, AMBER if GS.base_found else INK, w)
 	y += 24.0
 	_row(Vector2(x, y), GS.t("РАСЧЁТЫ") if rl.touch else GS.t("РАСЧЁТЫ [%s]") % GS.key_label("auto"), GS.t("ОГОНЬ ПО ГОТОВНОСТИ") if rl.crews_free() else GS.t("НЕ СТРЕЛЯТЬ"), INK if rl.crews_free() else AMBER, w)
+	if not GS.training:
+		y += 24.0
+		var left := int(ceil(game.shelter_left()))
+		var people := GS.t("НЕ ОБЪЯВЛЕНА")
+		if game.alarm:
+			people = GS.t("ЛЮДИ В УКРЫТИЯХ") if left <= 0 else GS.t("В УКРЫТИЯХ ЧЕРЕЗ %d с") % left
+		_row(Vector2(x, y), GS.t("ТРЕВОГА") if rl.touch else GS.t("ТРЕВОГА [%s]") % GS.key_label("alarm"), people, (INK if left <= 0 else AMBER) if game.alarm else DIM, w)
 	y += 38.0
 	_txt(Vector2(x, y), GS.t("НА ПОЗИЦИИ"), 14, DIM)
 	y += 22.0
@@ -370,6 +377,9 @@ func _draw_training(sz: Vector2) -> float:
 ## of the screen is the stick), a row along the bottom at the command post, the pause on top.
 func _layout(sz: Vector2) -> Array:
 	var out := [{"id": "pause", "c": Vector2(sz.x - 46.0, 46.0), "r": 28.0, "text": "❚❚"}]
+	if not GS.training:
+		# the air-raid alarm is called over the radio: the button is there in every seat and on foot
+		out.append({"id": "alarm", "rect": Rect2(sz.x - 228.0, 20.0, 136.0, 52.0), "text": GS.t("ОТБОЙ") if game.alarm else GS.t("ТРЕВОГА"), "hot": true, "lit": game.alarm})
 	match String(game.view):
 		"walk":
 			if not rl.near.is_empty():
@@ -477,6 +487,8 @@ func _press(id: String, on: bool) -> void:
 			game.hud.open_feed()
 		"crew":
 			rl.crew_order()
+		"alarm":
+			game.toggle_alarm()
 
 
 ## A window opened or the game ended with fingers still down.
@@ -514,6 +526,8 @@ func _draw_touch(sz: Vector2) -> void:
 		if down:
 			edge = INK
 		var fill := Color(0.22, 0.26, 0.22, 0.8) if down else Color(0.05, 0.065, 0.055, 0.5)
+		if b.get("lit", false) and not down:
+			fill = Color(0.6, 0.1, 0.07, 0.55 + 0.25 * absf(sin(Time.get_ticks_msec() * 0.003)))
 		var text := String(b.text)
 		if b.has("rect"):
 			var rc: Rect2 = b.rect

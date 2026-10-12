@@ -21,6 +21,8 @@ extends Node
 ##   --crush=X,Z                collapse and set fire to the building at X,Z (fire-service test)
 ##   --camat=X,Z[,DIST]         park the overhead camera on a spot
 ##   --screen=menu|settings|map|worlds|create|game   --open=shop|pause|morning|gameover|feed|video|record
+##   --daystrike=ballistic|cruise   (with --autotest) a strike in the daytime, without the dice
+##   --touch --alarmtouch       fingers on the air-raid alarm button of the usual game
 ##   --keytest                  verify the rebindable control map
 ##   --mptest                   multiplayer self-test, offline: codes, the Firebase event mirror and
 ##                              (with --autotest) friends in the city, watching, player list, requests
@@ -498,6 +500,26 @@ func _process(delta: float) -> void:
 				print("UAD FIRETOUCH released: trigger=%s" % game.base_view.trigger)
 				_finger(0, mid + Vector2(60, 0), false)
 		_tt.stage = int(_tt.stage) + 1
+	if _args.has("alarmtouch") and game and is_instance_valid(game) and game.rl == null and _clock >= 3.0:
+		# --touch --alarmtouch (the usual game): the alarm button under the second finger on the
+		# screen, then under the only one — each tap must count once
+		var ab: Vector2 = game.hud.alarm_btn.get_global_rect().get_center()
+		var away := get_viewport().get_visible_rect().size * 0.5
+		match int(_tt.stage):
+			0:
+				_finger(0, away, true)
+				_finger(1, ab, true)
+			4:
+				print("UAD ALARMTOUCH second finger: alarm=%s shown=%s" % [game.alarm, game.hud.alarm_btn.is_visible_in_tree()])
+				_finger(1, ab, false)
+				_finger(0, away, false)
+			8:
+				_finger(0, ab, true)
+			12:
+				_finger(0, ab, false)
+			16:
+				print("UAD ALARMTOUCH only finger: alarm=%s locked=%s" % [game.alarm, game.locked != null])
+		_tt.stage = int(_tt.stage) + 1
 	if _args.has("f16input") and game and is_instance_valid(game) and game.view == "fighter":
 		_f16_input(delta)
 	elif _args.has("aimbot") and game and is_instance_valid(game) and game.view == "fighter":
@@ -887,6 +909,9 @@ func _start_autotest() -> void:
 	game.auto_fire = 1
 	GS.day = int(_args.get("day", "3"))
 	GS.money_changed.emit(GS.money)
+	if _args.has("daystrike"):
+		# a strike in the daytime without the dice: --daystrike=ballistic|cruise
+		game.director.day_strike(GS.day, String(_args.daystrike))
 	if _args.has("weapon"):
 		game.select_weapon(String(_args.weapon))
 	if String(_args.get("view", "top")) == "base":
@@ -1819,6 +1844,7 @@ func _print_summary() -> void:
 			GS.day, game.director.phase, game.director.phase_time, str(get_tree().paused)])
 	if game:
 		print("UAD LAUNCHED: ", game.launched)
+		print("UAD ALARM: on=%s for=%.1f s sheltered=%s phase=%d" % [game.alarm, game.alarm_t, game.sheltered(), game.director.phase])
 		if game.fighter != null and bool(GS.unlocked.get("f16", false)):
 			print("UAD F16: state=%s kills=%d aim9_left=%d aim120_left=%d money=%d" % [game.fighter.state, int(GS.stats.kills), int(GS.ammo.get("aim9", 0)) + int(game.fighter.loaded.aim9), int(GS.ammo.get("aim120", 0)) + int(game.fighter.loaded.aim120), GS.money])
 			if _args.has("f16input"):

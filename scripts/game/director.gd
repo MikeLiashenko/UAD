@@ -1,6 +1,8 @@
 extends Node
 ## Day / night cycle and attack scheduling.
-##  DAY   — recon drones search for the base; lighting fades to dusk at the end.
+##  DAY   — recon drones search for the base; lighting fades to dusk at the end. Now and then
+##          the enemy does not wait for the dark: one or two ballistic missiles or a few cruise
+##          missiles in broad daylight, with no siren — that alarm is the player's to declare.
 ##  NIGHT — air-raid siren, Shahed swarms at different altitude layers, cruise and ballistic
 ##          missiles; a precise strike on the base if a scout found it during the day.
 ##          What exactly flies depends on the city (CityDef.raid): decoys and Kinzhals over Kyiv,
@@ -13,6 +15,9 @@ extends Node
 const Strikes = preload("res://scripts/game/strikes.gd")
 
 enum Phase { DAY, NIGHT, MORNING }
+
+## How often a day brings a missile strike of its own (once the city's missiles are in service).
+const DAY_STRIKE_CHANCE := 0.35
 
 var game
 var phase := Phase.DAY
@@ -69,8 +74,47 @@ func start_day() -> void:
 	var scouts := int(round((1 + GS.day / 3) * Strikes.output(game.map.city, "scout")))
 	for i in scouts:
 		schedule.append({"t": 4.0 + i * 14.0, "type": "scout", "count": 1})
+	day_strike(GS.day)
 	game.hud.alert(GS.t("ДЕНЬ %d — разведка противника в воздухе") % GS.day, Color(0.5, 0.9, 1.0))
 	game.hud.log_event(GS.t("Утро дня %d. Ищите и сбивайте разведчиков!") % GS.day, Color(0.5, 0.9, 1.0))
+
+
+## A strike in the daytime: one or two ballistic missiles, or a salvo of two to four cruise
+## missiles — only what the city is already hit with at night, and less of it when our strikes
+## have thinned the launch sites. `force` ("ballistic" / "cruise") is the test hook: no dice.
+func day_strike(d: int, force := "") -> void:
+	var city = game.map.city
+	var cruise_from := int(city.raid_start.get("cruise", 3))
+	var ball_from := int(city.raid_start.get("ballistic", 5))
+	if force == "":
+		if d < mini(cruise_from, ball_from) or _rng.randf() >= DAY_STRIKE_CHANCE:
+			return
+		force = "ballistic" if d >= ball_from and (d < cruise_from or _rng.randf() < 0.4) else "cruise"
+	# early enough to come down in daylight; MaxRealism needs the half minute of the early warning
+	# before the launch, so there the day is that much longer (its clock is only at the command post)
+	var at := _rng.randf_range(5.0, 16.0)
+	if GS.realism:
+		phase_len += 25.0
+		at = _rng.randf_range(29.0, 34.0)
+	if force == "ballistic":
+		var n := 2 if d >= ball_from + 2 and _rng.randf() < 0.45 else 1
+		var warned := not GS.realism
+		for i in n:
+			var bw := _weapon("ballistic", maxi(d, ball_from))
+			if _left(bw, 1) > 0:
+				schedule.append({"t": at + i * _rng.randf_range(4.0, 9.0), "type": bw, "count": 1})
+				if not warned:
+					# the same early warning as at night: the time to walk to a console
+					warned = true
+					schedule.append({"t": maxf(1.0, at - 28.0), "warn": true})
+	else:
+		var w := _weapon("cruise", maxi(d, cruise_from))
+		if w != "":
+			var glide: bool = GS.ENEMIES[w].get("glide", false)
+			var cc := _left(w, clampi(int(round(_rng.randf_range(2.0, 4.0) * maxf(GS.enemy_mult(), 0.8))), 2, 4))
+			if cc > 0:
+				schedule.append({"t": at, "type": w, "count": cc, "alt": -1.0 if glide or GS.ENEMIES[w].alt_max < 100.0 else _layer("cruise")})
+	schedule.sort_custom(func(a, b) -> bool: return float(a.t) < float(b.t))
 
 
 ## One weapon for a slot of the raid, by the city's weights, among those already in service.
@@ -213,7 +257,8 @@ func start_night() -> void:
 				schedule.append({"t": maxf(1.0, float(s.t) - 28.0), "warn": true})
 	schedule.sort_custom(func(a, b) -> bool: return float(a.t) < float(b.t))
 	SFX.play_music("night")
-	SFX.play_siren()
+	SFX.play_siren() # howls at dusk even over a city already under an alarm declared in the day
+	game.set_alarm(true, false)
 	_briefing(d)
 	if final:
 		game.hud.alert(GS.ctext("raid") % d, Color(1.0, 0.2, 0.25))
@@ -286,6 +331,7 @@ func _morning() -> void:
 	phase = Phase.MORNING
 	var night_s := int(phase_time)
 	phase_time = 0.0
+	game.set_alarm(false, false)
 	SFX.stop_siren()
 	SFX.play_music("day")
 	var s := GS.stats
@@ -352,6 +398,7 @@ func net_follow(r: Dictionary) -> void:
 				night_start_stats = GS.stats.duplicate()
 				SFX.play_music("night")
 				SFX.play_siren()
+				game.set_alarm(true, false)
 				game.hud.alert(GS.t("НОЧЬ %d — ВОЗДУШНАЯ ТРЕВОГА!") % GS.day, Color(1.0, 0.3, 0.3))
 				game.hud.log_event(GS.t("Воздушная тревога. Ночь %d.") % GS.day, Color(1.0, 0.3, 0.3))
 			Phase.MORNING:
