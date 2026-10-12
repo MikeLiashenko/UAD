@@ -35,6 +35,10 @@ var progress := 0.0
 ## without a window (a headless run renders nothing to capture). See --exporttest.
 var synthetic := false
 
+## What was cut out of the last grabbed frame, and the size of that frame (the test summary prints both).
+var crop := Rect2i()
+var source := Vector2i.ZERO
+
 var _avi
 var _capture: AudioEffectCapture
 var _t0 := 0
@@ -143,11 +147,16 @@ func _take_picture() -> PackedByteArray:
 	var full := Rect2i(Vector2i.ZERO, img.get_size())
 	var want := full
 	if ui != null and is_instance_valid(ui):
-		var r: Rect2 = ui.frame_rect()
-		want = Rect2i(int(r.position.x), int(r.position.y), int(r.size.x), int(r.size.y))
+		# The overlay is laid out in interface units and the grabbed frame is in screen pixels: on
+		# anything larger than the design size the two differ, and a rectangle taken as it is cuts
+		# out the dark curtain beside the phone instead of the phone.
+		var r: Rect2 = get_viewport().get_final_transform() * Rect2(ui.global_position + ui.frame_rect().position, ui.frame_rect().size)
+		want = Rect2i(int(round(r.position.x)), int(round(r.position.y)), int(round(r.size.x)), int(round(r.size.y)))
 	want = want.intersection(full)
 	if want.size.x < 8 or want.size.y < 8:
 		want = full
+	crop = want
+	source = full.size
 	img = img.get_region(want)
 	img.resize(WIDTH, HEIGHT, Image.INTERPOLATE_BILINEAR)
 	if img.get_format() != Image.FORMAT_RGB8:

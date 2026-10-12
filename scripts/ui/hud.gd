@@ -1151,6 +1151,8 @@ func _restart_recording(v: Dictionary) -> void:
 
 
 func _on_recorded(saved: String, ok: bool) -> void:
+	if game.autotest and _recorder != null and is_instance_valid(_recorder):
+		print("UAD RECORD: ok=%s crop=%s of %s file=%s" % [ok, _recorder.crop, _recorder.source, saved])
 	if _recorder != null and is_instance_valid(_recorder):
 		_recorder.queue_free()
 	_recorder = null

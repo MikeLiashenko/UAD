@@ -4,7 +4,9 @@ extends Node
 ##          the enemy does not wait for the dark: one or two ballistic missiles or a few cruise
 ##          missiles in broad daylight, with no siren — that alarm is the player's to declare.
 ##  NIGHT — air-raid siren, Shahed swarms at different altitude layers, cruise and ballistic
-##          missiles; a precise strike on the base if a scout found it during the day.
+##          missiles; a precise strike on the base if a scout found it during the day. Nothing
+##          flies to a timetable: when the waves come, how they are split, how heavy the night
+##          is and how long it lasts are rolled anew every night (start_night).
 ##          What exactly flies depends on the city (CityDef.raid): decoys and Kinzhals over Kyiv,
 ##          glide bombs and S-300s over Kharkiv, Kalibrs and Oniks from the sea over Odesa …
 ##  After the night is cleared the morning report + shop opens (handled by the HUD); the world
@@ -67,14 +69,17 @@ func time_left() -> float:
 func start_day() -> void:
 	phase = Phase.DAY
 	phase_time = 0.0
-	phase_len = 55.0 if GS.day == 1 else 75.0
+	phase_len = 55.0 if GS.day == 1 else _rng.randf_range(68.0, 86.0)
 	SFX.play_music("day")
 	schedule.clear()
-	# a destroyed recon post sends no scouts, a damaged one fewer
+	# a destroyed recon post sends no scouts, a damaged one fewer; they come when they come, not
+	# on the quarter of a minute
 	var scouts := int(round((1 + GS.day / 3) * Strikes.output(game.map.city, "scout")))
 	for i in scouts:
-		schedule.append({"t": 4.0 + i * 14.0, "type": "scout", "count": 1})
+		schedule.append({"t": _rng.randf_range(3.0, phase_len - 24.0), "type": "scout", "count": 1})
 	day_strike(GS.day)
+	schedule.sort_custom(func(a, b) -> bool: return float(a.t) < float(b.t))
+	_print_plan("day %d (%d s)" % [GS.day, int(phase_len)])
 	game.hud.alert(GS.t("ДЕНЬ %d — разведка противника в воздухе") % GS.day, Color(0.5, 0.9, 1.0))
 	game.hud.log_event(GS.t("Утро дня %d. Ищите и сбивайте разведчиков!") % GS.day, Color(0.5, 0.9, 1.0))
 
@@ -190,7 +195,7 @@ func start_night() -> void:
 	var final := d == GS.CAMPAIGN_NIGHTS and not GS.won
 	# the waves follow each other closely: with the air picture running GS.TEMPO times faster than
 	# life a Shahed is on its target within a minute of the radars picking it up
-	phase_len = minf(95.0 + 11.0 * d, 210.0) + (45.0 if final else 0.0)
+	phase_len = minf(95.0 + 11.0 * d, 210.0) * _rng.randf_range(0.9, 1.12) + (45.0 if final else 0.0)
 	night_start_stats = GS.stats.duplicate()
 	schedule.clear()
 	_strike_results()
@@ -200,9 +205,16 @@ func start_night() -> void:
 	# missiles once a second system is affordable, ballistics only when a Patriot is in reach.
 	var boss := 1.3 if final else 1.0
 	var city = game.map.city
-	var waves := clampi(2 + (d - 1) / 3, 2, 5) + (1 if final else 0)
+	# No two nights alike. The same weight of raid comes early or late, as a few big waves or as
+	# many small groups from several sides at once; some nights are quieter, some heavier, and a
+	# lone drone may turn up at any hour. The first nights and the final one swing the least.
+	var swing := 0.1 if d <= 2 or final else 0.25
+	var heat := _rng.randf_range(1.0 - swing, 1.0 + swing)
+	# above 1 the raid leans towards dusk, below 1 towards the morning
+	var lean := _rng.randf_range(0.6, 1.7)
+	var waves := clampi(2 + (d - 1) / 3 + (_rng.randi_range(-1, 1) if d > 2 else 0), 2, 6) + (1 if final else 0)
 	for i in waves:
-		var c := clampi(int(round(clampf(2.4 + d * 0.8, 3.0, 9.0) * m * boss)) + _rng.randi_range(-1, 1), 2, 13)
+		var c := clampi(int(round(clampf(2.4 + d * 0.8, 3.0, 9.0) * m * boss * heat)) + _rng.randi_range(-1, 1), 2, 13)
 		var w := _weapon("drone", d)
 		if w == "":
 			continue # every drone launch pad of the city is out
@@ -211,12 +223,23 @@ func start_night() -> void:
 		c = _left(w, maxi(2, int(c * float(wd.get("swarm", 1.0)))))
 		if c <= 0:
 			continue
-		schedule.append({"t": 5.0 + span * float(i) / waves + _rng.randf_range(0.0, 6.0), "type": w, "count": c, "alt": -1.0 if wd.get("own_alt", false) else _layer("shahed")})
+		var at := 4.0 + span * pow(_rng.randf(), lean)
+		# a wave may split in two: every launch picks its own side and its own altitude
+		var parts := 2 if c >= 4 and _rng.randf() < 0.35 else 1
+		for k in parts:
+			var ck := c / parts + (c % parts if k == 0 else 0)
+			schedule.append({"t": at + k * _rng.randf_range(5.0, 18.0), "type": w, "count": ck, "alt": -1.0 if wd.get("own_alt", false) else _layer("shahed")})
+	if d >= 2:
+		for i in _rng.randi_range(0, mini(1 + d / 4, 4)):
+			var lw := _weapon("drone", d)
+			var lc := _left(lw, _rng.randi_range(1, 2))
+			if lc > 0:
+				schedule.append({"t": phase_len * _rng.randf_range(0.08, 0.92), "type": lw, "count": lc, "alt": -1.0 if GS.ENEMIES[lw].get("own_alt", false) else _layer("shahed")})
 	var cruise_from := int(city.raid_start.get("cruise", 3))
 	var ball_from := int(city.raid_start.get("ballistic", 5))
 	if d >= cruise_from:
-		var total := clampi(int(round((d - cruise_from + 1) * 0.8 * m * boss)), 1, 6)
-		var salvos := 1 if total < 3 else 2
+		var total := clampi(int(round((d - cruise_from + 1) * 0.8 * m * boss * heat)), 1, 6)
+		var salvos := 1 if total < 3 else _rng.randi_range(1, 3)
 		for i in salvos:
 			var w := _weapon("cruise", d)
 			if w == "":
@@ -224,38 +247,40 @@ func start_night() -> void:
 			var glide: bool = GS.ENEMIES[w].get("glide", false)
 			var cc := _left(w, maxi(1, total / salvos) + (1 if glide else 0))
 			if cc > 0:
-				schedule.append({"t": span * (0.3 + 0.4 * i) + _rng.randf_range(0.0, 8.0), "type": w, "count": cc, "alt": -1.0 if glide or GS.ENEMIES[w].alt_max < 100.0 else _layer("cruise")})
+				schedule.append({"t": span * _rng.randf_range(0.12, 0.9), "type": w, "count": cc, "alt": -1.0 if glide or GS.ENEMIES[w].alt_max < 100.0 else _layer("cruise")})
 	if d >= ball_from or (d >= ball_from - 1 and GS.difficulty == 2):
 		var n := clampi(int(round((d - ball_from + 1) * 0.7 * m * boss)), 1, 3)
 		for i in n:
 			var bw := _weapon("ballistic", d)
 			if _left(bw, 1) > 0:
-				schedule.append({"t": span * _rng.randf_range(0.35, 0.95), "type": bw, "count": 1})
+				schedule.append({"t": span * _rng.randf_range(0.15, 0.95), "type": bw, "count": 1})
 	for x in city.raid_extra:
 		if d >= int(x.get("from", 1)):
 			var cr: Array = x.get("count", [1, 1])
 			var xc := _left(String(x.weapon), _rng.randi_range(int(cr[0]), int(cr[1])))
 			if xc > 0:
-				schedule.append({"t": span * float(x.get("at", 0.5)) + _rng.randf_range(0.0, 8.0), "type": String(x.weapon), "count": xc, "base": bool(x.get("base", false)), "keep": true})
+				schedule.append({"t": span * clampf(float(x.get("at", 0.5)) + _rng.randf_range(-0.15, 0.15), 0.05, 0.95), "type": String(x.weapon), "count": xc, "base": bool(x.get("base", false)), "keep": true})
 	if city.raid_events.has(d):
 		var ev: Dictionary = city.raid_events[d]
-		schedule.append({"t": span * 0.42, "alert": String(ev.get("alert", ""))})
-		schedule.append({"t": span * 0.5, "type": String(ev.weapon), "count": int(ev.get("count", 1)), "aim": String(ev.get("aim", ""))})
+		var hour := _rng.randf_range(0.35, 0.7)
+		schedule.append({"t": span * (hour - 0.08), "alert": String(ev.get("alert", ""))})
+		schedule.append({"t": span * hour, "type": String(ev.weapon), "count": int(ev.get("count", 1)), "aim": String(ev.get("aim", ""))})
 	if GS.base_found:
 		var bw := _weapon("cruise", maxi(d, cruise_from)) if d >= cruise_from else "cruise"
 		var bc := _left(bw, 1 if d < 4 else 2)
 		if bc > 0:
-			schedule.append({"t": span * 0.45, "type": bw, "count": bc, "base": true, "alt": 80.0})
+			schedule.append({"t": span * _rng.randf_range(0.25, 0.75), "type": bw, "count": bc, "base": true, "alt": 80.0})
 		if d >= 5:
 			var bb := _weapon("ballistic", maxi(d, ball_from))
 			if _left(bb, 1) > 0:
-				schedule.append({"t": span * 0.5, "type": bb, "count": 1, "base": true})
+				schedule.append({"t": span * _rng.randf_range(0.3, 0.8), "type": bb, "count": 1, "base": true})
 	if GS.realism:
 		# a ballistic missile leaves seconds; the early warning gives the time to walk to a console
 		for s in schedule.duplicate():
 			if s.has("type") and GS.kind_of(String(s.type)) == "ballistic":
 				schedule.append({"t": maxf(1.0, float(s.t) - 28.0), "warn": true})
 	schedule.sort_custom(func(a, b) -> bool: return float(a.t) < float(b.t))
+	_print_plan("night %d (%d s, heat %.2f, lean %.2f)" % [d, int(phase_len), heat, lean])
 	SFX.play_music("night")
 	SFX.play_siren() # howls at dusk even over a city already under an alarm declared in the day
 	game.set_alarm(true, false)
@@ -266,6 +291,17 @@ func start_night() -> void:
 	else:
 		game.hud.alert(GS.t("НОЧЬ %d — ВОЗДУШНАЯ ТРЕВОГА!") % d, Color(1.0, 0.3, 0.3))
 		game.hud.log_event(GS.t("Воздушная тревога. Ночь %d.") % d, Color(1.0, 0.3, 0.3))
+
+
+## Test runs print what was rolled: second, weapon and count of every launch.
+func _print_plan(title: String) -> void:
+	if not game.autotest:
+		return
+	var parts := PackedStringArray()
+	for s in schedule:
+		if s.has("type"):
+			parts.append("%d:%s×%d" % [int(s.t), String(s.type), int(s.count)])
+	print("UAD PLAN %s: %s" % [title, " ".join(parts)])
 
 
 ## The intelligence summary at dusk: which weapons are expected tonight.
