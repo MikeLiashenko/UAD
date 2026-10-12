@@ -615,7 +615,7 @@ func _process(delta: float) -> void:
 		_shot_cam.far = cam.far
 	if _args.has("shot") and not _shot_done and _clock >= float(_args.get("shot-at", "3")):
 		_shot_done = true
-		_frame_image().save_png(String(_args.shot))
+		_save_picture(_frame_image(), String(_args.shot), float(_args.get("shot-quality", "0.9")))
 		print("UAD: screenshot saved to ", _args.shot)
 	if _args.has("quit-at") and _clock >= float(_args["quit-at"]) and not _quitting:
 		_quitting = true
@@ -1107,6 +1107,8 @@ func _fx_stage(delta: float) -> void:
 		game.director.schedule.clear()
 		game.director.phase_len = 1.0e6
 	_fx_t += delta
+	# the phase never ends, and its clock reads like a watch in progress (the pictures show it)
+	game.director.phase_len = game.director.phase_time + 137.0
 	GS.base_hp = 100.0
 	GS.city = 100.0
 	if String(_args.fxstage) == "calm": # --fxstage=calm: the night without a raid
@@ -1629,8 +1631,10 @@ func _mp_session_selftest() -> void:
 ## an off-screen buffer of --shot-size (1920x1080) that --shot / --shotlist save.
 var _shot_vp: SubViewport
 var _shot_cam: Camera3D
-## --shotlist=file.json: [{file, pos: [x, y, z], look: [x, y, z], fov, night, fog, hold}, …]
-## taken one after another in the same run, then the game quits.
+## --shotlist=file.json: [{file, pos: [x, y, z], look: [x, y, z], fov, night, fog, hold, quality}, …]
+## taken one after another in the same run, then the game quits. "base": true counts both points
+## from the battery, "ll": true gives them as [latitude, longitude, height]. The file's extension
+## picks the format (.png, .jpg, .webp); --shot takes --shot-quality.
 var _shots: Array = []
 var _shot_i := 0
 var _shot_t := -1.0
@@ -1692,6 +1696,16 @@ func _frame_image() -> Image:
 	return tex.get_image()
 
 
+## By the file's extension: .jpg and .webp at `quality`, anything else as a PNG.
+func _save_picture(img: Image, file: String, quality: float) -> void:
+	if file.ends_with(".jpg"):
+		img.save_jpg(file, quality)
+	elif file.ends_with(".webp"):
+		img.save_webp(file, true, quality)
+	else:
+		img.save_png(file)
+
+
 ## One entry of the shot list per call: aim the camera, let the frame settle, save it.
 func _shot_list_step() -> void:
 	if _shots.is_empty() or _shot_i >= _shots.size() or _clock < float(_args.get("shot-start", "1.5")):
@@ -1703,8 +1717,13 @@ func _shot_list_step() -> void:
 	var look: Array = s.get("look", [0, 60, 0])
 	# "base": true — both points are offsets from the battery's position
 	var origin := GS.base_pos if bool(s.get("base", false)) else Vector3.ZERO
-	cam.global_position = origin + Vector3(float(pos[0]), float(pos[1]), float(pos[2]))
-	cam.look_at(origin + Vector3(float(look[0]), float(look[1]), float(look[2])), Vector3.UP)
+	if bool(s.get("ll", false)):
+		# "ll": true — both points are [latitude, longitude, height] on the city's own map
+		cam.global_position = map.city.ll3(float(pos[0]), float(pos[1]), float(pos[2]))
+		cam.look_at(map.city.ll3(float(look[0]), float(look[1]), float(look[2])), Vector3.UP)
+	else:
+		cam.global_position = origin + Vector3(float(pos[0]), float(pos[1]), float(pos[2]))
+		cam.look_at(origin + Vector3(float(look[0]), float(look[1]), float(look[2])), Vector3.UP)
 	cam.fov = float(s.get("fov", 62.0))
 	if s.has("night") and (game == null or not is_instance_valid(game)):
 		map.set_night(float(s.night))
@@ -1723,11 +1742,7 @@ func _shot_list_step() -> void:
 		return
 	_shot_settle = 0
 	var file := String(s.get("file", "shot_%d.png" % _shot_i))
-	var img := _frame_image()
-	if file.ends_with(".jpg"):
-		img.save_jpg(file, float(s.get("quality", 0.9)))
-	else:
-		img.save_png(file)
+	_save_picture(_frame_image(), file, float(s.get("quality", 0.9)))
 	print("UAD SHOT %d/%d saved %s (%d fps)" % [_shot_i + 1, _shots.size(), file, Engine.get_frames_per_second()])
 	_shot_i += 1
 	_shot_t = -1.0

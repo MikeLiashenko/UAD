@@ -3,309 +3,530 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ukraine Air Defense</title>
-<meta name="description" content="Нічне чергування ППО над Києвом, Харковом, Дніпром та Одесою. Завантажити для Windows та Android.">
-<meta name="theme-color" content="#020807">
+<title>Ukraine Air Defense — нічне чергування ППО</title>
+<meta name="description" content="Ukraine Air Defense: оборона неба над Києвом, Харковом, Дніпром та Одесою. 15 комплексів ППО, 20 типів загроз, FPV-перехоплювачі, F-16, кооператив і режим MaxRealism. Безкоштовно для Windows та Android.">
+<meta name="theme-color" content="#030807">
 <meta property="og:title" content="Ukraine Air Defense">
-<meta property="og:description" content="Нічне чергування ППО над Києвом, Харковом, Дніпром та Одесою. Windows · Android · кооператив.">
+<meta property="og:description" content="Нічне чергування ППО над Києвом, Харковом, Дніпром та Одесою. Windows · Android · кооператив · MaxRealism.">
 <meta property="og:image" content="https://mikeliashenko.github.io/UAD/img/shot-hero.jpg">
 <meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" href="img/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Russo+One&display=swap" rel="stylesheet">
 <style>
 :root {
-	--bg: #020807;
-	--bg2: #041310;
-	--panel: rgba(5, 28, 21, 0.72);
-	--panel2: rgba(8, 40, 30, 0.82);
-	--line: rgba(51, 255, 166, 0.22);
-	--line2: rgba(51, 255, 166, 0.5);
-	--neon: #33ffa6;
-	--cyan: #5ad8ff;
-	--amber: #ffbf40;
+	--bg: #030807;
+	--bg2: #06110e;
+	--panel: rgba(9, 28, 22, 0.66);
+	--panel2: rgba(10, 40, 30, 0.86);
+	--line: rgba(120, 255, 200, 0.14);
+	--line2: rgba(120, 255, 200, 0.42);
+	--neon: #3dffb0;
+	--cyan: #6fdcff;
+	--amber: #ffc24d;
 	--red: #ff5a4a;
-	--text: #dcffee;
-	--muted: #8fbfaa;
-	--dim: #5d8a78;
-	--radius: 14px;
+	--text: #ecfff6;
+	--muted: #9dbfb0;
+	--dim: #62877a;
+	--radius: 18px;
 	--display: "Russo One", "Manrope", system-ui, sans-serif;
 	--body: "Manrope", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+	--shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
 }
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; scroll-padding-top: 76px; }
 body {
-	margin: 0;
-	background: var(--bg);
-	color: var(--text);
-	font: 16px/1.6 var(--body);
-	-webkit-font-smoothing: antialiased;
-	overflow-x: hidden;
+	margin: 0; background: var(--bg); color: var(--text);
+	font: 17px/1.65 var(--body); -webkit-font-smoothing: antialiased; overflow-x: hidden;
 }
 a { color: var(--neon); text-decoration: none; }
 a:hover { text-decoration: underline; }
 img { max-width: 100%; display: block; }
-.wrap { width: min(1180px, 100% - 32px); margin: 0 auto; }
+button { font: inherit; }
+.wrap { width: min(1240px, 100% - 40px); margin: 0 auto; }
+::selection { background: rgba(61, 255, 176, 0.3); }
 
-/* --- navigation ------------------------------------------------------------ */
+/* --- navigation -------------------------------------------------------------------- */
 .nav {
-	position: fixed; inset: 0 0 auto 0; z-index: 20;
-	backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-	background: linear-gradient(to bottom, rgba(2, 8, 7, 0.92), rgba(2, 8, 7, 0.6));
-	border-bottom: 1px solid var(--line);
+	position: fixed; inset: 0 0 auto 0; z-index: 30; transition: background 0.3s, border-color 0.3s;
+	border-bottom: 1px solid transparent;
 }
-.nav .wrap { display: flex; align-items: center; gap: 18px; height: 64px; }
-.brand { display: flex; align-items: center; gap: 10px; color: var(--text); font: 20px var(--display); letter-spacing: 1px; }
+.nav.solid {
+	background: rgba(3, 8, 7, 0.82); border-bottom-color: var(--line);
+	backdrop-filter: blur(16px) saturate(1.3); -webkit-backdrop-filter: blur(16px) saturate(1.3);
+}
+.nav .wrap { display: flex; align-items: center; gap: 22px; height: 68px; }
+.brand { display: flex; align-items: center; gap: 11px; color: var(--text); font: 20px var(--display); letter-spacing: 1.5px; }
 .brand:hover { text-decoration: none; }
-.brand img { width: 34px; height: 34px; border-radius: 8px; box-shadow: 0 0 14px rgba(51, 255, 166, 0.35); }
-.nav .links { display: flex; gap: 22px; margin-left: auto; }
-.nav .links a { color: var(--muted); font-weight: 600; font-size: 15px; }
-.nav .links a:hover { color: var(--neon); text-decoration: none; }
-.lang { display: flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
-.lang button {
-	background: none; border: 0; color: var(--muted); font: 700 12px var(--body);
-	padding: 6px 10px; cursor: pointer; letter-spacing: 0.5px;
-}
+.brand img { width: 36px; height: 36px; border-radius: 9px; box-shadow: 0 0 18px rgba(61, 255, 176, 0.35); }
+.nav .links { display: flex; gap: 24px; margin-left: auto; }
+.nav .links a { color: var(--muted); font-weight: 600; font-size: 14.5px; position: relative; padding: 6px 0; }
+.nav .links a::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--neon); transform: scaleX(0); transition: transform 0.25s; transform-origin: left; }
+.nav .links a:hover, .nav .links a.on { color: var(--text); text-decoration: none; }
+.nav .links a:hover::after, .nav .links a.on::after { transform: scaleX(1); }
+.lang { display: flex; border: 1px solid var(--line2); border-radius: 999px; overflow: hidden; background: rgba(3, 8, 7, 0.5); }
+.lang button { background: none; border: 0; color: var(--muted); font: 700 12px var(--body); padding: 7px 11px; cursor: pointer; letter-spacing: 0.6px; }
 .lang button.on { background: var(--neon); color: #01140c; }
-@media (max-width: 820px) { .nav .links { display: none; } .lang { margin-left: auto; } }
+.nav .get {
+	padding: 9px 16px; border-radius: 10px; font-weight: 800; font-size: 14px; color: #012112;
+	background: linear-gradient(135deg, #3dffb0, #1fd28a); box-shadow: 0 0 22px rgba(61, 255, 176, 0.3);
+}
+.nav .get:hover { text-decoration: none; filter: brightness(1.08); }
+@media (max-width: 1080px) { .nav .links { display: none; } .lang { margin-left: auto; } }
+@media (max-width: 520px) { .nav .get { display: none; } }
 
-/* --- hero ---------------------------------------------------------------------- */
-.hero { position: relative; min-height: 100vh; min-height: 100svh; display: flex; align-items: center; padding: 96px 0 56px; overflow: hidden; }
-#radar { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0.9; }
-.hero::after {
-	content: ""; position: absolute; inset: 0; pointer-events: none;
+/* --- hero -------------------------------------------------------------------------- */
+.hero { position: relative; min-height: 100vh; min-height: 100svh; display: flex; align-items: flex-end; padding: 130px 0 0; overflow: hidden; }
+.hero .bg { position: absolute; inset: 0; background: #020504 center / cover no-repeat; transform: scale(1.06); animation: drift 26s ease-in-out infinite alternate; }
+@keyframes drift { to { transform: scale(1.14) translate(-1.2%, -1%); } }
+.hero::before {
+	content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
 	background:
-		radial-gradient(ellipse at 70% 45%, transparent 0%, rgba(2, 8, 7, 0.35) 55%, var(--bg) 100%),
-		repeating-linear-gradient(to bottom, rgba(51, 255, 166, 0.035) 0 1px, transparent 1px 4px);
+		linear-gradient(to bottom, rgba(3, 8, 7, 0.72) 0%, rgba(3, 8, 7, 0.1) 26%, rgba(3, 8, 7, 0.25) 55%, var(--bg) 98%),
+		linear-gradient(100deg, rgba(3, 8, 7, 0.88) 0%, rgba(3, 8, 7, 0.45) 42%, transparent 70%);
 }
-.hero .wrap { position: relative; z-index: 2; display: grid; grid-template-columns: 1.05fr 1fr; gap: 48px; align-items: center; }
-@media (max-width: 980px) { .hero .wrap { grid-template-columns: 1fr; } }
+#radar { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; opacity: 0.5; mix-blend-mode: screen; pointer-events: none; }
+.hero .wrap { position: relative; z-index: 2; padding-bottom: 46px; }
 .kicker {
-	display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px;
-	border: 1px solid var(--line2); color: var(--neon); font-weight: 700; font-size: 13px;
-	letter-spacing: 1.5px; text-transform: uppercase; background: rgba(51, 255, 166, 0.06);
+	display: inline-flex; align-items: center; gap: 9px; padding: 7px 14px; border-radius: 999px;
+	border: 1px solid rgba(255, 90, 74, 0.55); color: #ffd9d4; font-weight: 800; font-size: 12.5px;
+	letter-spacing: 2px; text-transform: uppercase; background: rgba(255, 90, 74, 0.12);
 }
-.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); box-shadow: 0 0 10px var(--red); animation: blink 1.2s infinite; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); box-shadow: 0 0 12px var(--red); animation: blink 1.2s infinite; }
 @keyframes blink { 50% { opacity: 0.25; } }
 h1 {
-	margin: 18px 0 14px; font: clamp(42px, 7vw, 86px)/0.95 var(--display); letter-spacing: 1px;
-	color: #eafff4;
-	text-shadow: 0 0 18px rgba(51, 255, 166, 0.55), 0 0 60px rgba(51, 255, 166, 0.25);
+	margin: 20px 0 16px; font: clamp(46px, 8.4vw, 124px)/0.9 var(--display); letter-spacing: 1px; color: #f3fff9;
+	text-shadow: 0 4px 40px rgba(0, 0, 0, 0.6);
 }
-h1 span { display: block; color: var(--neon); }
-.tagline { font-size: clamp(17px, 2vw, 20px); color: var(--muted); max-width: 560px; margin: 0 0 28px; }
+h1 span { display: block; background: linear-gradient(92deg, #3dffb0 10%, #6fdcff 90%); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 26px rgba(61, 255, 176, 0.35)); }
+.tagline { font-size: clamp(17px, 1.9vw, 21px); color: #cfe9de; max-width: 640px; margin: 0 0 30px; text-shadow: 0 2px 14px rgba(0, 0, 0, 0.8); }
 .cta { display: flex; flex-wrap: wrap; gap: 14px; }
 .btn {
-	display: inline-flex; align-items: center; gap: 14px; padding: 14px 22px 14px 18px; border-radius: 12px;
-	border: 1px solid var(--line2); background: var(--panel2); color: var(--text); min-width: 250px;
-	transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+	display: inline-flex; align-items: center; gap: 14px; padding: 14px 24px 14px 18px; border-radius: 14px;
+	border: 1px solid var(--line2); background: rgba(6, 26, 20, 0.72); color: var(--text); min-width: 262px;
+	backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+	transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s;
 }
-.btn:hover { text-decoration: none; transform: translateY(-2px); border-color: var(--neon); box-shadow: 0 8px 30px rgba(51, 255, 166, 0.18); }
+.btn:hover { text-decoration: none; transform: translateY(-2px); border-color: var(--neon); box-shadow: 0 10px 34px rgba(61, 255, 176, 0.2); }
 .btn svg { width: 30px; height: 30px; flex: none; }
 .btn b { display: block; font: 17px var(--display); letter-spacing: 0.5px; }
 .btn small { display: block; color: var(--muted); font-size: 13px; font-weight: 600; }
-.btn.primary { background: linear-gradient(135deg, #33ffa6, #1fd28a); color: #012112; border-color: transparent; box-shadow: 0 0 30px rgba(51, 255, 166, 0.35); }
-.btn.primary small { color: rgba(1, 33, 18, 0.75); }
-.btn.primary:hover { box-shadow: 0 10px 40px rgba(51, 255, 166, 0.5); }
-.buildline { margin-top: 18px; color: var(--dim); font-size: 14px; font-weight: 600; display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
-.buildline .tag { color: var(--neon); border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; font-variant-numeric: tabular-nums; }
-.shotframe {
-	position: relative; border-radius: 16px; padding: 8px; background: linear-gradient(145deg, rgba(51, 255, 166, 0.5), rgba(90, 216, 255, 0.15) 40%, rgba(51, 255, 166, 0.05));
-	box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6), 0 0 60px rgba(51, 255, 166, 0.15);
-	transform: perspective(1400px) rotateY(-9deg) rotateX(3deg);
+.btn.primary { background: linear-gradient(135deg, #3dffb0, #1fd28a); color: #012112; border-color: transparent; box-shadow: 0 0 36px rgba(61, 255, 176, 0.38); }
+.btn.primary small { color: rgba(1, 33, 18, 0.72); }
+.btn.primary:hover { box-shadow: 0 12px 46px rgba(61, 255, 176, 0.55); }
+.buildline { margin-top: 18px; color: #a9c9bb; font-size: 14px; font-weight: 600; display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.buildline .tag { color: var(--neon); border: 1px solid var(--line2); border-radius: 7px; padding: 2px 9px; font-variant-numeric: tabular-nums; background: rgba(3, 8, 7, 0.5); }
+.stats {
+	margin-top: 54px; display: grid; grid-template-columns: repeat(6, 1fr); border: 1px solid var(--line);
+	border-radius: var(--radius); background: rgba(5, 16, 13, 0.72); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); overflow: hidden;
 }
-.shotframe img, .shotframe .ph { border-radius: 10px; aspect-ratio: 16 / 9; width: 100%; object-fit: cover; background: #06140f; }
-.shotframe .hud {
-	position: absolute; left: 22px; bottom: 20px; right: 22px; display: flex; justify-content: space-between;
-	font: 700 12px var(--body); letter-spacing: 1.5px; color: var(--neon); text-shadow: 0 0 8px #000;
-}
-@media (max-width: 980px) { .shotframe { transform: none; } }
+.stats div { padding: 20px 18px; border-left: 1px solid var(--line); }
+.stats div:first-child { border-left: 0; }
+.stats b { display: block; font: clamp(24px, 2.6vw, 34px)/1.1 var(--display); color: var(--neon); letter-spacing: 0.5px; }
+.stats b { white-space: nowrap; }
+.stats b small { font-size: 0.52em; color: var(--muted); }
+.stats span { color: var(--muted); font-size: 13.5px; font-weight: 600; line-height: 1.35; display: block; margin-top: 4px; }
+@media (max-width: 980px) { .stats { grid-template-columns: repeat(3, 1fr); } .stats div:nth-child(4) { border-left: 0; } .stats div:nth-child(n+4) { border-top: 1px solid var(--line); } }
+@media (max-width: 560px) { .stats { grid-template-columns: repeat(2, 1fr); } .stats div { border-left: 0; border-top: 1px solid var(--line); } .stats div:nth-child(-n+2) { border-top: 0; } .stats div:nth-child(even) { border-left: 1px solid var(--line); } }
 
-/* --- sections ------------------------------------------------------------------ */
-section { padding: 96px 0; position: relative; }
-.sec-title { font: clamp(30px, 4vw, 44px)/1.1 var(--display); margin: 0 0 12px; letter-spacing: 0.5px; }
-.sec-sub { color: var(--muted); max-width: 680px; margin: 0 0 44px; font-size: 18px; }
-.grid-bg {
-	background:
-		linear-gradient(var(--bg2), var(--bg2)) padding-box,
-		linear-gradient(90deg, rgba(51, 255, 166, 0.05) 1px, transparent 1px) 0 0 / 48px 48px,
-		linear-gradient(rgba(51, 255, 166, 0.05) 1px, transparent 1px) 0 0 / 48px 48px;
-	background-blend-mode: normal;
+/* --- sections ---------------------------------------------------------------------- */
+section { padding: 110px 0; position: relative; }
+.eyebrow { display: inline-flex; align-items: center; gap: 10px; color: var(--neon); font: 700 13px var(--body); letter-spacing: 3px; text-transform: uppercase; margin-bottom: 14px; }
+.eyebrow::before { content: ""; width: 34px; height: 2px; background: linear-gradient(90deg, var(--neon), transparent); }
+.sec-title { font: clamp(32px, 4.6vw, 58px)/1.04 var(--display); margin: 0 0 16px; letter-spacing: 0.5px; max-width: 900px; }
+.sec-sub { color: var(--muted); max-width: 720px; margin: 0 0 54px; font-size: 19px; }
+.tint { background: linear-gradient(180deg, transparent, rgba(9, 30, 23, 0.55) 18%, rgba(9, 30, 23, 0.55) 82%, transparent); }
+.shot {
+	position: relative; margin: 0; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line2);
+	background: #06140f; box-shadow: var(--shadow), 0 0 0 1px rgba(0, 0, 0, 0.6) inset; cursor: zoom-in; aspect-ratio: 16 / 9;
 }
-.features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
-@media (max-width: 980px) { .features { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 620px) { .features { grid-template-columns: 1fr; } }
-.card {
-	background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px;
-	transition: border-color 0.2s, transform 0.2s;
+.shot img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.shot:hover img { transform: scale(1.035); }
+.shot figcaption {
+	position: absolute; left: 0; right: 0; bottom: 0; padding: 40px 18px 13px; font-weight: 700; font-size: 14.5px;
+	background: linear-gradient(transparent, rgba(0, 0, 0, 0.82)); pointer-events: none;
 }
-.card:hover { border-color: var(--line2); transform: translateY(-3px); }
-.card .ic {
-	width: 48px; height: 48px; border-radius: 12px; display: grid; place-items: center; margin-bottom: 16px;
-	background: rgba(51, 255, 166, 0.1); border: 1px solid var(--line); color: var(--neon);
+.shot::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04); }
+
+/* --- the day of a defender: alternating rows ----------------------------------------- */
+.rows { display: grid; gap: 96px; }
+.row { display: grid; grid-template-columns: 1.25fr 1fr; gap: 56px; align-items: center; }
+.row:nth-child(even) .shot { order: 2; }
+@media (max-width: 980px) { .row { grid-template-columns: 1fr; gap: 26px; } .row:nth-child(even) .shot { order: 0; } .rows { gap: 70px; } }
+.row .num { font: 15px var(--display); color: var(--amber); letter-spacing: 3px; }
+.row h3 { font: clamp(26px, 3vw, 38px)/1.1 var(--display); margin: 8px 0 14px; }
+.row p { color: var(--muted); margin: 0 0 16px; }
+.ticks { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; }
+.ticks li { position: relative; padding-left: 28px; color: #c6dfd3; }
+.ticks li::before { content: ""; position: absolute; left: 2px; top: 0.55em; width: 12px; height: 7px; border-left: 2px solid var(--neon); border-bottom: 2px solid var(--neon); transform: rotate(-45deg); }
+
+/* --- tabs ------------------------------------------------------------------------- */
+.tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
+.tabs button {
+	border: 1px solid var(--line); background: rgba(9, 28, 22, 0.6); color: var(--muted); padding: 11px 18px;
+	border-radius: 12px; font-weight: 700; font-size: 15px; cursor: pointer; transition: all 0.2s;
 }
+.tabs button:hover { color: var(--text); border-color: var(--line2); }
+.tabs button.on { background: var(--neon); color: #01140c; border-color: var(--neon); box-shadow: 0 0 26px rgba(61, 255, 176, 0.3); }
+.panes > div { display: none; }
+.panes > div.on { display: grid; animation: fade 0.45s; }
+@keyframes fade { from { opacity: 0; transform: translateY(10px); } }
+.pane { grid-template-columns: 1.7fr 1fr; gap: 34px; align-items: center; }
+@media (max-width: 980px) { .pane { grid-template-columns: 1fr; gap: 22px; } }
+.pane h3 { font: clamp(24px, 2.6vw, 32px)/1.12 var(--display); margin: 0 0 12px; }
+.pane p { color: var(--muted); margin: 0 0 14px; }
+.keys { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.key { border: 1px solid var(--line2); border-radius: 8px; padding: 3px 10px; font: 700 13px var(--body); color: var(--cyan); background: rgba(111, 220, 255, 0.06); }
+
+/* --- arsenal ---------------------------------------------------------------------- */
+.arsenal { display: grid; grid-template-columns: 1fr 1.15fr; gap: 44px; align-items: start; }
+@media (max-width: 980px) { .arsenal { grid-template-columns: 1fr; } }
+.tier { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); padding: 16px 18px; margin-bottom: 12px; }
+.tier h4 { margin: 0 0 10px; font: 14px var(--display); letter-spacing: 2px; color: var(--amber); text-transform: uppercase; display: flex; justify-content: space-between; gap: 10px; }
+.tier h4 small { font: 600 12.5px var(--body); color: var(--dim); letter-spacing: 0.3px; text-transform: none; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { border: 1px solid var(--line2); border-radius: 999px; padding: 5px 13px; font-weight: 700; font-size: 14px; color: var(--text); background: rgba(61, 255, 176, 0.06); white-space: nowrap; }
+.chip i { font-style: normal; color: var(--dim); font-weight: 600; margin-left: 6px; }
+.chip.hot { border-color: rgba(255, 90, 74, 0.55); background: rgba(255, 90, 74, 0.08); }
+.chip.warm { border-color: rgba(255, 194, 77, 0.5); background: rgba(255, 194, 77, 0.07); }
+.threats { margin-top: 44px; border: 1px solid var(--line); border-radius: var(--radius); padding: 26px; background: var(--panel); }
+.threats h3 { margin: 0 0 6px; font: 24px var(--display); }
+.threats p { margin: 0 0 18px; color: var(--muted); }
+
+/* --- cards ------------------------------------------------------------------------ */
+.cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+@media (max-width: 980px) { .cards { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 620px) { .cards { grid-template-columns: 1fr; } }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 26px; transition: border-color 0.25s, transform 0.25s, box-shadow 0.25s; }
+.card:hover { border-color: var(--line2); transform: translateY(-4px); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.4); }
+.card .ic { width: 50px; height: 50px; border-radius: 13px; display: grid; place-items: center; margin-bottom: 16px; background: rgba(61, 255, 176, 0.1); border: 1px solid var(--line2); color: var(--neon); }
 .card .ic svg { width: 26px; height: 26px; }
 .card h3 { margin: 0 0 8px; font: 20px var(--display); letter-spacing: 0.3px; }
-.card p { margin: 0; color: var(--muted); }
+.card p { margin: 0; color: var(--muted); font-size: 16px; }
+.wide { margin-top: 26px; aspect-ratio: 21 / 9; }
 
-.gallery { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; }
-.gallery figure { margin: 0; position: relative; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); cursor: zoom-in; background: #06140f; }
-.gallery figure:nth-child(1) { grid-column: span 4; grid-row: span 2; }
-.gallery figure { grid-column: span 2; }
-.gallery figure:nth-child(n+4) { grid-column: span 3; }
-.gallery img { width: 100%; height: 100%; object-fit: cover; aspect-ratio: 16 / 9; transition: transform 0.4s; }
-.gallery figure:hover img { transform: scale(1.04); }
-.gallery figcaption {
-	position: absolute; left: 0; right: 0; bottom: 0; padding: 26px 14px 10px; font-weight: 700; font-size: 14px;
-	background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
-}
-@media (max-width: 820px) { .gallery { grid-template-columns: 1fr 1fr; } .gallery figure, .gallery figure:nth-child(1), .gallery figure:nth-child(n+4) { grid-column: span 2; grid-row: auto; } }
+/* --- MaxRealism -------------------------------------------------------------------- */
+#real { background: radial-gradient(1200px 600px at 80% 0%, rgba(255, 194, 77, 0.09), transparent 60%), linear-gradient(180deg, #050706, #0a0d09 30%, #0a0d09 70%, var(--bg)); }
+#real .eyebrow { color: var(--amber); }
+#real .eyebrow::before { background: linear-gradient(90deg, var(--amber), transparent); }
+#real .sec-title span { color: var(--amber); }
+.real-head { display: grid; grid-template-columns: 1.1fr 1fr; gap: 50px; align-items: end; margin-bottom: 50px; }
+@media (max-width: 980px) { .real-head { grid-template-columns: 1fr; gap: 20px; } }
+.real-head .sec-sub { margin: 0; }
+.rules { display: grid; gap: 10px; }
+.rules div { border-left: 3px solid var(--amber); padding: 10px 16px; background: rgba(255, 194, 77, 0.05); border-radius: 0 10px 10px 0; color: #e6dcc6; font-weight: 600; }
+.real-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+@media (max-width: 980px) { .real-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 620px) { .real-grid { grid-template-columns: 1fr; } }
+.rcard { border: 1px solid rgba(255, 194, 77, 0.22); border-radius: var(--radius); overflow: hidden; background: rgba(18, 20, 14, 0.8); transition: transform 0.25s, border-color 0.25s; }
+.rcard:hover { transform: translateY(-4px); border-color: rgba(255, 194, 77, 0.6); }
+.rcard .shot { border: 0; border-radius: 0; box-shadow: none; border-bottom: 1px solid rgba(255, 194, 77, 0.22); }
+.rcard div { padding: 18px 20px 22px; }
+.rcard h3 { margin: 0 0 6px; font: 19px var(--display); color: #fff3d9; }
+.rcard p { margin: 0; color: #b5ad98; font-size: 15.5px; }
 
-.coop { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; }
+/* --- cities ------------------------------------------------------------------------ */
+.city { grid-template-columns: 1fr; gap: 22px; }
+.city-shots { display: grid; grid-template-columns: 1.6fr 1fr; gap: 18px; }
+@media (max-width: 820px) { .city-shots { grid-template-columns: 1fr; } }
+.city-text { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+@media (max-width: 820px) { .city-text { grid-template-columns: 1fr; gap: 10px; } }
+.city-text h3 { font: clamp(26px, 3vw, 36px) var(--display); margin: 0 0 8px; }
+.city-text p { margin: 0; color: var(--muted); }
+.city-text .chips { margin-top: 6px; }
+
+/* --- graphics / touch -------------------------------------------------------------- */
+.levels { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 0 0 30px; }
+@media (max-width: 820px) { .levels { grid-template-columns: repeat(2, 1fr); } }
+.levels div { border: 1px solid var(--line); border-radius: 12px; padding: 14px; background: var(--panel); }
+.levels b { display: block; font: 17px var(--display); color: var(--text); }
+.levels span { color: var(--dim); font-size: 13.5px; font-weight: 600; }
+.levels div.top { border-color: var(--line2); box-shadow: 0 0 30px rgba(61, 255, 176, 0.12); }
+.levels div.top b { color: var(--neon); }
+.duo { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+@media (max-width: 820px) { .duo { grid-template-columns: 1fr; } }
+
+/* --- co-op ------------------------------------------------------------------------- */
+.coop { display: grid; grid-template-columns: 1fr 1fr; gap: 44px; align-items: center; }
 @media (max-width: 980px) { .coop { grid-template-columns: 1fr; } }
-.steps { list-style: none; margin: 0; padding: 0; counter-reset: s; display: grid; gap: 14px; }
-.steps li {
-	counter-increment: s; position: relative; padding: 16px 18px 16px 70px; background: var(--panel);
-	border: 1px solid var(--line); border-radius: var(--radius); color: var(--muted);
-}
+.steps { list-style: none; margin: 0; padding: 0; counter-reset: s; display: grid; gap: 12px; }
+.steps li { counter-increment: s; position: relative; padding: 16px 18px 16px 72px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; color: var(--muted); }
 .steps li b { color: var(--text); display: block; font-size: 17px; }
 .steps li::before {
-	content: counter(s); position: absolute; left: 18px; top: 50%; transform: translateY(-50%);
-	width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center;
-	font: 17px var(--display); color: #012112; background: var(--neon); box-shadow: 0 0 16px rgba(51, 255, 166, 0.5);
+	content: counter(s); position: absolute; left: 18px; top: 50%; transform: translateY(-50%); width: 38px; height: 38px; border-radius: 50%;
+	display: grid; place-items: center; font: 17px var(--display); color: #012112; background: var(--neon); box-shadow: 0 0 18px rgba(61, 255, 176, 0.5);
 }
-.codebox {
-	background: var(--panel2); border: 1px solid var(--line2); border-radius: var(--radius); padding: 26px; text-align: center;
-	box-shadow: 0 0 50px rgba(51, 255, 166, 0.1);
-}
+.codebox { background: var(--panel2); border: 1px solid var(--line2); border-radius: var(--radius); padding: 30px; text-align: center; box-shadow: 0 0 60px rgba(61, 255, 176, 0.1); }
 .codebox .label { color: var(--muted); font-weight: 700; letter-spacing: 1.5px; font-size: 13px; text-transform: uppercase; }
-.codebox .code { font: clamp(34px, 6vw, 52px) var(--display); letter-spacing: 6px; color: var(--neon); text-shadow: 0 0 22px rgba(51, 255, 166, 0.6); margin: 8px 0 18px; }
-.request {
-	display: flex; align-items: center; gap: 12px; justify-content: center; flex-wrap: wrap; padding: 14px; border-radius: 10px;
-	border: 1px solid rgba(90, 216, 255, 0.5); background: rgba(0, 20, 28, 0.7); color: var(--text); font-weight: 600;
-}
+.codebox .code { font: clamp(34px, 6vw, 54px) var(--display); letter-spacing: 6px; color: var(--neon); text-shadow: 0 0 24px rgba(61, 255, 176, 0.6); margin: 8px 0 18px; }
+.request { display: flex; align-items: center; gap: 12px; justify-content: center; flex-wrap: wrap; padding: 14px; border-radius: 12px; border: 1px solid rgba(111, 220, 255, 0.5); background: rgba(0, 20, 28, 0.7); font-weight: 600; }
 .pill { padding: 6px 14px; border-radius: 8px; font-weight: 800; font-size: 14px; border: 1px solid var(--line2); }
 .pill.yes { color: var(--neon); }
 .pill.no { color: var(--muted); }
 
+/* --- gallery ----------------------------------------------------------------------- */
+.gallery { display: grid; grid-template-columns: repeat(12, 1fr); gap: 14px; }
+.gallery .shot { grid-column: span 4; box-shadow: none; border-color: var(--line); }
+.gallery .shot.big { grid-column: span 8; grid-row: span 2; aspect-ratio: auto; }
+.gallery .shot.half { grid-column: span 6; }
+@media (max-width: 900px) { .gallery .shot, .gallery .shot.half { grid-column: span 6; } .gallery .shot.big { grid-column: span 12; aspect-ratio: 16 / 9; } }
+@media (max-width: 560px) { .gallery .shot, .gallery .shot.half { grid-column: span 12; } }
+
+/* --- download ---------------------------------------------------------------------- */
+#download { background: radial-gradient(900px 500px at 50% 0%, rgba(61, 255, 176, 0.1), transparent 65%); }
 .dl { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 @media (max-width: 820px) { .dl { grid-template-columns: 1fr; } }
-.dlcard { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 28px; display: flex; flex-direction: column; gap: 14px; }
-.dlcard.hot { border-color: var(--line2); box-shadow: 0 0 40px rgba(51, 255, 166, 0.1); }
+.dlcard { background: var(--panel); border: 1px solid var(--line); border-radius: 22px; padding: 30px; display: flex; flex-direction: column; gap: 14px; }
+.dlcard.hot { border-color: var(--line2); box-shadow: 0 0 50px rgba(61, 255, 176, 0.12); }
 .dlcard header { display: flex; align-items: center; gap: 14px; }
-.dlcard header svg { width: 40px; height: 40px; color: var(--neon); }
-.dlcard h3 { margin: 0; font: 24px var(--display); }
+.dlcard header svg { width: 42px; height: 42px; color: var(--neon); }
+.dlcard h3 { margin: 0; font: 26px var(--display); }
 .dlcard .meta { color: var(--muted); font-size: 14px; font-weight: 600; }
-.dlcard ol { margin: 0; padding-left: 20px; color: var(--muted); }
+.dlcard ol { margin: 0; padding-left: 20px; color: var(--muted); flex: 1; }
 .dlcard ol li { margin: 4px 0; }
 .dlcard .btn { justify-content: center; width: 100%; }
 .note { margin-top: 22px; color: var(--muted); display: flex; gap: 10px; align-items: flex-start; }
-.note svg { width: 20px; height: 20px; flex: none; color: var(--amber); margin-top: 3px; }
-
+.note svg { width: 20px; height: 20px; flex: none; color: var(--amber); margin-top: 4px; }
 .builds { display: grid; gap: 12px; }
-.build {
-	display: grid; grid-template-columns: 140px 120px 1fr; gap: 16px; align-items: baseline; padding: 16px 20px;
-	background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
-}
+.build { display: grid; grid-template-columns: 150px 150px 1fr; gap: 16px; align-items: baseline; padding: 16px 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
 .build .n { font: 18px var(--display); color: var(--neon); }
 .build .d { color: var(--dim); font-weight: 600; font-variant-numeric: tabular-nums; }
 .build .t { color: var(--muted); white-space: pre-line; }
 .build.latest { border-color: var(--line2); }
-@media (max-width: 620px) { .build { grid-template-columns: 1fr; gap: 4px; } }
+@media (max-width: 680px) { .build { grid-template-columns: 1fr; gap: 4px; } }
 .empty { color: var(--dim); }
+.faq { display: grid; gap: 10px; max-width: 900px; }
+.faq details { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); padding: 0 20px; }
+.faq details[open] { border-color: var(--line2); }
+.faq summary { cursor: pointer; padding: 16px 0; font-weight: 700; list-style: none; display: flex; justify-content: space-between; gap: 16px; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after { content: "+"; color: var(--neon); font: 22px/1 var(--display); }
+.faq details[open] summary::after { content: "–"; }
+.faq p { margin: 0 0 18px; color: var(--muted); }
 
-footer { border-top: 1px solid var(--line); padding: 34px 0 44px; color: var(--dim); font-size: 14px; }
+footer { border-top: 1px solid var(--line); padding: 38px 0 48px; color: var(--dim); font-size: 14px; }
 footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 28px; align-items: center; justify-content: space-between; }
 
-.lightbox { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, 0.92); display: none; place-items: center; padding: 24px; cursor: zoom-out; }
+/* --- lightbox ---------------------------------------------------------------------- */
+.lightbox { position: fixed; inset: 0; z-index: 60; background: rgba(0, 0, 0, 0.94); display: none; place-items: center; padding: 20px 70px; }
 .lightbox.on { display: grid; }
-.lightbox img { max-height: 90vh; border-radius: 10px; border: 1px solid var(--line2); box-shadow: 0 0 60px rgba(51, 255, 166, 0.2); }
+.lightbox img { max-height: 86vh; max-width: 100%; border-radius: 12px; border: 1px solid var(--line2); box-shadow: 0 0 70px rgba(61, 255, 176, 0.18); cursor: zoom-out; }
+.lightbox .cap { position: absolute; left: 0; right: 0; bottom: 18px; text-align: center; color: var(--muted); font-weight: 600; }
+.lightbox button { position: absolute; top: 50%; transform: translateY(-50%); width: 52px; height: 52px; border-radius: 50%; border: 1px solid var(--line2); background: rgba(6, 26, 20, 0.8); color: var(--text); font-size: 24px; cursor: pointer; }
+.lightbox button:hover { border-color: var(--neon); color: var(--neon); }
+.lightbox .prev { left: 12px; } .lightbox .next { right: 12px; }
+.lightbox .close { top: 34px; right: 12px; transform: none; }
+@media (max-width: 620px) { .lightbox { padding: 20px 8px; } .lightbox .prev, .lightbox .next { top: auto; bottom: 54px; transform: none; } }
 
-.reveal { opacity: 0; transform: translateY(18px); transition: opacity 0.7s, transform 0.7s; }
+.reveal { opacity: 0; transform: translateY(22px); transition: opacity 0.8s, transform 0.8s cubic-bezier(0.2, 0.7, 0.2, 1); }
 .reveal.in { opacity: 1; transform: none; }
 @media (prefers-reduced-motion: reduce) {
 	.reveal { opacity: 1; transform: none; transition: none; }
-	.dot { animation: none; }
+	.dot, .hero .bg { animation: none; }
 	html { scroll-behavior: auto; }
 }
 </style>
 </head>
 <body>
 
-<nav class="nav">
+<nav class="nav" id="nav">
 	<div class="wrap">
 		<a class="brand" href="#top"><img src="img/icon.png" alt="">UAD</a>
 		<div class="links">
-			<a href="#features" data-i18n="nav_features"></a>
-			<a href="#shots" data-i18n="nav_shots"></a>
+			<a href="#game" data-i18n="nav_game"></a>
+			<a href="#views" data-i18n="nav_views"></a>
+			<a href="#arsenal" data-i18n="nav_arsenal"></a>
+			<a href="#real">MaxRealism</a>
+			<a href="#cities" data-i18n="nav_cities"></a>
 			<a href="#coop" data-i18n="nav_coop"></a>
-			<a href="#download" data-i18n="nav_download"></a>
+			<a href="#gallery" data-i18n="nav_gallery"></a>
 		</div>
 		<div class="lang" role="group" aria-label="Language">
 			<button data-lang="uk">UA</button><button data-lang="ru">RU</button><button data-lang="en">EN</button>
 		</div>
+		<a class="get" href="#download" data-i18n="nav_download"></a>
 	</div>
 </nav>
 
 <header class="hero" id="top">
+	<div class="bg" style="background-image:url(img/hero.webp)"></div>
 	<canvas id="radar" aria-hidden="true"></canvas>
 	<div class="wrap">
-		<div>
-			<span class="kicker"><span class="dot"></span><span data-i18n="kicker"></span></span>
-			<h1>UKRAINE<span>AIR DEFENSE</span></h1>
-			<p class="tagline" data-i18n="tagline"></p>
-			<div class="cta" id="cta">
-				<a class="btn primary" id="btn-win" href="https://github.com/MikeLiashenko/UAD/releases/latest/download/UAD.exe">
-					<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.1 10.4 4v7.2H3V5.1Zm0 13.8 7.4 1.1v-7.1H3v6Zm8.3 1.2L21 21.5V12.9h-9.7v7.2Zm0-16.2v7.3H21V2.5l-9.7 1.4Z"/></svg>
-					<span><b data-i18n="btn_win"></b><small id="win-meta">.exe</small></span>
-				</a>
-				<a class="btn" id="btn-apk" href="https://github.com/MikeLiashenko/UAD/releases/latest/download/UAD.apk">
-					<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.6 9.5 19.4 6.4a.4.4 0 0 0-.7-.4l-1.8 3.2a11 11 0 0 0-9.8 0L5.3 6a.4.4 0 0 0-.7.4l1.8 3.1A10.4 10.4 0 0 0 1 18h22a10.4 10.4 0 0 0-5.4-8.5ZM7 15.3a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4Zm10 0a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4Z"/></svg>
-					<span><b data-i18n="btn_apk"></b><small id="apk-meta">.apk</small></span>
-				</a>
-			</div>
-			<div class="buildline"><span class="tag" id="build-tag">…</span><span id="build-date"></span><a href="https://github.com/MikeLiashenko/UAD/releases" data-i18n="all_builds"></a></div>
+		<span class="kicker"><span class="dot"></span><span data-i18n="kicker"></span></span>
+		<h1>UKRAINE<span>AIR DEFENSE</span></h1>
+		<p class="tagline" data-i18n="tagline"></p>
+		<div class="cta" id="cta">
+			<a class="btn primary" id="btn-win" href="https://github.com/MikeLiashenko/UAD/releases/latest/download/UAD.exe">
+				<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.1 10.4 4v7.2H3V5.1Zm0 13.8 7.4 1.1v-7.1H3v6Zm8.3 1.2L21 21.5V12.9h-9.7v7.2Zm0-16.2v7.3H21V2.5l-9.7 1.4Z"/></svg>
+				<span><b data-i18n="btn_win"></b><small id="win-meta">.exe</small></span>
+			</a>
+			<a class="btn" id="btn-apk" href="https://github.com/MikeLiashenko/UAD/releases/latest/download/UAD.apk">
+				<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.6 9.5 19.4 6.4a.4.4 0 0 0-.7-.4l-1.8 3.2a11 11 0 0 0-9.8 0L5.3 6a.4.4 0 0 0-.7.4l1.8 3.1A10.4 10.4 0 0 0 1 18h22a10.4 10.4 0 0 0-5.4-8.5ZM7 15.3a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4Zm10 0a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4Z"/></svg>
+				<span><b data-i18n="btn_apk"></b><small id="apk-meta">.apk</small></span>
+			</a>
 		</div>
-		<div class="shotframe">
-			<img src="img/shot-hero.jpg" alt="Ukraine Air Defense" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'ph'}))">
-			<div class="hud"><span>● REC</span><span data-i18n="hud"></span></div>
+		<div class="buildline"><span class="tag" id="build-tag">…</span><span id="build-date"></span><span data-i18n="free"></span><a href="https://github.com/MikeLiashenko/UAD/releases" data-i18n="all_builds"></a></div>
+		<div class="stats">
+			<div><b>4</b><span data-i18n="st1"></span></div>
+			<div><b>15</b><span data-i18n="st2"></span></div>
+			<div><b>20</b><span data-i18n="st3"></span></div>
+			<div><b>30 × 30 <small data-i18n="km"></small></b><span data-i18n="st4"></span></div>
+			<div><b>2</b><span data-i18n="st5"></span></div>
+			<div><b>100 %</b><span data-i18n="st6"></span></div>
 		</div>
 	</div>
 </header>
 
-<section id="features" class="grid-bg">
+<section id="game">
 	<div class="wrap">
-		<h2 class="sec-title reveal" data-i18n="features_t"></h2>
-		<p class="sec-sub reveal" data-i18n="features_s"></p>
-		<div class="features">
-			<article class="card reveal"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V9l4-3v15M9 21V4l6 3v14M15 21V11l4 2v8"/></svg></div><h3 data-i18n="f1_t"></h3><p data-i18n="f1"></p></article>
-			<article class="card reveal"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v6M8 6l4-4 4 4M5 22l7-9 7 9M9 17h6"/></svg></div><h3 data-i18n="f2_t"></h3><p data-i18n="f2"></p></article>
-			<article class="card reveal"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12l7-2 4-7 2 1-2 7 7 1v2l-7 1 2 7-2 1-4-7-7-2z"/></svg></div><h3 data-i18n="f3_t"></h3><p data-i18n="f3"></p></article>
-			<article class="card reveal"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 7c-3 3-5 6-5 9a5 5 0 0 0 10 0c0-3-2-6-5-9zM4 21c2-1 4-1 6 0s4 1 6 0 4-1 4 0"/></svg></div><h3 data-i18n="f4_t"></h3><p data-i18n="f4"></p></article>
-			<article class="card reveal"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="5" r="2.5"/><circle cx="19" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M7 7l3 3M17 7l-3 3M7 17l3-3M17 17l-3-3"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/></svg></div><h3 data-i18n="f5_t"></h3><p data-i18n="f5"></p></article>
-			<article class="card reveal"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M2 20c0-3 3-5 6-5s6 2 6 5M12 20c0-3 2-5 4-5s6 2 6 5"/></svg></div><h3 data-i18n="f6_t"></h3><p data-i18n="f6"></p></article>
+		<div class="eyebrow reveal" data-i18n="game_e"></div>
+		<h2 class="sec-title reveal" data-i18n="game_t"></h2>
+		<p class="sec-sub reveal" data-i18n="game_s"></p>
+		<div class="rows">
+			<div class="row reveal">
+				<figure class="shot"><img loading="lazy" data-shot="alarm" alt=""></figure>
+				<div><div class="num">01</div><h3 data-i18n="g1_t"></h3><p data-i18n="g1"></p>
+					<ul class="ticks"><li data-i18n="g1_a"></li><li data-i18n="g1_b"></li><li data-i18n="g1_c"></li></ul></div>
+			</div>
+			<div class="row reveal">
+				<figure class="shot"><img loading="lazy" data-shot="raid" alt=""></figure>
+				<div><div class="num">02</div><h3 data-i18n="g2_t"></h3><p data-i18n="g2"></p>
+					<ul class="ticks"><li data-i18n="g2_a"></li><li data-i18n="g2_b"></li><li data-i18n="g2_c"></li></ul></div>
+			</div>
+			<div class="row reveal">
+				<figure class="shot"><img loading="lazy" data-shot="strikes" alt=""></figure>
+				<div><div class="num">03</div><h3 data-i18n="g3_t"></h3><p data-i18n="g3"></p>
+					<ul class="ticks"><li data-i18n="g3_a"></li><li data-i18n="g3_b"></li><li data-i18n="g3_c"></li></ul></div>
+			</div>
+			<div class="row reveal">
+				<figure class="shot"><img loading="lazy" data-shot="morning" alt=""></figure>
+				<div><div class="num">04</div><h3 data-i18n="g4_t"></h3><p data-i18n="g4"></p>
+					<ul class="ticks"><li data-i18n="g4_a"></li><li data-i18n="g4_b"></li><li data-i18n="g4_c"></li></ul></div>
+			</div>
 		</div>
 	</div>
 </section>
 
-<section id="shots">
+<section id="views" class="tint">
 	<div class="wrap">
-		<h2 class="sec-title reveal" data-i18n="shots_t"></h2>
-		<p class="sec-sub reveal" data-i18n="shots_s"></p>
-		<div class="gallery" id="gallery">
-			<figure class="reveal"><img loading="lazy" src="img/shot-1.jpg" alt=""><figcaption data-i18n="s1"></figcaption></figure>
-			<figure class="reveal"><img loading="lazy" src="img/Rozved.jpg" alt=""><figcaption data-i18n="s2"></figcaption></figure>
-			<figure class="reveal"><img loading="lazy" src="img/Nalet.jpg" alt=""><figcaption data-i18n="s3"></figcaption></figure>
-			<figure class="reveal"><img loading="lazy" src="img/shot-4.jpg" alt=""><figcaption data-i18n="s4"></figcaption></figure>
-			<figure class="reveal"><img loading="lazy" src="img/shot-5.jpg" alt=""><figcaption data-i18n="s5"></figcaption></figure>
+		<div class="eyebrow reveal" data-i18n="views_e"></div>
+		<h2 class="sec-title reveal" data-i18n="views_t"></h2>
+		<p class="sec-sub reveal" data-i18n="views_s"></p>
+		<div class="tabs reveal" data-tabs="views">
+			<button class="on" data-i18n="v1_n"></button><button data-i18n="v2_n"></button><button data-i18n="v3_n"></button>
+			<button data-i18n="v4_n"></button><button data-i18n="v5_n"></button><button data-i18n="v6_n"></button>
+		</div>
+		<div class="panes reveal" id="views-panes">
+			<div class="pane on"><figure class="shot"><img loading="lazy" data-shot="gunner" alt=""></figure><div><h3 data-i18n="v1_t"></h3><p data-i18n="v1"></p><div class="keys"><span class="key">V</span><span class="key">N</span><span class="key">1–9</span></div></div></div>
+			<div class="pane"><figure class="shot"><img loading="lazy" data-shot="fpv" alt=""></figure><div><h3 data-i18n="v2_t"></h3><p data-i18n="v2"></p><div class="keys"><span class="key">C</span><span class="key">Shift</span><span class="key">Space</span></div></div></div>
+			<div class="pane"><figure class="shot"><img loading="lazy" data-shot="f16" alt=""></figure><div><h3 data-i18n="v3_t"></h3><p data-i18n="v3"></p><div class="keys"><span class="key">J</span><span class="key">AIM-9X</span><span class="key">AIM-120</span></div></div></div>
+			<div class="pane"><figure class="shot"><img loading="lazy" data-shot="pickup" alt=""></figure><div><h3 data-i18n="v4_t"></h3><p data-i18n="v4"></p><div class="keys"><span class="key">M</span><span class="key">W A S D</span></div></div></div>
+			<div class="pane"><figure class="shot"><img loading="lazy" data-shot="map" alt=""></figure><div><h3 data-i18n="v5_t"></h3><p data-i18n="v5"></p></div></div>
+			<div class="pane"><figure class="shot"><img loading="lazy" data-shot="touch" alt=""></figure><div><h3 data-i18n="v6_t"></h3><p data-i18n="v6"></p></div></div>
 		</div>
 	</div>
 </section>
 
-<section id="coop" class="grid-bg">
+<section id="arsenal">
+	<div class="wrap">
+		<div class="eyebrow reveal" data-i18n="ars_e"></div>
+		<h2 class="sec-title reveal" data-i18n="ars_t"></h2>
+		<p class="sec-sub reveal" data-i18n="ars_s"></p>
+		<div class="arsenal">
+			<div class="reveal">
+				<div class="tier"><h4><span data-i18n="t1"></span><small data-i18n="t1_r"></small></h4><div class="chips"><span class="chip" data-i18n="w_mg"></span><span class="chip" data-i18n="w_zu"></span><span class="chip" data-i18n="w_shilka"></span><span class="chip">Gepard 35 mm</span></div></div>
+				<div class="tier"><h4><span data-i18n="t2"></span><small data-i18n="t2_r"></small></h4><div class="chips"><span class="chip" data-i18n="w_igla"></span><span class="chip">Avenger</span><span class="chip" data-i18n="w_drone"></span></div></div>
+				<div class="tier"><h4><span data-i18n="t3"></span><small data-i18n="t3_r"></small></h4><div class="chips"><span class="chip" data-i18n="w_osa"></span><span class="chip">NASAMS</span><span class="chip">IRIS-T SLM</span></div></div>
+				<div class="tier"><h4><span data-i18n="t4"></span><small data-i18n="t4_r"></small></h4><div class="chips"><span class="chip" data-i18n="w_buk"></span><span class="chip" data-i18n="w_s300"></span><span class="chip">Patriot PAC-3</span><span class="chip warm" data-i18n="w_s400"></span><span class="chip warm" data-i18n="w_s500"></span></div></div>
+				<div class="tier"><h4><span data-i18n="t5"></span><small data-i18n="t5_r"></small></h4><div class="chips"><span class="chip">F-16</span><span class="chip" data-i18n="w_mfg"></span><span class="chip" data-i18n="w_strike"></span></div></div>
+			</div>
+			<figure class="shot reveal"><img loading="lazy" data-shot="shop" alt=""></figure>
+		</div>
+		<div class="threats reveal">
+			<h3 data-i18n="thr_t"></h3><p data-i18n="thr_s"></p>
+			<div class="chips" id="threat-chips"></div>
+		</div>
+	</div>
+</section>
+
+<section id="world" class="tint">
+	<div class="wrap">
+		<div class="eyebrow reveal" data-i18n="world_e"></div>
+		<h2 class="sec-title reveal" data-i18n="world_t"></h2>
+		<p class="sec-sub reveal" data-i18n="world_s"></p>
+		<div class="cards">
+			<article class="card reveal"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 7c-3 3-5 6-5 9a5 5 0 0 0 10 0c0-3-2-6-5-9zM4 21c2-1 4-1 6 0s4 1 6 0 4-1 4 0"/></svg></div><h3 data-i18n="w1_t"></h3><p data-i18n="w1"></p></article>
+			<article class="card reveal"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c4 0 7-3 7-7 0-3-2-5-3-7-1 2-2 3-3 3 0-3-1-6-4-9 0 4-4 6-4 12 0 5 3 8 7 8z"/></svg></div><h3 data-i18n="w2_t"></h3><p data-i18n="w2"></p></article>
+			<article class="card reveal"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9l5 3-5 3z"/></svg></div><h3 data-i18n="w3_t"></h3><p data-i18n="w3"></p></article>
+			<article class="card reveal"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18V8l4-3 4 3v10M12 18v-7l4-2 4 2v7M2 18h20M7 11v2M7 15v1M16 13v1"/></svg></div><h3 data-i18n="w4_t"></h3><p data-i18n="w4"></p></article>
+			<article class="card reveal"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 9 9M12 7v5l3 2M17 3h4v4"/></svg></div><h3 data-i18n="w5_t"></h3><p data-i18n="w5"></p></article>
+			<article class="card reveal"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg></div><h3 data-i18n="w6_t"></h3><p data-i18n="w6"></p></article>
+		</div>
+		<figure class="shot wide reveal"><img loading="lazy" src="img/battle-1.webp" alt=""><figcaption data-i18n="cap_b1"></figcaption></figure>
+	</div>
+</section>
+
+<section id="real">
+	<div class="wrap">
+		<div class="eyebrow reveal" data-i18n="real_e"></div>
+		<div class="real-head">
+			<div><h2 class="sec-title reveal">Max<span>Realism</span></h2><p class="sec-sub reveal" data-i18n="real_s"></p></div>
+			<div class="rules reveal"><div data-i18n="rr1"></div><div data-i18n="rr2"></div><div data-i18n="rr3"></div><div data-i18n="rr4"></div></div>
+		</div>
+		<div class="real-grid">
+			<article class="rcard reveal"><figure class="shot"><img loading="lazy" data-shot="rl_foot" alt=""></figure><div><h3 data-i18n="r1_t"></h3><p data-i18n="r1"></p></div></article>
+			<article class="rcard reveal"><figure class="shot"><img loading="lazy" data-shot="rl_gun" alt=""></figure><div><h3 data-i18n="r2_t"></h3><p data-i18n="r2"></p></div></article>
+			<article class="rcard reveal"><figure class="shot"><img loading="lazy" data-shot="rl_console" alt=""></figure><div><h3 data-i18n="r3_t"></h3><p data-i18n="r3"></p></div></article>
+			<article class="rcard reveal"><figure class="shot"><img loading="lazy" data-shot="rl_post" alt=""></figure><div><h3 data-i18n="r4_t"></h3><p data-i18n="r4"></p></div></article>
+			<article class="rcard reveal"><figure class="shot"><img loading="lazy" data-shot="rl_supply" alt=""></figure><div><h3 data-i18n="r5_t"></h3><p data-i18n="r5"></p></div></article>
+			<article class="rcard reveal"><figure class="shot"><img loading="lazy" data-shot="rl_training" alt=""></figure><div><h3 data-i18n="r6_t"></h3><p data-i18n="r6"></p></div></article>
+		</div>
+	</div>
+</section>
+
+<section id="cities">
+	<div class="wrap">
+		<div class="eyebrow reveal" data-i18n="city_e"></div>
+		<h2 class="sec-title reveal" data-i18n="city_t"></h2>
+		<p class="sec-sub reveal" data-i18n="city_s"></p>
+		<div class="tabs reveal" data-tabs="cities">
+			<button class="on" data-i18n="c_kyiv"></button><button data-i18n="c_kharkiv"></button><button data-i18n="c_dnipro"></button><button data-i18n="c_odesa"></button>
+		</div>
+		<div class="panes reveal" id="cities-panes">
+			<div class="city on"><div class="city-shots"><figure class="shot"><img loading="lazy" src="img/kyiv-1.webp" alt=""></figure><figure class="shot"><img loading="lazy" src="img/kyiv-2.webp" alt=""></figure></div>
+				<div class="city-text"><div><h3 data-i18n="c_kyiv"></h3><p data-i18n="c_kyiv_d"></p></div><div><p data-i18n="c_kyiv_r"></p></div></div></div>
+			<div class="city"><div class="city-shots"><figure class="shot"><img loading="lazy" src="img/kharkiv-1.webp" alt=""></figure><figure class="shot"><img loading="lazy" src="img/kharkiv-2.webp" alt=""></figure></div>
+				<div class="city-text"><div><h3 data-i18n="c_kharkiv"></h3><p data-i18n="c_kharkiv_d"></p></div><div><p data-i18n="c_kharkiv_r"></p></div></div></div>
+			<div class="city"><div class="city-shots"><figure class="shot"><img loading="lazy" src="img/dnipro-1.webp" alt=""></figure><figure class="shot"><img loading="lazy" src="img/dnipro-2.webp" alt=""></figure></div>
+				<div class="city-text"><div><h3 data-i18n="c_dnipro"></h3><p data-i18n="c_dnipro_d"></p></div><div><p data-i18n="c_dnipro_r"></p></div></div></div>
+			<div class="city"><div class="city-shots"><figure class="shot"><img loading="lazy" src="img/odesa-1.webp" alt=""></figure><figure class="shot"><img loading="lazy" src="img/odesa-2.webp" alt=""></figure></div>
+				<div class="city-text"><div><h3 data-i18n="c_odesa"></h3><p data-i18n="c_odesa_d"></p></div><div><p data-i18n="c_odesa_r"></p></div></div></div>
+		</div>
+	</div>
+</section>
+
+<section id="graphics" class="tint">
+	<div class="wrap">
+		<div class="eyebrow reveal" data-i18n="gfx_e"></div>
+		<h2 class="sec-title reveal" data-i18n="gfx_t"></h2>
+		<p class="sec-sub reveal" data-i18n="gfx_s"></p>
+		<div class="levels reveal">
+			<div><b>Low</b><span data-i18n="l1"></span></div><div><b>High</b><span data-i18n="l2"></span></div><div><b>Ultra</b><span data-i18n="l3"></span></div>
+			<div><b>Max</b><span data-i18n="l4"></span></div><div class="top"><b>UltraMax</b><span data-i18n="l5"></span></div>
+		</div>
+		<div class="duo">
+			<figure class="shot reveal"><img loading="lazy" src="img/gfx-1.webp" alt=""><figcaption data-i18n="cap_g1"></figcaption></figure>
+			<figure class="shot reveal"><img loading="lazy" src="img/gfx-2.webp" alt=""><figcaption data-i18n="cap_g2"></figcaption></figure>
+		</div>
+	</div>
+</section>
+
+<section id="coop">
 	<div class="wrap coop">
 		<div>
+			<div class="eyebrow reveal" data-i18n="coop_e"></div>
 			<h2 class="sec-title reveal" data-i18n="coop_t"></h2>
 			<p class="sec-sub reveal" data-i18n="coop_s"></p>
 			<ol class="steps">
@@ -323,8 +544,18 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 28px; align-items: cent
 	</div>
 </section>
 
+<section id="gallery" class="tint">
+	<div class="wrap">
+		<div class="eyebrow reveal" data-i18n="gal_e"></div>
+		<h2 class="sec-title reveal" data-i18n="gal_t"></h2>
+		<p class="sec-sub reveal" data-i18n="gal_s"></p>
+		<div class="gallery" id="gallery-grid"></div>
+	</div>
+</section>
+
 <section id="download">
 	<div class="wrap">
+		<div class="eyebrow reveal" data-i18n="dl_e"></div>
 		<h2 class="sec-title reveal" data-i18n="dl_t"></h2>
 		<p class="sec-sub reveal" data-i18n="dl_s"></p>
 		<div class="dl">
@@ -343,11 +574,26 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 28px; align-items: cent
 	</div>
 </section>
 
-<section id="builds" class="grid-bg">
+<section id="builds" class="tint">
 	<div class="wrap">
+		<div class="eyebrow reveal" data-i18n="builds_e"></div>
 		<h2 class="sec-title reveal" data-i18n="builds_t"></h2>
 		<p class="sec-sub reveal" data-i18n="builds_s"></p>
 		<div class="builds" id="build-list"><div class="empty" data-i18n="loading"></div></div>
+	</div>
+</section>
+
+<section id="faq">
+	<div class="wrap">
+		<div class="eyebrow reveal">FAQ</div>
+		<h2 class="sec-title reveal" data-i18n="faq_t"></h2>
+		<div class="faq reveal" style="margin-top:34px">
+			<details><summary data-i18n="q1"></summary><p data-i18n="a1"></p></details>
+			<details><summary data-i18n="q2"></summary><p data-i18n="a2"></p></details>
+			<details><summary data-i18n="q3"></summary><p data-i18n="a3"></p></details>
+			<details><summary data-i18n="q4"></summary><p data-i18n="a4"></p></details>
+			<details><summary data-i18n="q5"></summary><p data-i18n="a5"></p></details>
+		</div>
 	</div>
 </section>
 
@@ -358,104 +604,34 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 28px; align-items: cent
 	</div>
 </footer>
 
-<div class="lightbox" id="lightbox" role="dialog" aria-modal="true"><img alt=""></div>
+<div class="lightbox" id="lightbox" role="dialog" aria-modal="true">
+	<button class="close" aria-label="Close">✕</button><button class="prev" aria-label="Previous">‹</button>
+	<img alt=""><button class="next" aria-label="Next">›</button><div class="cap"></div>
+</div>
 
+<script src="i18n.js"></script>
 <script>
 const DB = "https://dream-journal-93835-default-rtdb.firebaseio.com/uad/release.json";
 const REPO = "MikeLiashenko/UAD";
-
-const T = {
-	uk: {
-		nav_features: "Можливості", nav_shots: "Скріншоти", nav_coop: "Кооператив", nav_download: "Завантажити",
-		kicker: "Повітряна тривога",
-		tagline: "Нічне чергування ППО над Києвом, Харковом, Дніпром та Одесою. Збивайте шахеди, крилаті ракети й КАБи — і стежте, куди падають уламки.",
-		btn_win: "Завантажити для Windows", btn_apk: "Завантажити для Android",
-		all_builds: "Усі версії на GitHub", mb: "МБ", hud: "ППО НА ЧЕРГУВАННІ",
-		features_t: "Що всередині", features_s: "Повністю процедурна гра: міста, техніка, звуки та інтерфейс генеруються кодом.",
-		f1_t: "Чотири міста", f1: "Київ, Харків, Дніпро й Одеса — власні карти з районами, мостами, метро, портом і пам'ятками.",
-		f2_t: "15 систем ППО", f2: "Від пікапа з кулеметом, ЗУ-23 і Gepard до IRIS-T, NASAMS і Patriot — у кожної своя дальність і цілі.",
-		f3_t: "Реальні загрози", f3: "Шахеди, «Гербери», Х-101, «Калібри», КАБи, «Іскандери» й «Кинджали» — склад нальотів за зведеннями.",
-		f4_t: "Уламки мають значення", f4: "Прогноз падіння показує, куди впаде збите: над річкою — безпечно, над дахами — штраф і пожежа.",
-		f5_t: "FPV-перехоплювачі", f5: "Сідайте за пульт і таранте ціль уручну — або дайте дронам «Шершень» полювати самостійно.",
-		f6_t: "Кооператив", f6: "Відкрийте свій світ друзям: один наліт на всіх, у кожного своя батарея, нагорода — тому, хто збив.",
-		shots_t: "Скріншоти", shots_s: "Ніч, дим, трасери й місто, що не спить.",
-		s1: "Київ уночі", s2: "Вид від зброї", s3: "Нічний наліт", s4: "Харків", s5: "Одеса з моря",
-		coop_t: "Грайте з друзями", coop_s: "Як у Minecraft: код друга, запит на вхід — і спільна оборона одного міста через інтернет, без налаштування портів.",
-		c1_t: "Обміняйтеся кодами", c1: "Код друга — на вкладці «Мультиплеєр». З акаунтом друга можна знайти за ніком, а друзі й код будуть на всіх ваших пристроях.",
-		c2_t: "Хост відкриває світ", c2: "Пауза → «Відкрити для друзів».",
-		c3_t: "Надішліть запит", c3: "Хост бачить картку й натискає «Прийняти».",
-		c4_t: "Один наліт на всіх", c4: "Бачите бази й камери одне одного, ракети друзів — у небі, нагорода — тому, хто збив.",
-		code_label: "Ваш код друга", request: "Оля хоче приєднатися", accept: "Прийняти [Y]", decline: "Відхилити [N]",
-		dl_t: "Завантажити", dl_s: "Безкоштовно. Світи й налаштування зберігаються на вашому пристрої.",
-		win_req: "Windows 10/11 · OpenGL 3.3", win_1: "Завантажте UAD.exe і запустіть — встановлення не потрібне.",
-		win_2: "Якщо з'явиться SmartScreen: «Докладніше» → «Однаково запустити».", win_3: "Нова версія? Гра сама запропонує оновитися.",
-		apk_req: "Android 7.0+ · OpenGL ES 3.0", apk_1: "Завантажте UAD.apk на телефоні.",
-		apk_2: "Відкрийте файл і дозвольте встановлення з цього джерела.", apk_3: "Оновлення встановлюється поверх — прогрес зберігається.",
-		update_note: "Кожна версія має номер (v1.1.2 Alpha, v1.1.3 Alpha…). Коли вийде новіша, гра покаже це в головному меню й дасть посилання на завантаження.",
-		builds_t: "Останні версії", builds_s: "Що змінилося — просто з GitHub.", loading: "Завантаження…", none: "Збірок поки немає.",
-		footer: "Зроблено на Godot. Усі моделі, звуки й текстури генеруються кодом."
-	},
-	ru: {
-		nav_features: "Возможности", nav_shots: "Скриншоты", nav_coop: "Кооператив", nav_download: "Скачать",
-		kicker: "Воздушная тревога",
-		tagline: "Ночное дежурство ПВО над Киевом, Харьковом, Днепром и Одессой. Сбивайте шахеды, крылатые ракеты и КАБы — и следите, куда падают обломки.",
-		btn_win: "Скачать для Windows", btn_apk: "Скачать для Android",
-		all_builds: "Все версии на GitHub", mb: "МБ", hud: "ПВО НА ДЕЖУРСТВЕ",
-		features_t: "Что внутри", features_s: "Полностью процедурная игра: города, техника, звуки и интерфейс генерируются кодом.",
-		f1_t: "Четыре города", f1: "Киев, Харьков, Днепр и Одесса — свои карты с районами, мостами, метро, портом и достопримечательностями.",
-		f2_t: "15 систем ПВО", f2: "От пикапа с пулемётом, ЗУ-23 и Gepard до IRIS-T, NASAMS и Patriot — у каждой своя дальность и цели.",
-		f3_t: "Реальные угрозы", f3: "Шахеды, «Герберы», Х-101, «Калибры», КАБы, «Искандеры» и «Кинжалы» — состав налётов по сводкам.",
-		f4_t: "Обломки важны", f4: "Прогноз падения показывает, куда упадёт сбитое: над рекой — безопасно, над крышами — штраф и пожар.",
-		f5_t: "FPV-перехватчики", f5: "Садитесь за пульт и тараньте цель вручную — или дайте дронам «Шершень» охотиться самим.",
-		f6_t: "Кооператив", f6: "Откройте свой мир друзьям: один налёт на всех, у каждого своя батарея, награда — тому, кто сбил.",
-		shots_t: "Скриншоты", shots_s: "Ночь, дым, трассеры и город, который не спит.",
-		s1: "Киев ночью", s2: "Вид от орудия", s3: "Ночной налёт", s4: "Харьков", s5: "Одесса с моря",
-		coop_t: "Играйте с друзьями", coop_s: "Как в Minecraft: код друга, запрос на вход — и общая оборона одного города через интернет, без настройки портов.",
-		c1_t: "Обменяйтесь кодами", c1: "Код друга — на вкладке «Мультиплеер». С аккаунтом друга можно найти по нику, а друзья и код будут на всех ваших устройствах.",
-		c2_t: "Хост открывает мир", c2: "Пауза → «Открыть для друзей».",
-		c3_t: "Отправьте запрос", c3: "Хост видит карточку и нажимает «Принять».",
-		c4_t: "Один налёт на всех", c4: "Видно базы и камеры друг друга, ракеты друзей — в небе, награда — тому, кто сбил.",
-		code_label: "Ваш код друга", request: "Оля хочет присоединиться", accept: "Принять [Y]", decline: "Отклонить [N]",
-		dl_t: "Скачать", dl_s: "Бесплатно. Миры и настройки хранятся на вашем устройстве.",
-		win_req: "Windows 10/11 · OpenGL 3.3", win_1: "Скачайте UAD.exe и запустите — установка не нужна.",
-		win_2: "Если появится SmartScreen: «Подробнее» → «Выполнить в любом случае».", win_3: "Вышла новая версия? Игра сама предложит обновиться.",
-		apk_req: "Android 7.0+ · OpenGL ES 3.0", apk_1: "Скачайте UAD.apk на телефоне.",
-		apk_2: "Откройте файл и разрешите установку из этого источника.", apk_3: "Обновление ставится поверх — прогресс сохраняется.",
-		update_note: "У каждой версии есть номер (v1.1.2 Alpha, v1.1.3 Alpha…). Когда выйдет новее, игра покажет это в главном меню и даст ссылку на скачивание.",
-		builds_t: "Последние версии", builds_s: "Что изменилось — прямо с GitHub.", loading: "Загрузка…", none: "Сборок пока нет.",
-		footer: "Сделано на Godot. Все модели, звуки и текстуры генерируются кодом."
-	},
-	en: {
-		nav_features: "Features", nav_shots: "Screenshots", nav_coop: "Co-op", nav_download: "Download",
-		kicker: "Air raid alert",
-		tagline: "Night air-defense duty over Kyiv, Kharkiv, Dnipro and Odesa. Shoot down Shaheds, cruise missiles and glide bombs — and watch where the debris falls.",
-		btn_win: "Download for Windows", btn_apk: "Download for Android",
-		all_builds: "All versions on GitHub", mb: "MB", hud: "AIR DEFENSE ON DUTY",
-		features_t: "What's inside", features_s: "A fully procedural game: cities, hardware, sounds and UI are all generated in code.",
-		f1_t: "Four cities", f1: "Kyiv, Kharkiv, Dnipro and Odesa — each its own map with districts, bridges, metro, port and landmarks.",
-		f2_t: "15 air-defense systems", f2: "From a machine-gun pickup, ZU-23 and Gepard to IRIS-T, NASAMS and Patriot — each with its own reach and targets.",
-		f3_t: "Real threats", f3: "Shaheds, Gerbera decoys, Kh-101s, Kalibrs, KAB glide bombs, Iskanders and Kinzhals — raids built from real reports.",
-		f4_t: "Debris matters", f4: "The fall forecast shows where a kill comes down: over the river it's safe, over rooftops it's a fine and a fire.",
-		f5_t: "FPV interceptors", f5: "Take the console and ram the target yourself — or let the Hornet drones hunt on their own.",
-		f6_t: "Co-op", f6: "Open your world to friends: one raid for everybody, a battery each, and the reward goes to whoever brings it down.",
-		shots_t: "Screenshots", shots_s: "Night, smoke, tracers and a city that never sleeps.",
-		s1: "Kyiv at night", s2: "Gunner view", s3: "Night raid", s4: "Kharkiv", s5: "Odesa from the sea",
-		coop_t: "Play with friends", coop_s: "Like Minecraft: a friend code, a join request — and one city defended together over the internet, no port forwarding.",
-		c1_t: "Swap codes", c1: "Your friend code is on the Multiplayer tab. With an account friends find you by nick, and your friends and code follow you to every device.",
-		c2_t: "The host opens the world", c2: "Pause → «Open to friends».",
-		c3_t: "Send a request", c3: "The host sees a card and presses «Accept».",
-		c4_t: "One raid for everybody", c4: "See each other's bases and cameras, your friends' missiles in the sky; the reward goes to whoever hits.",
-		code_label: "Your friend code", request: "Olia wants to join", accept: "Accept [Y]", decline: "Decline [N]",
-		dl_t: "Download", dl_s: "Free. Worlds and settings stay on your device.",
-		win_req: "Windows 10/11 · OpenGL 3.3", win_1: "Download UAD.exe and run it — nothing to install.",
-		win_2: "If SmartScreen shows up: «More info» → «Run anyway».", win_3: "New version out? The game offers the update itself.",
-		apk_req: "Android 7.0+ · OpenGL ES 3.0", apk_1: "Download UAD.apk on your phone.",
-		apk_2: "Open the file and allow installing from this source.", apk_3: "Updates install over the top — your progress stays.",
-		update_note: "Every version has a number (v1.1.2 Alpha, v1.1.3 Alpha…). When a newer one is out, the game shows it in the main menu with a download link.",
-		builds_t: "Latest builds", builds_s: "What changed — straight from GitHub.", loading: "Loading…", none: "No builds yet.",
-		footer: "Made with Godot. Every model, sound and texture is generated in code."
-	}
-};
+// Screenshots with the interface exist once per language (img/<lang>/<name>.webp); the rest are shared.
+const LOCAL = ["raid", "gunner", "fpv", "f16", "pickup", "shop", "strikes", "morning", "alarm", "menu", "map", "rl_foot", "rl_post", "rl_console", "rl_gun", "rl_supply", "rl_training", "touch"];
+// The gallery: [file or localized name, caption key, layout class].
+const GALLERY = [
+	["hero", "cap_hero", "big"], ["kyiv-1", "cap_kyiv1", ""], ["battle-2", "cap_b2", ""],
+	["raid", "g2_t", ""], ["odesa-1", "cap_odesa1", ""], ["gunner", "v1_n", ""],
+	["battle-3", "cap_b3", "half"], ["kharkiv-1", "cap_kharkiv1", "half"],
+	["menu", "cap_menu", ""], ["kyiv-3", "cap_kyiv3", ""], ["fpv", "v2_n", ""],
+	["dnipro-1", "cap_dnipro1", "half"], ["battle-4", "cap_b4", "half"],
+	["f16", "v3_n", ""], ["kyiv-2", "cap_kyiv2", ""], ["rl_console", "r3_t", ""],
+	["odesa-2", "cap_odesa2", ""], ["pickup", "v4_n", ""], ["kharkiv-2", "cap_kharkiv2", ""],
+	["rl_post", "r4_t", "half"], ["dnipro-2", "cap_dnipro2", "half"],
+	["gfx-1", "cap_g1", ""], ["rl_gun", "r2_t", ""], ["gfx-2", "cap_g2", ""],
+	["kyiv-4", "cap_kyiv4", ""], ["dnipro-3", "cap_dnipro3", ""], ["odesa-3", "cap_odesa3", ""]
+];
+// Threats: [key, class] — drones, cruise, ballistic.
+const THREATS = [["e_scout", ""], ["e_shahed", ""], ["e_gerbera", ""], ["e_molniya", ""], ["e_geran3", ""], ["e_geran4", ""], ["e_geran5", ""],
+	["e_kh101", "warm"], ["e_kalibr", "warm"], ["e_oniks", "warm"], ["e_kh31", "warm"], ["e_kab", "warm"],
+	["e_iskander", "hot"], ["e_s300", "hot"], ["e_s400", "hot"], ["e_s500", "hot"], ["e_kh22", "hot"], ["e_kinzhal", "hot"], ["e_zircon", "hot"], ["e_oreshnik", "hot"]];
 
 let lang = "uk";
 let release = null;
@@ -469,10 +645,18 @@ function pickLang() {
 
 function t(k) { return (T[lang] && T[lang][k]) || T.en[k] || k; }
 
+function shotUrl(name) { return LOCAL.includes(name) ? "img/" + lang + "/" + name + ".webp" : "img/" + name + ".webp"; }
+
 function applyLang() {
 	document.documentElement.lang = lang;
+	document.title = "Ukraine Air Defense — " + t("title");
 	document.querySelectorAll("[data-i18n]").forEach((el) => { el.textContent = t(el.dataset.i18n); });
+	document.querySelectorAll("img[data-shot]").forEach((img) => { img.src = shotUrl(img.dataset.shot); });
+	document.querySelectorAll("[data-cap]").forEach((el) => { el.textContent = t(el.dataset.cap); });
 	document.querySelectorAll(".lang button").forEach((b) => b.classList.toggle("on", b.dataset.lang === lang));
+	const chips = document.getElementById("threat-chips");
+	chips.innerHTML = "";
+	THREATS.forEach(([k, c]) => { const s = document.createElement("span"); s.className = "chip " + c; s.textContent = t(k); chips.append(s); });
 	renderRelease();
 	renderBuilds();
 }
@@ -483,6 +667,26 @@ document.querySelectorAll(".lang button").forEach((b) => b.addEventListener("cli
 	applyLang();
 }));
 
+// the gallery is built from the list: a picture that is missing takes its tile with it
+(() => {
+	const grid = document.getElementById("gallery-grid");
+	GALLERY.forEach(([name, cap, cls]) => {
+		const f = document.createElement("figure"); f.className = "shot reveal " + cls;
+		const img = document.createElement("img"); img.loading = "lazy"; img.alt = "";
+		if (LOCAL.includes(name)) img.dataset.shot = name; else img.src = "img/" + name + ".webp";
+		const c = document.createElement("figcaption"); c.dataset.cap = cap;
+		f.append(img, c); grid.append(f);
+	});
+})();
+
+// tabs: the n-th button shows the n-th pane
+document.querySelectorAll("[data-tabs]").forEach((bar) => {
+	const panes = document.getElementById(bar.dataset.tabs + "-panes").children;
+	[...bar.children].forEach((b, i) => b.addEventListener("click", () => {
+		[...bar.children].forEach((x, j) => { x.classList.toggle("on", i === j); panes[j].classList.toggle("on", i === j); });
+	}));
+});
+
 function fmtDate(s) {
 	if (!s) return "";
 	const d = new Date(s);
@@ -490,9 +694,7 @@ function fmtDate(s) {
 	return d.toLocaleDateString(lang === "uk" ? "uk-UA" : lang === "ru" ? "ru-RU" : "en-GB", { day: "numeric", month: "long", year: "numeric" });
 }
 
-function trusted(url) {
-	return typeof url === "string" && url.startsWith("https://github.com/" + REPO + "/releases/");
-}
+function trusted(url) { return typeof url === "string" && url.startsWith("https://github.com/" + REPO + "/releases/"); }
 
 // build N is called "v1.1.(N - 11) Alpha"; the builds up to 11 came out as "v1.0.N Alpha"
 function label(n) { return n ? (n > 11 ? "v1.1." + (n - 11) : "v1.0." + n) + " Alpha" : "v —"; }
@@ -560,95 +762,106 @@ if (/Android/i.test(navigator.userAgent)) {
 	document.getElementById("card-win").classList.add("hot");
 }
 
-// screenshots: hide the ones not taken yet, open the rest full size
-document.querySelectorAll(".gallery img").forEach((img) => {
-	img.addEventListener("error", () => img.closest("figure").remove());
-	img.closest("figure").addEventListener("click", () => {
-		const lb = document.getElementById("lightbox");
-		lb.querySelector("img").src = img.src;
-		lb.classList.add("on");
+// every picture opens full size; the arrows walk through the ones on the page
+(() => {
+	const lb = document.getElementById("lightbox");
+	const big = lb.querySelector("img");
+	const cap = lb.querySelector(".cap");
+	let list = [], at = 0;
+	function show(i) {
+		at = (i + list.length) % list.length;
+		big.src = list[at].currentSrc || list[at].src;
+		const c = list[at].closest("figure").querySelector("figcaption");
+		cap.textContent = c ? c.textContent : "";
+	}
+	document.querySelectorAll(".shot img").forEach((img) => {
+		img.addEventListener("error", () => { const f = img.closest("figure"); if (f.parentNode.id === "gallery-grid") f.remove(); });
+		img.closest("figure").addEventListener("click", () => {
+			list = [...document.querySelectorAll(".shot img")].filter((x) => x.offsetParent !== null && x.naturalWidth > 0);
+			show(Math.max(0, list.indexOf(img)));
+			lb.classList.add("on");
+		});
 	});
-});
-document.getElementById("lightbox").addEventListener("click", (e) => e.currentTarget.classList.remove("on"));
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") document.getElementById("lightbox").classList.remove("on"); });
+	const close = () => lb.classList.remove("on");
+	lb.addEventListener("click", (e) => { if (e.target === lb || e.target === big) close(); });
+	lb.querySelector(".close").addEventListener("click", close);
+	lb.querySelector(".prev").addEventListener("click", () => show(at - 1));
+	lb.querySelector(".next").addEventListener("click", () => show(at + 1));
+	document.addEventListener("keydown", (e) => {
+		if (!lb.classList.contains("on")) return;
+		if (e.key === "Escape") close();
+		if (e.key === "ArrowLeft") show(at - 1);
+		if (e.key === "ArrowRight") show(at + 1);
+	});
+})();
+
+// the bar turns solid once the page is scrolled; the link of the section on screen is lit
+(() => {
+	const nav = document.getElementById("nav");
+	const links = [...document.querySelectorAll(".nav .links a")];
+	const onScroll = () => {
+		nav.classList.toggle("solid", window.scrollY > 40);
+		let cur = "";
+		links.forEach((a) => { const s = document.querySelector(a.getAttribute("href")); if (s && s.getBoundingClientRect().top < 140) cur = a.getAttribute("href"); });
+		links.forEach((a) => a.classList.toggle("on", a.getAttribute("href") === cur));
+	};
+	window.addEventListener("scroll", onScroll, { passive: true });
+	onScroll();
+})();
 
 // sections fade in as they scroll into view
 const io = "IntersectionObserver" in window ? new IntersectionObserver((es) => es.forEach((e) => {
 	if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
-}), { threshold: 0.12 }) : null;
+}), { threshold: 0.1 }) : null;
 document.querySelectorAll(".reveal").forEach((el) => io ? io.observe(el) : el.classList.add("in"));
 
-// the radar behind the title: a sweeping beam, threats closing in, interceptors going up
+// the radar over the title picture: a sweeping beam and threats closing in
 (() => {
 	const cv = document.getElementById("radar");
 	const ctx = cv.getContext("2d");
 	const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 	let w, h, cx, cy, R, dpr;
 	const blips = [];
-	const shots = [];
 	function resize() {
 		dpr = Math.min(window.devicePixelRatio || 1, 2);
 		w = cv.clientWidth; h = cv.clientHeight;
 		cv.width = w * dpr; cv.height = h * dpr;
 		ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-		cx = w > 980 ? w * 0.74 : w * 0.5; cy = h * 0.5;
-		R = Math.max(w, h) * 0.55;
+		cx = w > 980 ? w * 0.78 : w * 0.5; cy = h * 0.42;
+		R = Math.max(w, h) * 0.5;
 	}
 	function spawn() {
 		const a = Math.random() * Math.PI * 2;
-		const kind = Math.random() < 0.72 ? 0 : (Math.random() < 0.7 ? 1 : 2);
-		blips.push({ a, r: R * (0.9 + Math.random() * 0.2), v: [14, 34, 70][kind] * (0.8 + Math.random() * 0.4), kind, seen: 0, alive: true });
+		const kind = Math.random() < 0.72 ? 0 : 1;
+		blips.push({ a, r: R * (0.9 + Math.random() * 0.2), v: [14, 40][kind] * (0.8 + Math.random() * 0.4), kind, seen: 0, alive: true });
 	}
-	for (let i = 0; i < 9; i++) { spawn(); blips[i].r = R * (0.25 + Math.random() * 0.7); }
+	for (let i = 0; i < 8; i++) { spawn(); blips[i].r = R * (0.25 + Math.random() * 0.7); }
 	let sweep = 0, last = performance.now();
 	function frame(now) {
 		const dt = Math.min((now - last) / 1000, 0.05); last = now;
-		sweep = (sweep + dt * 1.25) % (Math.PI * 2);
+		sweep = (sweep + dt * 1.1) % (Math.PI * 2);
 		ctx.clearRect(0, 0, w, h);
-		ctx.strokeStyle = "rgba(51,255,166,0.12)"; ctx.lineWidth = 1;
+		ctx.strokeStyle = "rgba(61,255,176,0.16)"; ctx.lineWidth = 1;
 		for (let k = 1; k <= 6; k++) { ctx.beginPath(); ctx.arc(cx, cy, R * k / 6, 0, Math.PI * 2); ctx.stroke(); }
-		for (let k = 0; k < 12; k++) {
-			const a = k * Math.PI / 6;
-			ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); ctx.stroke();
-		}
 		const g = ctx.createConicGradient ? ctx.createConicGradient(sweep - 0.9, cx, cy) : null;
 		if (g) {
-			g.addColorStop(0, "rgba(51,255,166,0)"); g.addColorStop(0.143, "rgba(51,255,166,0.22)"); g.addColorStop(0.1431, "rgba(51,255,166,0)"); g.addColorStop(1, "rgba(51,255,166,0)");
+			g.addColorStop(0, "rgba(61,255,176,0)"); g.addColorStop(0.143, "rgba(61,255,176,0.2)"); g.addColorStop(0.1431, "rgba(61,255,176,0)"); g.addColorStop(1, "rgba(61,255,176,0)");
 			ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, R, sweep - 0.9, sweep); ctx.closePath(); ctx.fill();
 		}
-		ctx.strokeStyle = "rgba(160,255,210,0.7)"; ctx.lineWidth = 1.5;
+		ctx.strokeStyle = "rgba(160,255,210,0.55)"; ctx.lineWidth = 1.5;
 		ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(sweep) * R, cy + Math.sin(sweep) * R); ctx.stroke();
-		if (!still && Math.random() < dt * 0.9) spawn();
+		if (!still && Math.random() < dt * 0.7) spawn();
 		for (const b of blips) {
 			if (!still) b.r -= b.v * dt;
 			const diff = ((sweep - b.a) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
 			if (diff < 0.08) b.seen = 1;
 			b.seen = Math.max(0, b.seen - dt * 0.45);
 			const x = cx + Math.cos(b.a) * b.r, y = cy + Math.sin(b.a) * b.r;
-			const col = b.kind === 0 ? "255,191,64" : b.kind === 1 ? "255,90,74" : "255,120,255";
-			ctx.fillStyle = "rgba(" + col + "," + (0.15 + b.seen * 0.85) + ")";
+			ctx.fillStyle = "rgba(" + (b.kind === 0 ? "255,194,77" : "255,90,74") + "," + (0.1 + b.seen * 0.9) + ")";
 			ctx.beginPath(); ctx.arc(x, y, b.kind === 0 ? 3 : 4, 0, Math.PI * 2); ctx.fill();
-			if (b.seen > 0.5 && !b.targeted && b.r < R * 0.6 && Math.random() < dt * 1.5) {
-				b.targeted = true; shots.push({ x: cx, y: cy, b, life: 3 });
-			}
 			if (b.r < 12) b.alive = false;
 		}
-		for (const s of shots) {
-			if (!s.b.alive) { s.life = 0; continue; }
-			const tx = cx + Math.cos(s.b.a) * s.b.r, ty = cy + Math.sin(s.b.a) * s.b.r;
-			const dx = tx - s.x, dy = ty - s.y, d = Math.hypot(dx, dy);
-			const sp = 260 * dt;
-			const nx = s.x + dx / (d || 1) * Math.min(sp, d), ny = s.y + dy / (d || 1) * Math.min(sp, d);
-			ctx.strokeStyle = "rgba(90,216,255,0.85)"; ctx.lineWidth = 2;
-			ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(nx, ny); ctx.stroke();
-			s.x = nx; s.y = ny; s.life -= dt;
-			if (d < 6) {
-				s.b.alive = false; s.life = 0;
-				ctx.fillStyle = "rgba(255,230,150,0.9)"; ctx.beginPath(); ctx.arc(tx, ty, 10, 0, Math.PI * 2); ctx.fill();
-			}
-		}
 		for (let i = blips.length - 1; i >= 0; i--) if (!blips[i].alive) blips.splice(i, 1);
-		for (let i = shots.length - 1; i >= 0; i--) if (shots[i].life <= 0) shots.splice(i, 1);
 		if (!still) requestAnimationFrame(frame);
 	}
 	resize();
