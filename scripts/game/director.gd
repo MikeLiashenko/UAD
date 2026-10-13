@@ -13,6 +13,8 @@ extends Node
 ##  is autosaved at the start of every day.
 ## Our counter-strikes (scripts/game/strikes.gd) land at dusk: a damaged launch site sends half
 ## of its usual share, a destroyed one sends nothing until the enemy has rebuilt it.
+##  A match on a server (GS.pvp): only the clock is left of all this — day and night follow each
+##  other without a morning report, and what flies is what the other city's players launch.
 
 const Strikes = preload("res://scripts/game/strikes.gd")
 
@@ -33,11 +35,16 @@ var _rng := RandomNumberGenerator.new()
 ## (net_follow) and nothing is launched here; the morning report is still our own.
 var follower := false
 var _followed := false
+## A match on a server: the raids are the other city's (scripts/game/pvp.gd).
+var pvp := false
+## Length of a day and of a night of a match, seconds.
+const PVP_PHASE := 150.0
 
 
 func _ready() -> void:
 	_rng.randomize()
 	follower = Net.role == "guest"
+	pvp = not GS.pvp.is_empty()
 	if follower:
 		SFX.play_music("day")
 		return
@@ -72,6 +79,9 @@ func start_day() -> void:
 	phase_len = 55.0 if GS.day == 1 else _rng.randf_range(68.0, 86.0)
 	SFX.play_music("day")
 	schedule.clear()
+	if pvp:
+		phase_len = PVP_PHASE
+		return
 	# a destroyed recon post sends no scouts, a damaged one fewer; they come when they come, not
 	# on the quarter of a minute
 	var scouts := int(round((1 + GS.day / 3) * Strikes.output(game.map.city, "scout")))
@@ -190,6 +200,11 @@ func _layer(type: String) -> float:
 func start_night() -> void:
 	phase = Phase.NIGHT
 	phase_time = 0.0
+	if pvp:
+		phase_len = PVP_PHASE
+		schedule.clear()
+		SFX.play_music("night")
+		return
 	var d := GS.day
 	var m := GS.enemy_mult()
 	var final := d == GS.CAMPAIGN_NIGHTS and not GS.won
@@ -359,7 +374,12 @@ func _process(delta: float) -> void:
 			if phase_time >= phase_len:
 				start_night()
 		Phase.NIGHT:
-			if phase_time >= phase_len and schedule.is_empty() and game.enemies.is_empty():
+			if pvp:
+				if phase_time >= phase_len:
+					GS.day += 1
+					GS.state_changed.emit()
+					start_day()
+			elif phase_time >= phase_len and schedule.is_empty() and game.enemies.is_empty():
 				_morning()
 
 
@@ -420,7 +440,13 @@ func net_follow(r: Dictionary) -> void:
 	if d != GS.day:
 		GS.day = d
 		GS.state_changed.emit()
-	if ph != phase or not _followed:
+	if pvp:
+		# a match has no dusk siren and no morning report: only the light and the music change
+		if ph != phase or not _followed:
+			_followed = true
+			phase = Phase.NIGHT if ph == Phase.NIGHT else Phase.DAY
+			SFX.play_music("night" if phase == Phase.NIGHT else "day")
+	elif ph != phase or not _followed:
 		var was := phase
 		_followed = true
 		match ph:

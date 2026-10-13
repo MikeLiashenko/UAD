@@ -1,15 +1,19 @@
 extends Control
-## The "Play" screen, Minecraft-style, with two tabs:
+## The "Play" screen, Minecraft-style, with three tabs:
 ##   Главная     — your own worlds: every defence is a save slot in local storage;
 ##   Мультиплеер — friends added by code or nick (Net): who is online and which world they opened.
 ##                 A join request goes to the host, who accepts or declines it in their game.
 ##                 Playing by code needs nothing; an optional account (AccountUi) keeps the
 ##                 code, nick and friends in the cloud, on every device.
+##   Серверы     — two cities drawn by a player fire at each other (ServerDef, scripts/game/pvp.gd):
+##                 the player's own servers (drafts and published ones) and everybody's published
+##                 ones. A server is entered by picking the city to defend.
 
 const UiKit = preload("res://scripts/ui/ui_kit.gd")
 const Cities = preload("res://scripts/world/cities.gd")
 const PingBars = preload("res://scripts/ui/ping_bars.gd")
 const AccountUi = preload("res://scripts/ui/account_ui.gd")
+const ServerDef = preload("res://scripts/core/server_def.gd")
 
 ## The tab shown when the screen opens again (back from creating a world, a declined request…).
 static var last_tab := "home"
@@ -45,6 +49,20 @@ var _t := 0.0
 ## Join request dialog: [root, status label, spinner, button].
 var _req: Array = []
 var _req_host := ""
+
+# --- Серверы ---
+var _srv_list: VBoxContainer
+var _srv_rows := {}
+## Rows by key: "d:<id>" a server of our own (ServerDef), "p:<id>" a published one (Net.srv_list).
+var _srv_entries := {}
+var _srv_sel := ""
+var _srv_public: Array = []
+## "" not asked yet, "wait", "ok", "fail".
+var _srv_state := ""
+var _srv_t := 0.0
+var _srv_click := {}
+var _srv_go: Button
+var _srv_note: Label
 
 
 ## Radar sweep turning while the request waits for the host.
@@ -92,7 +110,7 @@ func _ready() -> void:
 	p.add_child(v)
 	var tabs := UiKit.hbox(8)
 	v.add_child(tabs)
-	for spec in [["home", GS.t("Главная")], ["mp", GS.t("Мультиплеер")]]:
+	for spec in [["home", GS.t("Главная")], ["mp", GS.t("Мультиплеер")], ["servers", GS.t("Серверы")]]:
 		var b := Button.new()
 		b.text = spec[1]
 		b.toggle_mode = true
@@ -107,6 +125,7 @@ func _ready() -> void:
 		_tab_btns[spec[0]] = b
 	_pages["home"] = _build_home()
 	_pages["mp"] = _build_mp()
+	_pages["servers"] = _build_servers()
 	for k in _pages:
 		v.add_child(_pages[k])
 	Net.friends_changed.connect(_rebuild_mp)
@@ -124,6 +143,8 @@ func _exit_tree() -> void:
 
 
 func _show_tab(t: String) -> void:
+	if not _pages.has(t):
+		t = "home"
 	last_tab = t
 	for k in _pages:
 		(_pages[k] as Control).visible = k == t
@@ -133,6 +154,9 @@ func _show_tab(t: String) -> void:
 		_rebuild_mp()
 	else:
 		Net.watch_friends(false)
+	if t == "servers":
+		_rebuild_servers()
+		_ask_servers()
 
 
 # --- Главная: own worlds -----------------------------------------------------------------
@@ -508,6 +532,8 @@ func _mp_row(e: Dictionary) -> Control:
 		col.add_child(UiKit.label(fnick, 21, Color(0.85, 1.0, 0.92)))
 		var what := GS.t("в меню")
 		match String(info.get("s", "")):
+			"srv":
+				what = GS.t("играет на сервере")
 			"game":
 				what = GS.t("играет один, мир не открыт")
 			"guest":
@@ -559,6 +585,220 @@ func _update_mp_buttons() -> void:
 	var w := _selected_world()
 	_join_btn.disabled = w.is_empty() or int(w.get("players", 1)) >= int(w.get("max", Net.MAX_PLAYERS))
 	_unfriend_btn.disabled = not _mp_entries.has(_mp_sel)
+
+
+# --- Серверы: two cities against each other ---------------------------------------------------------
+func _build_servers() -> Control:
+	var v := UiKit.vbox(10)
+	v.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var sub := UiKit.label(GS.t("Сервер — это два города, которые бьют друг по другу ракетами и дронами. Выберите сервер и город, который будете защищать, — или нарисуйте свои города: сначала черновик и тест с ботом, потом публикация для всех."), 14, Color(0.6, 0.85, 0.75), HORIZONTAL_ALIGNMENT_CENTER)
+	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	sub.custom_minimum_size = Vector2(740, 0)
+	v.add_child(sub)
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(0, 330)
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	v.add_child(scroll)
+	_srv_list = UiKit.vbox(6)
+	_srv_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(_srv_list)
+	_srv_note = UiKit.label("", 14, UiKit.NEON, HORIZONTAL_ALIGNMENT_CENTER)
+	v.add_child(_srv_note)
+	var grid := _grid()
+	v.add_child(grid)
+	_srv_go = UiKit.button(GS.t("Играть на сервере"), _srv_open, 370, 20)
+	grid.add_child(_srv_go)
+	grid.add_child(UiKit.button(GS.t("Создать сервер"), _srv_create, 370, 20))
+	grid.add_child(UiKit.button(GS.t("Обновить список"), _ask_servers, 370, 18))
+	grid.add_child(UiKit.button(GS.t("Отмена"), func() -> void: main.show_menu(), 370, 18))
+	return v
+
+
+## Asks the database for the published servers (the list is small: names and player counts).
+func _ask_servers() -> void:
+	_srv_t = 0.0
+	if _srv_state == "":
+		_srv_state = "wait"
+	Net.srv_list(func(ok: bool, list: Array) -> void:
+		if not is_instance_valid(self):
+			return
+		_srv_state = "ok" if ok else "fail"
+		if ok:
+			_srv_public = list
+		_rebuild_servers())
+
+
+func _srv_head(text: String) -> Label:
+	var l := UiKit.label(text, 14, UiKit.AMBER)
+	l.custom_minimum_size = Vector2(0, 24)
+	l.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	return l
+
+
+func _rebuild_servers() -> void:
+	if _srv_list == null:
+		return
+	for c in _srv_list.get_children():
+		c.queue_free()
+	_srv_rows.clear()
+	_srv_entries.clear()
+	var own := ServerDef.list()
+	var own_ids := {}
+	_srv_list.add_child(_srv_head(GS.t("МОИ СЕРВЕРЫ")))
+	if own.is_empty():
+		var e := _empty_note(GS.t("Своих серверов пока нет — нажмите «Создать сервер»: два готовых города уже будут на месте."))
+		e.custom_minimum_size = Vector2(0, 64)
+		e.add_theme_font_size_override("font_size", 16)
+		_srv_list.add_child(e)
+	for d in own:
+		own_ids[String(d.id)] = true
+		var key := "d:" + String(d.id)
+		_srv_entries[key] = d
+		_srv_list.add_child(_srv_row(key))
+	_srv_list.add_child(_srv_head(GS.t("ОБЩИЕ СЕРВЕРЫ")))
+	var shown := 0
+	for s in _srv_public:
+		var key := "p:" + String(s.id)
+		_srv_entries[key] = s
+		_srv_list.add_child(_srv_row(key, own_ids.has(String(s.id))))
+		shown += 1
+	if shown == 0:
+		var text := GS.t("Опубликованных серверов пока нет. Станьте первым!")
+		match _srv_state:
+			"wait", "":
+				text = GS.t("Загружаем список…")
+			"fail":
+				text = GS.t("Нет связи с сервером. Проверьте интернет.")
+		var e := _empty_note(text)
+		e.custom_minimum_size = Vector2(0, 64)
+		e.add_theme_font_size_override("font_size", 16)
+		_srv_list.add_child(e)
+	if not _srv_entries.has(_srv_sel):
+		_srv_sel = String(_srv_entries.keys()[0]) if not _srv_entries.is_empty() else ""
+	_update_srv_buttons()
+
+
+func _srv_row(key: String, mine := false) -> Control:
+	var e: Dictionary = _srv_entries[key]
+	var draft := key.begins_with("d:")
+	var shell := _row_shell(Color(0.25, 0.7, 0.95) if draft else Color(1.0, 0.45, 0.35), "⚔")
+	var b: Button = shell[0]
+	var hb: HBoxContainer = shell[1]
+	var col: VBoxContainer = shell[2]
+	b.custom_minimum_size = Vector2(0, 68)
+	col.add_child(UiKit.label(String(e.name), 20, Color(1, 1, 1)))
+	if draft:
+		var state := GS.t("черновик · виден только вам")
+		var scol := Color(0.6, 0.85, 0.75)
+		if bool(e.get("published", false)):
+			state = GS.t("опубликован, но изменён — обновите") if bool(e.get("dirty", false)) else GS.t("опубликован")
+			scol = UiKit.AMBER if bool(e.get("dirty", false)) else UiKit.NEON
+		col.add_child(UiKit.label("%s ⚔ %s · %s" % [String(e.cities[0].name), String(e.cities[1].name), state], 14, scol))
+	else:
+		var who := GS.t("ваш сервер") if mine else GS.t("автор: %s") % String(e.nick)
+		col.add_child(UiKit.label("%s ⚔ %s · %s" % [String(e.cities[0]), String(e.cities[1]), who], 14, Color(0.7, 1.0, 0.85)))
+		var right := UiKit.vbox(2)
+		right.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		right.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		hb.add_child(right)
+		var n: int = int(e.players[0]) + int(e.players[1])
+		var cap: int = int(e.team) * 2
+		right.add_child(UiKit.label("%d/%d" % [n, cap], 17, UiKit.AMBER if n >= cap else (Color(0.8, 1.0, 0.9) if n > 0 else Color(0.5, 0.6, 0.56)), HORIZONTAL_ALIGNMENT_RIGHT))
+		right.add_child(UiKit.label(GS.t("игроков"), 11, Color(0.5, 0.7, 0.62), HORIZONTAL_ALIGNMENT_RIGHT))
+		for c in right.get_children():
+			(c as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for c in col.get_children():
+		(c as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
+	b.pressed.connect(_on_srv_row.bind(key))
+	_srv_rows[key] = b
+	return b
+
+
+func _on_srv_row(key: String) -> void:
+	SFX.play("click", -8.0)
+	var now := Time.get_ticks_msec()
+	if _srv_sel == key and now - int(_srv_click.get(key, 0)) < 400:
+		_srv_open()
+		return
+	_srv_click[key] = now
+	_srv_sel = key
+	_update_srv_buttons()
+
+
+func _update_srv_buttons() -> void:
+	for k in _srv_rows:
+		(_srv_rows[k] as Button).button_pressed = k == _srv_sel
+	_srv_go.disabled = _srv_sel == ""
+	_srv_go.text = GS.t("Открыть мой сервер") if _srv_sel.begins_with("d:") else GS.t("Играть на сервере")
+	var total := 0
+	for s in _srv_public:
+		total += int(s.players[0]) + int(s.players[1])
+	_srv_note.text = GS.t("Серверов: %d · игроков на них: %d · серверы пока бесплатны") % [_srv_public.size(), total] if _srv_state == "ok" else ""
+
+
+func _srv_create() -> void:
+	_save_nick()
+	var d := ServerDef.blank(Net.code(), Net.nick())
+	ServerDef.save(d)
+	main.show_server(d)
+
+
+## A server of our own opens its screen; a published one asks which city to defend.
+func _srv_open() -> void:
+	if not _srv_entries.has(_srv_sel) or (_confirm != null and is_instance_valid(_confirm)):
+		return
+	_save_nick()
+	if _srv_sel.begins_with("d:"):
+		main.show_server(_srv_entries[_srv_sel])
+		return
+	var e: Dictionary = _srv_entries[_srv_sel]
+	var m := UiKit.modal(self, Vector2(520, 0))
+	_confirm = m[0]
+	var box := _confirm
+	var v: VBoxContainer = m[1]
+	v.add_child(UiKit.glow_label(String(e.name).to_upper(), 28, UiKit.NEON))
+	var st := UiKit.label(GS.t("Загружаем сервер…"), 16, Color(0.7, 1.0, 0.85), HORIZONTAL_ALIGNMENT_CENTER)
+	st.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	st.custom_minimum_size = Vector2(480, 44)
+	v.add_child(st)
+	var sides := UiKit.vbox(8)
+	v.add_child(sides)
+	v.add_child(UiKit.button(GS.t("Отмена"), func() -> void:
+		Net.close()
+		box.queue_free()))
+	var fail := func(text: String) -> void:
+		SFX.play("alert", -10.0)
+		st.text = text
+		st.add_theme_color_override("font_color", UiKit.RED)
+	Net.srv_fetch(String(e.id), func(def: Dictionary) -> void:
+		if not is_instance_valid(box):
+			return
+		if def.is_empty():
+			fail.call(GS.t("Сервер не найден: его сняли с публикации или нет связи."))
+			return
+		st.text = GS.t("Какой город будете защищать? По другому — наносить удары.")
+		for side in 2:
+			var n := int(e.players[side])
+			var full := n >= int(def.rules.team)
+			var btn := UiKit.button(GS.t("Защищать: %s · %d/%d") % [ServerDef.city_name(def, side), n, int(def.rules.team)], func() -> void: pass, 480, 20)
+			btn.disabled = full
+			btn.pressed.connect(func() -> void:
+				for c in sides.get_children():
+					(c as Button).disabled = true
+				st.text = GS.t("Подключаемся…")
+				Net.srv_join(def, side, func(ok: bool, why: String) -> void:
+					if not is_instance_valid(box):
+						if ok:
+							Net.close() # cancelled while the answer was on its way
+						return
+					if ok:
+						main.start_server(def, side, false)
+					else:
+						fail.call(why)
+						for i in sides.get_child_count():
+							(sides.get_child(i) as Button).disabled = int(e.players[i]) >= int(def.rules.team)))
+			sides.add_child(btn))
 
 
 # --- Join request -------------------------------------------------------------------------------
@@ -690,6 +930,11 @@ func _process(delta: float) -> void:
 			if bool(Net.friend_info.get(String(f.code), {}).get("online", false)):
 				online += 1
 		_scan_lbl.text = GS.t("%s Друзей в сети: %d из %d") % [dots, online, list.size()]
+	if _pages["servers"].visible and (_confirm == null or not is_instance_valid(_confirm)):
+		# the list of servers is read again now and then: who plays where changes all the time
+		_srv_t += delta
+		if _srv_t >= 12.0:
+			_ask_servers()
 
 
 func _unhandled_input(event: InputEvent) -> void:

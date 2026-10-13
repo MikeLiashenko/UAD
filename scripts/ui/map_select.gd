@@ -131,7 +131,9 @@ func _build_ui() -> void:
 	_start = UiKit.button(GS.t("НАЧАТЬ ОБОРОНУ ▶"), _on_start, 340, 22)
 	_start.disabled = true
 	v.add_child(_start)
-	if guest:
+	if bool(main.pending_world.get("pvp", false)):
+		v.add_child(UiKit.button(GS.t("Назад"), func() -> void: main.leave_server(), 340, 18))
+	elif guest:
 		v.add_child(UiKit.button(GS.t("Отключиться"), func() -> void: main.show_worlds(), 340, 18))
 	else:
 		v.add_child(UiKit.button(GS.t("Назад"), func() -> void: main.show_create_world(), 340, 18))

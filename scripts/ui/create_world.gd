@@ -116,7 +116,8 @@ func _ready() -> void:
 
 
 func _set_city(id: String) -> void:
-	if not Cities.has(id):
+	# a world is defended in one of the game's own cities, not in a server's drawn one
+	if not Cities.has(id) or Cities.is_custom(id):
 		id = Cities.DEFAULT
 	_city = id
 	for k in _city_btns:

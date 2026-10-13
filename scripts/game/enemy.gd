@@ -57,6 +57,8 @@ var last_hit_by := ""
 ## is reported to the host, which decides when it goes down.
 var net_id := -1
 var puppet := false
+## A match on a server: the strike of the other city this weapon belongs to (Pvp).
+var strike_id := ""
 ## Host: whose base a strike "on the base" is aimed at ("" = the host's own).
 var net_base_owner := ""
 ## Host: index of the strike target in map.targets (-1 none, -2 a base).

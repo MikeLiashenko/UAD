@@ -12,7 +12,7 @@ function walk(d, o) {
   return o;
 }
 const keys = new Set();
-const DATA = new Set(['autoload/gs.gd', 'world/city_gen.gd', 'world/landmarks.gd', 'ui/main_menu.gd', 'world/city_map.gd', 'main.gd']);
+const DATA = new Set(['autoload/gs.gd', 'world/city_gen.gd', 'world/landmarks.gd', 'ui/main_menu.gd', 'world/city_map.gd', 'main.gd', 'world/custom_city.gd', 'core/server_def.gd', 'ui/city_editor.gd']);
 for (const f of walk(root, [])) {
   const rel = path.relative(root, f).split(path.sep).join('/');
   if (rel.startsWith('i18n/')) continue;

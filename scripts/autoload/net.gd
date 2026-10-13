@@ -21,6 +21,20 @@ extends Node
 ## and credits the kill to whoever brought the target down.
 ## "t" is always the server's clock.
 ##
+## Servers (ServerDef, scripts/game/pvp.gd): two cities drawn by a player fire at each other, up
+## to ServerDef.TEAM_MAX players defending each. Nobody hosts a server: every side is a session
+## like the one above, and the game of one of its players — the captain, whoever has been there
+## longest — flies the raid on that city; when the captain leaves, the next player takes over.
+##   servers/list/<id>            {n: name, o: owner's code, on: owner's nick, t, m: players a side,
+##                                 c: [city, city], p: protocol, pl: {s0, s1: {n: players, t}}}
+##   servers/defs/<id>            the server itself: rules and both cities
+##   servers/live/<id>/s0, s1     the session of a side: players, raid, map and cap (the captain's code)
+##   servers/live/<id>/x          what crosses between the sides:
+##       in0, in1/<strike>        strikes aimed at a side {w, c, x, z, by, n, t, d}
+##       res/<strike>             their outcomes {h: reached the city, k: shot down}
+##       hp/s0, s1                {v: the city's integrity, t};  pl/s0, s1  {n: players, t}
+##       end                      {l: the side that lost, t} — the next player to join starts anew
+##
 ## Two ways to be somebody: by default a player is just the code kept on this device; an optional
 ## account (Account, Firebase Authentication: email + password) owns a code and a unique nick and
 ## keeps the friend list in the cloud, the same on every device. Requests then carry the account's
@@ -32,6 +46,7 @@ const FbStream = preload("res://scripts/core/fb_stream.gd")
 const FbConn = preload("res://scripts/core/fb_conn.gd")
 const BuildInfo = preload("res://scripts/build_info.gd")
 const Account = preload("res://scripts/core/account.gd")
+const ServerDef = preload("res://scripts/core/server_def.gd")
 ## The Firebase Web API key (accounts) lives in this file, kept out of the public repository:
 ##   const FIREBASE_WEB_KEY := "AIza..."
 ## Without it the game runs on friend codes only.
@@ -64,6 +79,10 @@ signal launches_received(code: String, list: Array)
 signal release_checked(info: Dictionary)
 ## Signed in or out of the account, or its nick / friends changed.
 signal account_changed
+## On a server: strikes, their outcomes, the cities' integrity or the players of the other side changed (srv_x).
+signal srv_changed
+## On a server: the captain of our side changed (role says whether it is us now).
+signal srv_captain_changed
 
 const DB_URL := "https://dream-journal-93835-default-rtdb.firebaseio.com"
 ## Updates are only ever downloaded from here (see update_url).
@@ -94,7 +113,15 @@ const IDLE_RAID_EVERY := 1.0
 const MAP_EVERY := 1.0
 const COLORS := [
 	Color(0.2, 1.0, 0.65), Color(0.35, 0.8, 1.0), Color(1.0, 0.55, 0.9), Color(1.0, 0.78, 0.3),
+	Color(0.7, 0.6, 1.0), Color(1.0, 0.5, 0.4), Color(0.6, 1.0, 0.3), Color(0.9, 0.9, 0.95),
 ]
+## Servers: with more than four players on a side the cameras are sent less often.
+const SRV_STATE_EVERY := 0.5
+## Servers: the captain tells the other side how many defend the city and how it stands.
+const SRV_BEAT := 5.0
+const SRV_LIST_BEAT := 20.0
+## Servers: a side whose beat is older than this is empty.
+const SRV_SIDE_MS := 16000
 
 ## "" (single player), "host", "joining" (request waiting for the answer) or "guest".
 var role := ""
@@ -158,6 +185,19 @@ var _host_seen := false
 var _code_override := ""
 ## Self-test: settings changed here stay in memory and are never written to disk.
 var dry := false
+## The server we are on: {"id", "side", "def"}; {} otherwise. role is "host" for the captain of
+## our side and "guest" for everybody else on it; host is the captain's code.
+var srv := {}
+var _cross: FbStream
+var _srv_t := 0.0
+var _srv_list_t := 0.0
+var _srv_hp_sent := -1.0
+var _srv_synced := false
+## Outcomes we wrote, id -> clock (they are taken out of the database a little later).
+var _srv_done := {}
+var _cap_claim_t := -99.0
+## Since when our own entry has been missing from the side's session (-1: it is there).
+var _srv_missing_t := -1.0
 ## Leaving for good (the test quits): no more heartbeats that would bring our entry back.
 var quiet := false
 
@@ -511,8 +551,10 @@ func _heartbeat() -> void:
 		s = role
 	elif main != null and main.game != null and is_instance_valid(main.game):
 		s = "game"
+	if not srv.is_empty():
+		s = "srv" # a server is joined from the list of servers, not through a friend
 	var d := {"n": nick(), "t": FbDb.now_placeholder(), "s": s}
-	if role == "host":
+	if role == "host" and srv.is_empty():
 		d["w"] = _world_info()
 	_presence_code = code()
 	db.put("users/" + _presence_code, d)
@@ -521,7 +563,7 @@ func _heartbeat() -> void:
 # --- Hosting -------------------------------------------------------------------------------------
 ## Opens the running world to friends.
 func open_world() -> void:
-	if role != "":
+	if role != "" or not srv.is_empty():
 		return
 	_enable()
 	role = "host"
@@ -693,14 +735,14 @@ func _on_session() -> void:
 				continue # "raid" and "map" live next to the players
 			if c != me and now - int(float(e.get("t", 0))) > STALE_MS:
 				if role == "host":
-					db.delete("sessions/%s/%s" % [host, c]) # crashed or lost: tidy up
+					db.delete("%s/%s" % [_sp(), c]) # crashed or lost: tidy up
 				continue
 			seen[c] = true
 			var p = players.get(c)
 			if p == null:
 				p = _player(_clean_nick(e.get("n")), int(e.get("s", players.size())))
 				players[c] = p
-				if role == "guest" and _host_seen:
+				if (role == "guest" and _host_seen) or _srv_synced:
 					player_joined.emit(String(p.nick))
 			_read_entry(p, e, c == me)
 			if c != me:
@@ -728,7 +770,17 @@ func _on_session() -> void:
 			players.erase(c)
 			if c != host:
 				player_left.emit(n)
-	if role == "guest":
+	if not srv.is_empty():
+		# a server has no host to wait for: the captain is whoever the session says
+		if d is Dictionary:
+			_srv_synced = true
+			_srv_roles(d, now)
+		# our entry gone and not coming back: the server was unpublished under us
+		if d is Dictionary and (d as Dictionary).has(me):
+			_srv_missing_t = -1.0
+		elif _srv_missing_t < 0.0:
+			_srv_missing_t = _clock
+	elif role == "guest":
 		if seen.has(host):
 			_host_seen = true
 		elif _session.synced and (_host_seen or _clock - _join_t > 8.0):
@@ -825,7 +877,7 @@ func _publish_raid() -> void:
 	_raid_seq += 1
 	snap["n"] = _raid_seq
 	snap["t"] = server_now()
-	conn_raid.send(HTTPClient.METHOD_PUT, "sessions/%s/raid" % host, snap, Callable(), "raid")
+	conn_raid.send(HTTPClient.METHOD_PUT, _sp() + "/raid", snap, Callable(), "raid")
 
 
 ## Host: buildings state, sent only when it changed.
@@ -838,7 +890,7 @@ func _publish_map() -> void:
 	if sig == _map_sig:
 		return
 	_map_sig = sig
-	conn_raid.send(HTTPClient.METHOD_PUT, "sessions/%s/map" % host, m, Callable(), "map")
+	conn_raid.send(HTTPClient.METHOD_PUT, _sp() + "/map", m, Callable(), "map")
 
 
 func _push_state() -> void:
@@ -853,7 +905,7 @@ func _push_state() -> void:
 			snappedf(q.x, 0.0001), snappedf(q.y, 0.0001), snappedf(q.z, 0.0001), snappedf(q.w, 0.0001)]
 		d["f"] = snappedf(float(_local.fov), 0.1)
 		d["v"] = String(_local.view)
-	conn.send(HTTPClient.METHOD_PATCH, "sessions/%s/%s" % [host, code()], d, Callable(), "state")
+	conn.send(HTTPClient.METHOD_PATCH, "%s/%s" % [_sp(), code()], d, Callable(), "state")
 
 
 # --- Leaving ------------------------------------------------------------------------------------------
@@ -862,7 +914,17 @@ func close() -> void:
 	if role == "":
 		return
 	var paths := []
-	match role:
+	match role if srv.is_empty() else "srv":
+		"srv":
+			var live := "servers/live/%s" % String(srv.id)
+			var mine := "s%d" % int(srv.side)
+			if players.size() > 1:
+				# the next in line takes the raid over at once, without waiting for our entry to go stale
+				paths = ["%s/%s" % [_sp(), code()]] + (["%s/cap" % _sp()] if role == "host" else [])
+			elif srv_enemy_count() > 0:
+				paths = ["%s/%s" % [live, mine], "%s/x/pl/%s" % [live, mine], "%s/x/in%d" % [live, int(srv.side)]]
+			else:
+				paths = [live] # the last player of the server: nothing of the match stays behind
 		"host":
 			paths = ["sessions/" + host, "requests/" + host]
 		"guest":
@@ -880,12 +942,14 @@ func close() -> void:
 func _wipe(paths: Array) -> void:
 	if role != "" and host != "" and paths.any(func(p) -> bool: return String(p).contains(host)):
 		return # a new session with the same host started in the meantime
+	if not srv.is_empty() and paths.any(func(p) -> bool: return String(p).contains(String(srv.id))):
+		return # back on the same server already
 	for p in paths:
 		db.delete(String(p))
 
 
 func _end(reason: String) -> void:
-	db.delete("sessions/%s/%s" % [host, code()])
+	db.delete("%s/%s" % [_sp(), code()])
 	_drop()
 	session_ended.emit(reason_text(reason))
 
@@ -893,8 +957,16 @@ func _end(reason: String) -> void:
 func _drop() -> void:
 	_close_stream(_session)
 	_close_stream(_requests)
+	_close_stream(_cross)
 	_session = null
 	_requests = null
+	_cross = null
+	srv = {}
+	_srv_missing_t = -1.0
+	_srv_synced = false
+	_srv_hp_sent = -1.0
+	_srv_done.clear()
+	_cap_claim_t = -99.0
 	conn.cancel("state")
 	conn_raid.cancel("raid")
 	conn_raid.cancel("map")
@@ -920,8 +992,23 @@ func _drop() -> void:
 func _stream(path: String) -> FbStream:
 	var s := FbStream.new()
 	add_child(s)
-	s.open(db.url(path))
+	if db.mock is Dictionary:
+		# self-test: fed from the in-memory database by mock_sync, not from the network
+		s.set_meta("mock_path", path)
+		s.set_process(false)
+	else:
+		s.open(db.url(path))
 	return s
+
+
+## Self-test: every open stream shows what the in-memory database holds now.
+func mock_sync() -> void:
+	for s in [_session, _requests, _cross]:
+		if s != null and is_instance_valid(s) and s.has_meta("mock_path"):
+			var v = db._mock_get(Array(String(s.get_meta("mock_path")).split("/", false)))
+			s.data = v.duplicate(true) if v is Dictionary else v
+			s.synced = true
+			s.changed.emit()
 
 
 func _close_stream(s: FbStream) -> void:
@@ -945,7 +1032,265 @@ static func reason_text(reason: String, host_nick := "") -> String:
 			return GS.t("Хост закрыл мир")
 		"lost":
 			return GS.t("Соединение с хостом потеряно")
+		"srv_closed":
+			return GS.t("Сервер закрыт: его сняли с публикации или пропала связь")
 	return reason
+
+
+# --- Servers ------------------------------------------------------------------------------------------
+## Where our session lives: under the host's code in a friend's world, under the side on a server.
+func _sp() -> String:
+	if not srv.is_empty():
+		return "servers/live/%s/s%d" % [String(srv.id), int(srv.side)]
+	return "sessions/" + host
+
+
+## Sends a server of the player's own to the database for everybody (again to update it).
+## cb(ok: bool, why: String).
+func srv_publish(def: Dictionary, cb: Callable) -> void:
+	var d := ServerDef.clean(def)
+	if d.is_empty():
+		cb.call(false, GS.t("Сервер повреждён"))
+		return
+	_enable()
+	# a server keeps the owner it was first published under (the rules let nobody else update it)
+	if not bool(def.get("published", false)) or not ServerDef.valid_id(String(d.owner)):
+		d["owner"] = code()
+		def["owner"] = code()
+	d["nick"] = nick()
+	d.erase("published")
+	d.erase("dirty")
+	var sid := String(d.id)
+	var fail := func() -> void:
+		cb.call(false, GS.t("Не удалось опубликовать: нет связи, или этот код сервера уже занят другим игроком."))
+	# the entry of the list goes first: the rules let only its owner write the rest
+	var entry := {"n": String(d.name), "o": String(d.owner), "on": nick(), "t": FbDb.now_placeholder(), "m": int(d.rules.team),
+		"c": [String(d.cities[0].name), String(d.cities[1].name)], "p": PROTO}
+	db.patch("servers/list/" + sid, entry, func(ok: bool, _r) -> void:
+		if not ok:
+			fail.call()
+			return
+		db.put("servers/defs/" + sid, d, func(ok2: bool, _r2) -> void:
+			if ok2:
+				cb.call(true, "")
+			else:
+				fail.call()))
+
+
+## Takes a server out of the list; whoever is playing on it is dropped.
+func srv_unpublish(sid: String, cb: Callable) -> void:
+	if not ServerDef.valid_id(sid):
+		cb.call(false, "")
+		return
+	db.delete("servers/live/" + sid)
+	db.delete("servers/defs/" + sid, func(ok: bool, _r) -> void:
+		if not ok:
+			cb.call(false, GS.t("Нет связи с сервером"))
+			return
+		db.delete("servers/list/" + sid, func(ok2: bool, _r2) -> void:
+			cb.call(ok2, "" if ok2 else GS.t("Нет связи с сервером"))))
+
+
+## The published servers for the list: [{id, name, owner, nick, team, cities: [a, b], players: [a, b]}],
+## the busiest first. cb(ok: bool, list: Array).
+func srv_list(cb: Callable) -> void:
+	_enable()
+	db.get_value("servers/list", func(ok: bool, d) -> void:
+		if not ok:
+			cb.call(false, [])
+			return
+		var out := []
+		var now := server_now()
+		if d is Dictionary:
+			for sid in d:
+				var e = d[sid]
+				if not (e is Dictionary) or not ServerDef.valid_id(String(sid)) or int(float(e.get("p", 0))) != PROTO:
+					continue
+				var cs = e.get("c")
+				var pl = e.get("pl")
+				var counts := [0, 0]
+				for i in 2:
+					var b = (pl as Dictionary).get("s%d" % i) if pl is Dictionary else null
+					if b is Dictionary and now - int(float(b.get("t", 0))) < SRV_LIST_BEAT * 3000.0:
+						counts[i] = clampi(int(float(b.get("n", 0))), 0, ServerDef.TEAM_MAX)
+				out.append({"id": String(sid), "name": ServerDef.CustomCity.clean_name(e.get("n", ""), ServerDef.NAME_MAX),
+					"owner": String(e.get("o", "")), "nick": _clean_nick(e.get("on")), "team": clampi(int(float(e.get("m", ServerDef.TEAM_MAX))), 1, ServerDef.TEAM_MAX),
+					"cities": [ServerDef.CustomCity.clean_name(cs[0]) if cs is Array and (cs as Array).size() == 2 else "?", ServerDef.CustomCity.clean_name(cs[1]) if cs is Array and (cs as Array).size() == 2 else "?"],
+					"players": counts})
+		out.sort_custom(func(a, b) -> bool:
+			var pa: int = int(a.players[0]) + int(a.players[1])
+			var pb: int = int(b.players[0]) + int(b.players[1])
+			return pa > pb if pa != pb else String(a.name).naturalnocasecmp_to(String(b.name)) < 0)
+		cb.call(true, out))
+
+
+## Downloads a published server. cb(def: Dictionary) — {} when it is gone or broken.
+func srv_fetch(sid: String, cb: Callable) -> void:
+	db.get_value("servers/defs/" + sid, func(ok: bool, d) -> void:
+		var def := ServerDef.clean(d) if ok else {}
+		cb.call(def if String(def.get("id", "")) == sid else {}))
+
+
+## Joins the city of `side` of a published server. cb(ok: bool, why: String). From then on we
+## are in the session of that side; who flies its raid is settled by _srv_roles.
+func srv_join(def: Dictionary, side: int, cb: Callable) -> void:
+	close()
+	_enable()
+	var sid := String(def.id)
+	side = clampi(side, 0, 1)
+	db.get_value("servers/live/" + sid, func(ok: bool, d) -> void:
+		if not ok:
+			cb.call(false, GS.t("Нет связи с сервером. Проверьте интернет."))
+			return
+		var live: Dictionary = d if d is Dictionary else {}
+		var x = live.get("x")
+		var now := server_now()
+		var anyone := false
+		for key in ["s0", "s1"]:
+			var t = live.get(key)
+			if t is Dictionary:
+				for c in t:
+					if t[c] is Dictionary and parse_code(String(c)) == String(c) and String(c) != code() and now - int(float((t[c] as Dictionary).get("t", 0))) <= STALE_MS:
+						anyone = true
+		if not live.is_empty() and (not anyone or (x is Dictionary and (x as Dictionary).has("end"))):
+			# the last match is over, or everybody left it: a new one starts with us
+			db.delete("servers/live/" + sid)
+			live = {}
+		var team = live.get("s%d" % side)
+		var used := {}
+		if team is Dictionary:
+			for c in team:
+				var e = team[c]
+				if e is Dictionary and parse_code(String(c)) == String(c) and String(c) != code() and now - int(float(e.get("t", 0))) <= STALE_MS:
+					used[int(float(e.get("s", 0)))] = true
+		if used.size() >= int(def.rules.team):
+			cb.call(false, GS.t("В этом городе нет свободных мест"))
+			return
+		var slot := 0
+		while used.has(slot):
+			slot += 1
+		if role != "":
+			return # something else was joined while the answer was on its way
+		srv = {"id": sid, "side": side, "def": def}
+		role = "guest"
+		host = ""
+		players = {code(): _player(nick(), slot)}
+		db.put("%s/%s" % [_sp(), code()], {"n": nick(), "s": slot, "t": FbDb.now_placeholder(), "j": FbDb.now_placeholder()}, func(ok2: bool, _r) -> void:
+			if String(srv.get("id", "")) != sid:
+				return
+			if not ok2:
+				_drop()
+				cb.call(false, GS.t("Сервер не принял подключение. Попробуйте ещё раз."))
+				return
+			_session = _stream(_sp())
+			_session.changed.connect(_on_session)
+			_cross = _stream("servers/live/%s/x" % sid)
+			_cross.changed.connect(_on_cross)
+			_user_t = 999.0
+			_srv_t = SRV_BEAT
+			_srv_list_t = SRV_LIST_BEAT
+			cb.call(true, "")))
+
+
+## Who flies the raid on our city. The captain is written into the session ("cap"); when that
+## player is gone, the one who has been here longest writes their own code there — and only then
+## starts flying, so two games never run the same raid.
+func _srv_roles(d: Dictionary, now: int) -> void:
+	var me := code()
+	var cap := String(d.get("cap", "")) if d.get("cap") is String else ""
+	var fresh := []
+	for c in d:
+		var e = d[c]
+		if e is Dictionary and parse_code(String(c)) == String(c) and (String(c) == me or now - int(float(e.get("t", 0))) <= STALE_MS):
+			fresh.append([float(e.get("j", 0.0)), String(c)])
+	if not fresh.any(func(f) -> bool: return String(f[1]) == me):
+		return # our own entry has not reached the database yet
+	var alive: bool = fresh.any(func(f) -> bool: return String(f[1]) == cap)
+	if not alive:
+		cap = ""
+		fresh.sort_custom(func(a, b) -> bool: return float(a[0]) < float(b[0]) if float(a[0]) != float(b[0]) else String(a[1]) < String(b[1]))
+		if String(fresh[0][1]) == me and _clock - _cap_claim_t > 3.0:
+			_cap_claim_t = _clock
+			db.put(_sp() + "/cap", me)
+	var new_role := "host" if cap == me else "guest"
+	if new_role != role or cap != host:
+		role = new_role
+		host = cap
+		_raid_t = 0.0
+		_map_sig = ""
+		_srv_t = SRV_BEAT
+		srv_captain_changed.emit()
+
+
+## The first full picture of what crosses between the sides has arrived.
+func srv_synced() -> bool:
+	return _cross != null and is_instance_valid(_cross) and _cross.synced
+
+
+## What crosses between the two sides, as the database has it now.
+func srv_x() -> Dictionary:
+	return _cross.data if _cross != null and is_instance_valid(_cross) and _cross.data is Dictionary else {}
+
+
+func _on_cross() -> void:
+	if not srv.is_empty():
+		srv_changed.emit()
+
+
+## How many players defend the other city right now.
+func srv_enemy_count() -> int:
+	if srv.is_empty():
+		return 0
+	var pl = srv_x().get("pl")
+	var b = (pl as Dictionary).get("s%d" % (1 - int(srv.side))) if pl is Dictionary else null
+	if not (b is Dictionary) or server_now() - int(float(b.get("t", 0))) > SRV_SIDE_MS:
+		return 0
+	return clampi(int(float(b.get("n", 0))), 0, ServerDef.TEAM_MAX)
+
+
+## A strike of ours at the other side's city.
+func srv_send_strike(to_side: int, s: Dictionary) -> void:
+	if not srv.is_empty():
+		db.put("servers/live/%s/x/in%d/%s" % [String(srv.id), to_side, String(s.id)], s)
+
+
+## Captain: the outcome of a strike on our city; the strike itself is done with.
+func srv_send_result(side: int, r: Dictionary) -> void:
+	if srv.is_empty():
+		return
+	var live := "servers/live/%s/x" % String(srv.id)
+	var id := String(r.id)
+	db.put("%s/res/%s" % [live, id], {"h": int(r.h), "k": int(r.k), "t": FbDb.now_placeholder()})
+	db.delete("%s/in%d/%s" % [live, side, id])
+	_srv_done[id] = _clock
+
+
+## Captain: the match is over — our city has fallen.
+func srv_send_end(loser: int) -> void:
+	if not srv.is_empty():
+		db.patch("servers/live/%s/x" % String(srv.id), {"end": {"l": loser, "t": FbDb.now_placeholder()}, "hp/s%d" % loser: {"v": 0, "t": FbDb.now_placeholder()}})
+
+
+## Captain: how many of us there are and how the city stands, for the other side and for the list.
+func _srv_tick(delta: float) -> void:
+	if role != "host":
+		return
+	var live := "servers/live/%s/x" % String(srv.id)
+	var key := "s%d" % int(srv.side)
+	_srv_t += delta
+	var hp := snappedf(GS.city, 0.1)
+	if _srv_t >= SRV_BEAT or (absf(hp - _srv_hp_sent) >= 0.1 and _srv_t >= 1.0):
+		_srv_t = 0.0
+		_srv_hp_sent = hp
+		db.patch_latest("srvbeat", live, {"pl/" + key: {"n": players.size(), "t": FbDb.now_placeholder()}, "hp/" + key: {"v": hp, "t": FbDb.now_placeholder()}})
+	_srv_list_t += delta
+	if _srv_list_t >= SRV_LIST_BEAT:
+		_srv_list_t = 0.0
+		db.put("servers/list/%s/pl/%s" % [String(srv.id), key], {"n": players.size(), "t": FbDb.now_placeholder()})
+	for id in _srv_done.keys():
+		if _clock - float(_srv_done[id]) > 40.0:
+			_srv_done.erase(id)
+			db.delete("%s/res/%s" % [live, id])
 
 
 # --- Frame -----------------------------------------------------------------------------------------------
@@ -996,7 +1341,13 @@ func _process(delta: float) -> void:
 				_lost_t = 0.0
 		_:
 			return
+	if not srv.is_empty():
+		if _srv_missing_t >= 0.0 and _clock - _srv_missing_t > 10.0:
+			_end("srv_closed")
+			return
+		_srv_tick(delta)
 	_state_t += delta
-	if _state_t >= (STATE_EVERY if not _local.is_empty() else IDLE_STATE_EVERY):
+	var every := SRV_STATE_EVERY if players.size() > 4 else STATE_EVERY
+	if _state_t >= (every if not _local.is_empty() else IDLE_STATE_EVERY):
 		_state_t = 0.0
 		_push_state()

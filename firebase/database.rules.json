@@ -45,6 +45,34 @@
             }
           }
         },
+        "servers": {
+          "list": {
+            ".read": true,
+            "$sid": {
+              ".write": "$sid.matches(/^[A-HJ-NP-Z2-9]{8}$/) && ((!data.exists() && newData.exists() && newData.child('o').isString() && (!root.child('uad/v1/codes/' + newData.child('o').val()).exists() || (auth != null && root.child('uad/v1/codes/' + newData.child('o').val()).val() === auth.uid))) || (data.exists() && (!root.child('uad/v1/codes/' + data.child('o').val()).exists() || (auth != null && root.child('uad/v1/codes/' + data.child('o').val()).val() === auth.uid))))",
+              ".validate": "!newData.exists() || (newData.child('n').isString() && newData.child('n').val().length <= 32 && newData.child('o').isString() && newData.child('o').val().matches(/^[A-HJ-NP-Z2-9]{8}$/) && (!data.exists() || newData.child('o').val() === data.child('o').val()))",
+              "pl": {
+                ".write": "data.parent().exists()",
+                "$side": {
+                  ".validate": "($side === 's0' || $side === 's1') && newData.child('n').isNumber() && newData.child('n').val() >= 0 && newData.child('n').val() <= 8 && newData.child('t').isNumber() && newData.child('t').val() <= now + 60000"
+                }
+              }
+            }
+          },
+          "defs": {
+            "$sid": {
+              ".read": true,
+              ".write": "root.child('uad/v1/servers/list/' + $sid).exists() && (!root.child('uad/v1/codes/' + root.child('uad/v1/servers/list/' + $sid + '/o').val()).exists() || (auth != null && root.child('uad/v1/codes/' + root.child('uad/v1/servers/list/' + $sid + '/o').val()).val() === auth.uid))",
+              ".validate": "!newData.exists() || (newData.child('id').val() === $sid && newData.child('name').isString() && newData.child('name').val().length <= 32 && newData.child('rules').hasChildren() && newData.child('cities').hasChildren(['0', '1']))"
+            }
+          },
+          "live": {
+            "$sid": {
+              ".read": true,
+              ".write": "$sid.matches(/^[A-HJ-NP-Z2-9]{8}$/) && (!newData.exists() || root.child('uad/v1/servers/list/' + $sid).exists())"
+            }
+          }
+        },
         "sessions": {
           "$host": {
             ".read": true,

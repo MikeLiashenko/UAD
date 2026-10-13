@@ -24,6 +24,7 @@ const Reel = preload("res://scripts/game/reel.gd")
 const Hud = preload("res://scripts/ui/hud.gd")
 const RemotePlayers = preload("res://scripts/game/remote_players.gd")
 const Realism = preload("res://scripts/game/realism.gd")
+const Pvp = preload("res://scripts/game/pvp.gd")
 
 ## Every system gets its own spot around the base: guns close in, launchers further out,
 ## spread over a 320° arc so the western sector stays free for the fire station.
@@ -93,6 +94,8 @@ var mfg
 var fighter
 ## MaxRealism (GS.realism): the session is played on foot (scripts/game/realism.gd); null otherwise.
 var rl
+## A match on a server (GS.pvp): two cities fire at each other (scripts/game/pvp.gd); null otherwise.
+var pvp
 ## Where and facing what the next "walk" view puts the player (MaxRealism: beside the seat left).
 var walk_at := Vector3.INF
 var walk_yaw := NAN
@@ -185,6 +188,10 @@ func _ready() -> void:
 		rl = Realism.new()
 		rl.game = self
 		add_child(rl)
+	if not GS.pvp.is_empty():
+		pvp = Pvp.new()
+		pvp.game = self
+		add_child(pvp)
 	director = Director.new()
 	director.game = self
 	add_child(director)
@@ -207,6 +214,10 @@ func _ready() -> void:
 	Net.map_received.connect(net_apply_map)
 	Net.guest_hits.connect(_on_guest_hits)
 	Net.launches_received.connect(_on_launches)
+	Net.srv_captain_changed.connect(_on_srv_captain)
+	if pvp != null:
+		# a captain who takes a raid over numbers its threats apart from the one before
+		_net_seq = _rng.randi_range(1, 9000) * 1000
 	if Net.role == "guest":
 		# what the host sent while we were choosing a position
 		if not Net.map_state.is_empty():
@@ -837,6 +848,25 @@ func _pick_target() -> Dictionary:
 ## strike is meant for one particular target (the Oreshnik on Pivdenmash).
 ## Threats launched this session by weapon (the test summary prints it).
 var launched := {}
+## Set by launch_at for the launch it makes: {pos, name, target, bearing, id}.
+var _forced := {}
+
+
+## A strike from the other city of a server (Pvp): `count` weapons at a point of ours, coming in
+## from `bearing`. They carry the strike's id, so its outcome can be told to whoever sent it.
+func launch_at(type: String, count: int, pos: Vector3, bearing: float, strike_id: String) -> void:
+	pos.y = map.ground_height(pos.x, pos.z) + 8.0
+	var near := {}
+	var best := 450.0
+	for t in map.targets:
+		var d := Vector2(t.pos.x - pos.x, t.pos.z - pos.z).length()
+		if d < best:
+			best = d
+			near = t
+	var tname: String = String(near.name) if not near.is_empty() else (map.district_name(pos.x, pos.z) if not map.city.districts.is_empty() else String(map.city.name))
+	_forced = {"pos": pos, "name": tname, "target": near, "bearing": bearing, "id": strike_id}
+	launch(type, count, false)
+	_forced = {}
 
 
 func launch(type: String, count: int, at_base: bool, alt := -1.0, aim := "") -> void:
@@ -862,6 +892,10 @@ func launch(type: String, count: int, at_base: bool, alt := -1.0, aim := "") -> 
 		tgt_pos = t.pos
 		tgt_name = t.name
 		_last_target = t
+		if not _forced.is_empty():
+			tgt_pos = _forced.pos
+			tgt_name = _forced.name
+			_last_target = _forced.target
 	# multiplayer: a strike "on the base" may be meant for any battery in the city
 	var base_owner := ""
 	var tidx: int = -2 if at_base else map.targets.find(_last_target)
@@ -876,6 +910,9 @@ func launch(type: String, count: int, at_base: bool, alt := -1.0, aim := "") -> 
 			tgt_pos = (pick[1] as Vector3) + Vector3(0, 1, 0)
 			tgt_name = GS.t("База %s") % String(Net.players[base_owner].nick)
 	var dir := _edge_dir(type)
+	if not _forced.is_empty():
+		var fa := deg_to_rad(float(_forced.bearing) + _rng.randf_range(-25.0, 25.0))
+		dir = Vector3(sin(fa), 0, -cos(fa))
 	var side := Vector3(-dir.z, 0, dir.x)
 	var glide: bool = def.get("glide", false)
 	var corridor := not at_base and not glide and ((kind == "shahed" and _rng.randf() < 0.8) or (kind == "cruise" and _rng.randf() < 0.6))
@@ -916,6 +953,7 @@ func launch(type: String, count: int, at_base: bool, alt := -1.0, aim := "") -> 
 		if i == 0:
 			first = start
 		e.strike_base = at_base
+		e.strike_id = String(_forced.get("id", ""))
 		_net_seq += 1
 		e.net_id = _net_seq
 		e.net_target = tidx
@@ -988,7 +1026,7 @@ func toggle_alarm() -> void:
 	if game_over or GS.training or director == null or director.phase == Director.Phase.MORNING:
 		return
 	if Net.role == "guest":
-		hud.alert(GS.t("Воздушную тревогу объявляет хозяин мира"), Color(1.0, 0.75, 0.35))
+		hud.alert(GS.t("Воздушную тревогу объявляет капитан обороны") if pvp != null else GS.t("Воздушную тревогу объявляет хозяин мира"), Color(1.0, 0.75, 0.35))
 		return
 	set_alarm(not alarm)
 
@@ -1074,6 +1112,8 @@ func enemy_destroyed(e) -> void:
 		var v: Vector3 = e.vel
 		_net_event("k", e.net_id, [killer if killer != "" else Net.code(), _r(p.x), _r(p.y), _r(p.z), _r(v.x), _r(v.y), _r(v.z), 1 if airburst else 0, 1 if warhead else 0, reward])
 	_kill_fx(e, airburst, warhead, reward, killer, false)
+	if pvp != null:
+		pvp.unit_done(e, false, true)
 	if rl != null:
 		# no banner and no bullet time: the observers report the kill over the radio
 		rl.on_kill(e)
@@ -1164,6 +1204,7 @@ func collapse_fx(bi: int, lost: float) -> void:
 
 func enemy_impact(e) -> void:
 	var p: Vector3 = e.position
+	var city_before := GS.city
 	if GS.training:
 		# a drill target that got through: no warhead, it is simply taken off the range
 		Fx.ground_hit(fx_root, p)
@@ -1181,6 +1222,8 @@ func enemy_impact(e) -> void:
 		Fx.ground_hit(fx_root, p)
 		play_3d("boom_small", p, -10.0)
 		hud.log_event(GS.t("%s упала — без боевой части") % GS.t(String(e.def.name)), Color(0.8, 0.85, 0.7))
+		if pvp != null:
+			pvp.unit_done(e, false, false)
 		_remove_enemy(e)
 		return
 	Fx.explosion(fx_root, p, 2.2, Color(1.0, 0.45, 0.1), true)
@@ -1216,7 +1259,7 @@ func enemy_impact(e) -> void:
 			var base_cost := maxf(float(GS.HOME_HIT_COST), float(e.def.hit_cost) * 0.6)
 			var cost := _split_cost(int(base_cost * float(GS.KIND_PENALTY[kind]) * GS.penalty_mult() * _alarm_fine()), "h")
 			GS.add_money(-cost)
-			GS.city = maxf(0.0, GS.city - 3.0 - float(e.def.hit_damage) * 0.25)
+			GS.city = maxf(0.0, GS.city - (3.0 + float(e.def.hit_damage) * 0.25) / GS.city_armor)
 			GS.stats.homes = int(GS.stats.get("homes", 0)) + 1
 			for i in _buildings_near(p, 14.0 + float(e.def.hit_damage)):
 				map.damage_building(i)
@@ -1227,7 +1270,7 @@ func enemy_impact(e) -> void:
 			hud.log_event(GS.t("%s промахнулся и упал на пустырь — без жертв") % what_hit, Color(0.6, 1.0, 0.7))
 	else:
 		var cost := _split_cost(int(float(e.def.hit_cost) * GS.penalty_mult() * _alarm_fine()), "i")
-		GS.city = maxf(0.0, GS.city - float(e.def.hit_damage))
+		GS.city = maxf(0.0, GS.city - float(e.def.hit_damage) / GS.city_armor)
 		GS.add_money(-cost)
 		GS.stats.impacts = int(GS.stats.impacts) + 1
 		for i in _buildings_near(p, 32.0):
@@ -1240,11 +1283,15 @@ func enemy_impact(e) -> void:
 				hud.alert(GS.t("БЛЭКАУТ: %s повреждена — район без света") % GS.t(String(t.name)), Color(1.0, 0.8, 0.3))
 				hud.log_event(GS.t("Блэкаут вокруг «%s»") % GS.t(String(t.name)), Color(1.0, 0.8, 0.3))
 	GS.state_changed.emit()
+	if pvp != null:
+		pvp.unit_done(e, GS.city < city_before, false)
 	_remove_enemy(e)
 	check_game_over()
 
 
 func enemy_left(e) -> void:
+	if pvp != null:
+		pvp.unit_done(e, false, false)
 	_remove_enemy(e)
 
 
@@ -1671,6 +1718,12 @@ func on_morning(report: Dictionary) -> void:
 
 func check_game_over() -> void:
 	if game_over:
+		return
+	if pvp != null:
+		# a match ends only with a city (Pvp.finish): a battery is rebuilt, a debt is just a debt
+		if GS.base_hp <= 0.0:
+			GS.base_hp = 40.0
+			hud.alert(GS.t("БАЗА РАЗБИТА — расчёты восстановили позицию"), Color(1.0, 0.5, 0.3))
 		return
 	var reason := ""
 	if GS.base_hp <= 0.0:
@@ -2114,6 +2167,31 @@ func _on_launches(code: String, list: Array) -> void:
 		m.position = Vector3(float(it[2]), float(it[3]), float(it[4]))
 		fx_root.add_child(m)
 	_launch_seen[code] = maxi(top, int(_launch_seen[code]))
+
+
+## A server: the captain of our side changed. The new one flies the raid from here on — the
+## puppets of the old snapshots go, and what the old captain had counted for us starts from zero.
+func _on_srv_captain() -> void:
+	_bank_seen = {}
+	_bank_init = false
+	if Net.role == "host" and director.follower:
+		for key in net_enemies.keys():
+			var e = net_enemies[key]
+			if e != null and is_instance_valid(e):
+				_remove_enemy(e)
+		net_enemies.clear()
+		_net_hits.clear()
+		_net_applied.clear()
+		_net_bank.clear()
+		Net.set_extra("h", {})
+		director.follower = false
+		hud.log_event(GS.t("Вы — капитан обороны: теперь налёт на город ведёт ваша игра"), Color(0.35, 0.85, 1.0))
+		if pvp != null:
+			pvp.take_over()
+	elif Net.role == "guest" and not director.follower:
+		for e in enemies.duplicate():
+			_remove_enemy(e)
+		director.follower = true
 
 
 ## The mouse is wanted by a panel (player list) or an open window in a game that does not pause.

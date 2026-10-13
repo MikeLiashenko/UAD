@@ -51,7 +51,9 @@ func _rebuild() -> void:
 		return
 	_sig = sig
 	var host_nick := String(Net.players[Net.host].nick) if Net.players.has(Net.host) else "?"
-	if Net.role == "host":
+	if not Net.srv.is_empty():
+		_title.text = GS.t("ОБОРОНА ГОРОДА %s · ИГРОКОВ %d/%d") % [String(Net.srv.def.cities[int(Net.srv.side)].name).to_upper(), codes.size(), int(Net.srv.def.rules.team)]
+	elif Net.role == "host":
 		_title.text = GS.t("ВАШ МИР «%s» · ИГРОКОВ %d/%d") % [GS.world_name, codes.size(), Net.MAX_PLAYERS]
 	else:
 		_title.text = GS.t("В ГОСТЯХ У %s · ИГРОКОВ %d/%d") % [host_nick.to_upper(), codes.size(), Net.MAX_PLAYERS]
@@ -75,7 +77,7 @@ func _row(c: String, p: Dictionary, mine: bool) -> Control:
 	h.add_child(col)
 	var who := String(p.nick)
 	if c == Net.host:
-		who += GS.t(" · хост")
+		who += GS.t(" · капитан") if not Net.srv.is_empty() else GS.t(" · хост")
 	if mine:
 		who += GS.t(" (вы)")
 	col.add_child(UiKit.label(who, 18, Color(1, 1, 1) if not mine else UiKit.NEON))

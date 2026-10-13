@@ -39,6 +39,24 @@ extends Node
 ##   --fakerelease=N            pretend build N was published (the update offer in the menu)
 ##   --avitest[=path]           write a synthetic clip and read the container back
 ##   --exporttest               run the video recorder on generated frames and verify the file
+##   --customcity[=flip]        the ready-made drawn city of a new server (with --plan: its plan)
+##   --srvtest                  a server's draft against the bot (with --autotest): the drawn city, the
+##                              match clock, the bot's strikes on us; --srv-side=0|1 --srv-armor=N
+##                              --srv-income=N --srv-money=N --srv-dist=N change the rules of the run
+##   --srv-strike=SECONDS[,weapon,count]   our own strike at the other city at that moment
+##   --srv-end=SECONDS          the other city falls at that moment (the end of a match)
+##   --srv-blank                (with --srvtest) the city is an empty field: nothing drawn at all
+##   --srvflow                  the way of a player through a draft's test: the server's screen, "test
+##                              against the bot" for the second city, the position on the map, the match
+##   --edittest                 the city editor worked through its own handlers: every tool, a drag,
+##                              the sliders' data, undo, the limits, "Done"
+##   --srvunit                  servers self-test, offline (in-memory database): hostile city and
+##                              server data, publishing, the list, joining a side, the captain and
+##                              the handover, strikes and outcomes, leaving
+##   --open=attack              the attack screen of a match
+##   --screen=server|cityedit|servers   the server's screen, the city editor, the servers tab
+##   --offline                  nothing reaches the network and no setting is written (pictures of
+##                              the multiplayer and server screens); --srvdemo fills the list of servers
 ##   --press=K,K,K              send those keys one per second (input round trip)
 ##   --bind=action:KEY          rebind a control before the session (with --press)
 ##   --shot=path.png --shot-at=SECONDS   --quit-at=SECONDS   --speed=N   --follow
@@ -57,6 +75,9 @@ const Game = preload("res://scripts/game/game_controller.gd")
 const Bullet = preload("res://scripts/game/bullet.gd")
 const Avi = preload("res://scripts/core/avi.gd")
 const VideoExport = preload("res://scripts/game/video_export.gd")
+const ServerDef = preload("res://scripts/core/server_def.gd")
+const ServerEditor = preload("res://scripts/ui/server_editor.gd")
+const CityEditor = preload("res://scripts/ui/city_editor.gd")
 
 var map
 var cam: Camera3D
@@ -64,6 +85,8 @@ var ui: CanvasLayer
 var screen: Node
 var game: Node
 var pending_world := {"name": GS.t("Оборона Киева"), "difficulty": 1, "city": "kyiv"}
+## The match on a server being set up or played: {"def": ServerDef, "side": 0 | 1, "bot": bool}.
+var server := {}
 var _mode := "menu"
 var _orbit := 0.6
 
@@ -93,6 +116,15 @@ func _ready() -> void:
 	if not recent.is_empty():
 		start_city = String(recent[0].get("city_id", Cities.DEFAULT))
 	start_city = String(_args.get("city", start_city))
+	if _args.has("customcity"):
+		# test hook: the ready-made drawn city of a new server (=flip for its mirrored twin)
+		start_city = "srv_test_0"
+		Cities.register(start_city, Cities.CustomCity.sample("Северск", String(_args.customcity) == "flip"))
+	if _args.has("srvtest"):
+		# test hook: a new server's draft, the city of one side on screen from the start
+		server = {"def": _test_server(), "side": clampi(int(_args.get("srv-side", "0")), 0, 1), "bot": true}
+		start_city = ServerDef.city_id(server.def, int(server.side))
+		Cities.register(start_city, server.def.cities[int(server.side)])
 	GS.city_id = start_city if Cities.has(start_city) else Cities.DEFAULT
 	_build_map(GS.city_id)
 	pending_world = {"name": GS.ctext("defense"), "difficulty": 1, "city": GS.city_id}
@@ -120,6 +152,10 @@ func _ready() -> void:
 		_acct_selftest()
 	if _args.has("striketest"):
 		_strike_selftest()
+	if _args.has("srvunit"):
+		_srv_unit_selftest()
+	if _args.has("edittest"):
+		_editor_selftest.call_deferred()
 	if _args.has("mphost") or _args.has("mpjoin"):
 		_mp_live_setup()
 	if not _args.has("quit-at"):
@@ -160,7 +196,27 @@ func _ready() -> void:
 		"create":
 			show_create_world()
 		"game":
-			_start_autotest()
+			if _args.has("srvtest"):
+				_start_server_test()
+			else:
+				_start_autotest()
+		"server":
+			show_server(_test_server())
+		"cityedit":
+			show_city_editor(_test_server(), 0)
+		"servers":
+			WorldsMenu.last_tab = "servers"
+			show_worlds()
+			if _args.has("srvdemo"):
+				# a list as the database would give it, for a look at the tab
+				screen._srv_public = [
+					{"id": "K7MQ4XRT", "name": "Северск против Южного", "owner": "AAAAAAAA", "nick": "Мыкола", "team": 8, "cities": ["Северск", "Южный"], "players": [5, 4]},
+					{"id": "P3HD8WQN", "name": "Дуэль портов", "owner": "BBBBBBBB", "nick": "Оксана", "team": 4, "cities": ["Приморск", "Гавань"], "players": [4, 4]},
+					{"id": "Z9XC2VBM", "name": "Два берега", "owner": "CCCCCCCC", "nick": "Tablet_Mike", "team": 2, "cities": ["Левый", "Правый"], "players": [0, 0]},
+				]
+				screen._srv_state = "ok"
+				screen._srv_entries.clear()
+				screen._rebuild_servers.call_deferred()
 		"training":
 			# the MaxRealism range (--train-bot walks through its lessons by itself)
 			start_training()
@@ -220,6 +276,11 @@ func _parse_args() -> void:
 		Engine.time_scale = float(_args.speed)
 	if _args.has("nomarkers"):
 		GS.settings.markers = false
+	if _args.has("offline") or _args.has("srvtest") or _args.has("srvunit") or _args.has("srvflow") or _args.has("edittest"):
+		ServerDef.dry = true # a test's server never lands among the player's drafts
+	if _args.has("offline"):
+		Net.set_offline()
+		Net.dry = true
 	if _args.has("touch"):
 		GS.force_touch = true # the interface of a touch screen (sticks, on-screen buttons)
 	if _args.has("quality"):
@@ -254,7 +315,8 @@ var _loading: Control
 func switch_city(id: String, then: Callable) -> void:
 	if not Cities.has(id):
 		id = Cities.DEFAULT
-	if map and is_instance_valid(map) and map.city_id == id:
+	# a drawn city may have been redrawn under the same id
+	if map and is_instance_valid(map) and map.city_id == id and map.city == Cities.get_def(id):
 		then.call()
 		return
 	_end_game()
@@ -342,7 +404,7 @@ func show_map_select(params := {}) -> void:
 	if not params.is_empty():
 		pending_world = params
 	var cid := String(pending_world.get("city", Cities.DEFAULT))
-	if map.city_id != cid:
+	if map.city_id != cid or map.city != Cities.get_def(cid):
 		switch_city(cid, show_map_select)
 		return
 	GS.city_id = cid
@@ -355,6 +417,9 @@ func show_map_select(params := {}) -> void:
 
 ## New world from the map screen: create, save immediately, start day 1.
 func create_world(pos: Vector3, loc: int) -> void:
+	if bool(pending_world.get("pvp", false)):
+		_enter_server(pos, loc)
+		return
 	var guest := bool(pending_world.get("guest", false))
 	GS.new_world(String(pending_world.get("name", GS.ctext("defense"))), int(pending_world.get("difficulty", 1)), pos, loc, map.city_id, bool(pending_world.get("realism", false)) and not guest)
 	if guest:
@@ -368,6 +433,114 @@ func create_world(pos: Vector3, loc: int) -> void:
 		return
 	GS.save_world()
 	_start_session()
+
+
+# --- Servers: two drawn cities firing at each other (ServerDef, scripts/game/pvp.gd) ------------------
+## The screen of one of the player's own servers: its rules, its two cities, the test, publishing.
+func show_server(def: Dictionary) -> void:
+	Net.close()
+	_end_game()
+	server = {}
+	map.set_labels_visible(false)
+	map.set_night(1.0)
+	var s := ServerEditor.new()
+	s.main = self
+	s.def = def
+	_show(s, "menu")
+
+
+## The "Servers" tab of the play screen.
+func show_servers() -> void:
+	WorldsMenu.last_tab = "servers"
+	show_worlds()
+
+
+## The city editor on one of the two cities of a server.
+func show_city_editor(def: Dictionary, side: int) -> void:
+	_end_game()
+	var e := CityEditor.new()
+	e.main = self
+	e.def = def
+	e.side = side
+	_show(e, "menu")
+
+
+## Enters a match as a defender of the city of `side`: the city is built and the player picks
+## where the battery stands. `bot`: a draft's test, the other city is played by the machine.
+func start_server(def: Dictionary, side: int, bot: bool) -> void:
+	server = {"def": def, "side": side, "bot": bot}
+	var cid := ServerDef.city_id(def, side)
+	# the same drawing keeps its map; a redrawn city is registered anew and built again
+	if not Cities.is_custom(cid) or JSON.stringify(Cities.get_def(cid).data) != JSON.stringify(Cities.CustomCity.clean(def.cities[side])):
+		Cities.register(cid, def.cities[side])
+	pending_world = {"name": "%s · %s" % [String(def.name), ServerDef.city_name(def, side)], "difficulty": 1, "city": cid, "pvp": true}
+	show_map_select()
+
+
+## The position is picked: the match starts (nothing of it is ever written to disk).
+func _enter_server(pos: Vector3, loc: int) -> void:
+	if server.is_empty():
+		show_worlds()
+		return
+	var def: Dictionary = server.def
+	GS.new_world(String(def.name), 1, pos, loc, map.city_id, false)
+	GS.world_id = ""
+	GS.pvp = server.duplicate()
+	GS.city_armor = float(def.rules.armor)
+	GS.money = int(def.rules.money)
+	GS.money_changed.emit(GS.money)
+	_start_session()
+
+
+## Out of a match: back to the server's screen after a draft's test, to the list of servers otherwise.
+func leave_server() -> void:
+	var was := server
+	Net.close()
+	server = {}
+	if bool(was.get("bot", false)):
+		show_server(was.def)
+	else:
+		WorldsMenu.last_tab = "servers"
+		show_worlds()
+
+
+## The same match once more, from the choice of the position.
+func restart_server() -> void:
+	if server.is_empty():
+		show_worlds()
+	else:
+		start_server(server.def, int(server.side), bool(server.bot))
+
+
+## Test hooks: a new draft with the rules of the command line.
+func _test_server() -> Dictionary:
+	var def := ServerDef.blank("TESTTEST", "test")
+	def.id = "TESTSRV2"
+	for k in ["armor", "income", "money", "dist"]:
+		if _args.has("srv-" + k):
+			def.rules[k] = float(_args["srv-" + k])
+	if _args.has("srv-blank"):
+		def.cities[0] = Cities.CustomCity.blank("Пустошь", 4000.0)
+	return ServerDef.clean(def)
+
+
+## --srvtest: straight into a draft's test with a battery already bought (see _start_autotest).
+func _start_server_test() -> void:
+	pending_world = {"name": String(server.def.name), "difficulty": 1, "city": map.city_id, "pvp": true}
+	var want := {"river": GS.Loc.RIVER, "forest": GS.Loc.FOREST, "city": GS.Loc.CITY, "field": GS.Loc.FIELD}
+	var loc_want: int = want.get(String(_args.get("loc", "river")), GS.Loc.RIVER)
+	var pos := _find_spot(loc_want)
+	_enter_server(pos, loc_want)
+	var money := GS.money
+	GS.money = 400000
+	for id in String(_args.get("weapons", "mg,gepard,drone,iris,patriot")).split(","):
+		game.purchase_weapon(id)
+	GS.money = money
+	for aid in GS.AMMO_ORDER:
+		GS.ammo[aid] = 40
+	game.auto_fire = 2 if _args.has("autoall") else 1
+	GS.money_changed.emit(GS.money)
+	print("UAD SRVTEST: %s side=%d base at %s rules=%s targets=%d" % [map.city_id, int(server.side), str(pos), str(server.def.rules), map.targets.size()])
 
 
 ## A friend accepted our join request: load their city and pick where our base stands.
@@ -586,6 +759,20 @@ func _process(delta: float) -> void:
 			Input.parse_input_event(ev)
 			# parse_input_event is queued, so the effect shows up on the next frame
 			_press_pending = String(seq[i])
+	if _args.has("srv-strike") and game and is_instance_valid(game) and game.pvp != null:
+		# test hook: our own strike at the other city — "seconds[,weapon,count]"
+		var sp := String(_args["srv-strike"]).split(",")
+		if _clock >= float(sp[0]):
+			_args.erase("srv-strike")
+			var sw := String(sp[1]) if sp.size() > 1 else "shahed"
+			var sc := int(sp[2]) if sp.size() > 2 else 4
+			var sent: bool = game.pvp.launch_strike(sw, sc, Vector2(100, 200))
+			print("UAD SRVTEST strike %s x%d sent=%s money=%d blocker=%s" % [sw, sc, sent, GS.money, game.pvp.blocker(sw, sc)])
+	if _args.has("srv-end") and game and is_instance_valid(game) and game.pvp != null and _clock >= float(_args["srv-end"]):
+		_args.erase("srv-end")
+		game.pvp.set_enemy_hp(0.0)
+	if _args.has("srvflow"):
+		_srv_flow_step()
 	if _args.has("mptest") and game and is_instance_valid(game):
 		_mp_session_selftest()
 	if _args.has("mphost") or _args.has("mpjoin"):
@@ -640,6 +827,8 @@ func _open_screen(what: String) -> void:
 		"strikes":
 			if _args.has("strikedemo"):
 				_strike_demo()
+			game.hud.open_strikes()
+		"attack":
 			game.hud.open_strikes()
 		"pause":
 			game.hud.toggle_pause()
@@ -1339,6 +1528,262 @@ func _mp_unit_selftest() -> void:
 		}
 
 
+## --srvflow: what a player does to try a draft — from the server's screen into the match.
+var _flow := 0
+
+
+func _srv_flow_step() -> void:
+	match _flow:
+		0:
+			if _clock >= 1.0:
+				_flow = 1
+				show_server(_test_server())
+		1:
+			if _clock >= 2.0 and screen != null and screen.get_script() == ServerEditor:
+				_flow = 2
+				print("UAD SRVFLOW server screen: cities=%d arsenal=%d" % [screen.def.cities.size(), screen._arsenal_btns.size()])
+				start_server(screen.def, 1, true) # what "Test against the bot" of the second city does
+		2:
+			if screen != null and is_instance_valid(screen) and screen.get_script() == MapSelect and _loading == null:
+				_flow = 3
+				var spot := _find_spot(GS.Loc.FIELD)
+				print("UAD SRVFLOW map: city=%s custom=%s half=%d spot=%s loc=%d" % [map.city_id, Cities.is_custom(map.city_id), int(map.half), str(spot), map.location_at(spot.x, spot.z)])
+				create_world(spot, GS.Loc.FIELD)
+		3:
+			if game and is_instance_valid(game) and game.pvp != null:
+				_flow = 4
+				print("UAD SRVFLOW match: side=%d bot=%s money=%d armor=%.2f saved_id='%s' city=%s enemy=%s" % [game.pvp.side, game.pvp.bot, GS.money, GS.city_armor, GS.world_id, game.pvp.my_name(), game.pvp.enemy_name()])
+				_flow_t = _clock
+		4:
+			if _clock - _flow_t >= 3.0:
+				_flow = 5
+				leave_server()
+		5:
+			if screen != null and is_instance_valid(screen) and screen.get_script() == ServerEditor:
+				_flow = 6
+				print("UAD SRVFLOW back on the server screen: game=%s pvp=%s role='%s'" % [game != null and is_instance_valid(game), not GS.pvp.is_empty() and game != null, Net.role])
+
+
+var _flow_t := 0.0
+
+
+## --edittest: the city editor through its own handlers, the way taps and drags reach it.
+func _editor_selftest() -> void:
+	const CC = preload("res://scripts/world/custom_city.gd")
+	var def := _test_server()
+	def.cities[0] = CC.blank("Чистый лист", 7000.0)
+	show_city_editor(def, 0)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var ed = screen
+	var fails := []
+	var check := func(ok: bool, what: String) -> void:
+		if not ok:
+			fails.append(what)
+	check.call(ed.data.districts.is_empty() and ed._plan.size.x > 300.0, "an empty city on the plan")
+	# a district under the finger, selected at once
+	ed._set_tool("district")
+	ed._kind = "historic"
+	ed._on_tap(Vector2(500, -300))
+	check.call(ed.data.districts.size() == 1 and String(ed.data.districts[0][4]) == "historic" and String(ed._sel.get("type", "")) == "district", "district placed and selected")
+	ed._on_tap(Vector2(99999, 0))
+	check.call(ed.data.districts.size() == 1, "a tap beyond the edge places nothing")
+	# a river point by point; one point is no river
+	ed._set_tool("river")
+	ed._on_tap(Vector2(-6000, -2000))
+	ed._set_tool("select")
+	check.call(ed.data.rivers.is_empty(), "one point makes no river")
+	ed._set_tool("river")
+	for p in [Vector2(-6000, -2000), Vector2(0, -1500), Vector2(6000, -2500)]:
+		ed._on_tap(p)
+	check.call(ed._draft.size() == 3 and ed.data.rivers.is_empty(), "the river is still being drawn")
+	ed.undo()
+	check.call(ed._draft.size() == 2, "undo takes the last point back")
+	ed._on_tap(Vector2(6000, -2500))
+	ed._finish_line()
+	check.call(ed.data.rivers.size() == 1 and ed.data.rivers[0].p.size() == 3 and float(ed.data.rivers[0].p[0][2]) == 150.0, "river finished with its width")
+	ed._set_tool("road")
+	ed._on_tap(Vector2(-5000, 500))
+	ed._on_tap(Vector2(5000, 800))
+	ed._set_tool("object") # changing the tool finishes the line
+	check.call(ed.data.roads.size() == 1, "changing the tool finishes the road")
+	ed._object = "tpp"
+	ed._on_tap(Vector2(-2000, 2000))
+	ed._set_tool("lake")
+	ed._on_tap(Vector2(3000, 3000))
+	ed._set_tool("forest")
+	ed._on_tap(Vector2(-4000, -5000))
+	check.call(ed.data.objects.size() == 1 and String(ed.data.objects[0].k) == "tpp" and ed.data.lakes.size() == 1 and ed.data.forests.size() == 1, "object, lake and forest placed")
+	# picking and dragging with the select tool
+	ed._set_tool("select")
+	ed._on_tap(Vector2(-2000, 2000))
+	check.call(String(ed._sel.get("type", "")) == "object", "an object is picked by a tap")
+	ed._on_tap(Vector2(0, -1500))
+	check.call(String(ed._sel.get("type", "")) == "river" and int(ed._sel.pt) == 1, "a point of the river is picked")
+	ed._on_tap(Vector2(520, -280))
+	check.call(String(ed._sel.get("type", "")) == "district", "a district is picked inside its circle")
+	var undo_n: int = ed._undo.size()
+	ed._on_drag(Vector2(520, -280), 0)
+	ed._on_drag(Vector2(1520, 720), 1)
+	ed._on_drag(Vector2(1520, 720), 2)
+	check.call(absf(float(ed.data.districts[0][1]) - 1500.0) < 1.0 and absf(float(ed.data.districts[0][2]) - 700.0) < 1.0 and ed._undo.size() == undo_n + 1, "district dragged, one undo step")
+	var c0: Vector2 = ed._plan.center
+	ed._on_drag(Vector2(-6500, 6500), 0)
+	ed._on_drag(Vector2(-6000, 6000), 1)
+	ed._on_drag(Vector2(-6000, 6000), 2)
+	check.call(ed._plan.center != c0 and ed._undo.size() == undo_n + 1, "dragging empty ground moves the plan, not the city")
+	ed.undo()
+	check.call(absf(float(ed.data.districts[0][1]) - 500.0) < 1.0, "undo puts the district back")
+	# the limits hold
+	ed._set_tool("district")
+	for i in 60:
+		ed._on_tap(Vector2(-6000 + i * 200.0, 4000))
+	check.call(ed.data.districts.size() == CC.MAX_DISTRICTS, "no more districts than the limit")
+	# delete, resize, done
+	ed._set_tool("select")
+	ed._on_tap(Vector2(3000, 3000))
+	ed._delete_selected()
+	check.call(ed.data.lakes.is_empty(), "the selected lake deleted")
+	ed._resize_city(4000.0)
+	var inside := true
+	for d in ed.data.districts:
+		inside = inside and absf(float(d[1])) <= 4000.0 and absf(float(d[2])) <= 4000.0
+	check.call(float(ed.data.size) == 4000.0 and inside, "a smaller square keeps everything inside")
+	ed._name.text = "Новоград%\n"
+	ed._done()
+	await get_tree().process_frame
+	check.call(screen.get_script() == ServerEditor and String(def.cities[0].name) == "Новоград" and def.cities[0].districts.size() == CC.MAX_DISTRICTS and def.cities[0].rivers.size() == 1, "done: the server has the drawn city")
+	check.call(not FileAccess.file_exists(ServerDef.DIR + String(def.id) + ".json"), "a test writes no draft to disk")
+	# the generator takes what was drawn
+	var cid := ServerDef.city_id(def, 0)
+	Cities.register(cid, def.cities[0])
+	_build_map(cid)
+	check.call(map.city_id == cid and map.targets.size() >= 1 and map.fp_box.size() > 1000, "the drawn city is built: %d buildings, %d targets" % [map.fp_box.size(), map.targets.size()])
+	print("UAD EDITTEST: %s" % ("OK" if fails.is_empty() else "FAIL " + " | ".join(fails)))
+
+
+## Waits until the deferred answers of the in-memory database have been delivered.
+func _settle(frames := 3) -> void:
+	for i in frames:
+		await get_tree().process_frame
+		Net.mock_sync()
+
+
+## --srvunit: servers, offline. Hostile data is cleaned, a server is published into an in-memory
+## database, listed, fetched and joined; the captain's role is taken, handed over and taken back;
+## strikes and their outcomes cross between the sides; leaving tidies the database.
+func _srv_unit_selftest() -> void:
+	const CC = preload("res://scripts/world/custom_city.gd")
+	Net.dry = true
+	Net.set_offline()
+	Net.db.mock = {}
+	Net._code_override = "TESTAAAA"
+	var m: Dictionary = Net.db.mock
+	var fails := []
+	var check := func(ok: bool, what: String) -> void:
+		if not ok:
+			fails.append(what)
+	# --- data from strangers
+	var junk := CC.clean("nonsense")
+	check.call(junk.districts.is_empty() and float(junk.size) == 7000.0 and String(junk.name) != "", "a city of nonsense is an empty city")
+	var many := []
+	for i in 300:
+		many.append(["Р%d" % i, 1.0e12, -1.0e12, 9999.0, "castle", 1.0e9])
+	var hostile := CC.clean({"name": "Зло%s\n\t<b>" + "x".repeat(500), "size": 1.0e9, "seed": "abc", "districts": many, "rivers": [{"p": "zz"}, {"p": [[0, 0, NAN], [1, 1]]}, 7],
+		"lakes": [[0, 0, -5, INF]], "objects": [{"k": 5, "x": "a"}, {"k": "tpp", "x": 1.0e9, "z": 0, "n": 12}], "roads": {"a": 1}})
+	check.call(float(hostile.size) == CC.SIZE_MAX and hostile.districts.size() == CC.MAX_DISTRICTS, "size and count limits")
+	check.call(not String(hostile.name).contains("%") and not String(hostile.name).contains("\n") and String(hostile.name).length() <= CC.NAME_MAX, "names are plain short text")
+	check.call(absf(float(hostile.districts[0][1])) <= CC.SIZE_MAX and String(hostile.districts[0][4]) == "panel" and float(hostile.districts[0][5]) <= 2500.0, "district clamped, unknown kind replaced")
+	check.call(hostile.rivers.is_empty() and hostile.roads.is_empty(), "broken lines dropped")
+	check.call(hostile.lakes.size() == 1 and float(hostile.lakes[0][2]) >= 60.0 and is_finite(float(hostile.lakes[0][3])), "ellipses finite")
+	check.call(hostile.objects.size() == 2 and String(hostile.objects[0].k) == "gov" and float(hostile.objects[1].x) == CC.SIZE_MAX and String(hostile.objects[1].n) == "", "objects cleaned")
+	check.call(ServerDef.clean({"id": "bad", "cities": [{}, {}]}).is_empty() and ServerDef.clean({"id": "TESTSRV2", "cities": [{}]}).is_empty() and ServerDef.clean(5).is_empty(), "no server without an id and two cities")
+	var odd := ServerDef.clean({"id": "TESTSRV2", "name": "%d%s", "cities": [{}, "x"], "rules": {"money": -5, "income": 1.0e12, "armor": 0, "team": 99, "arsenal": ["nuke", "shahed"]}})
+	check.call(int(odd.rules.money) == 5000 and int(odd.rules.income) == 60000 and float(odd.rules.armor) == 0.25 and int(odd.rules.team) == ServerDef.TEAM_MAX, "rules clamped")
+	check.call(odd.rules.arsenal == ["shahed"] and not String(odd.name).contains("%"), "unknown weapons dropped")
+	check.call(absf(ServerDef.transit("shahed", 300.0) - 98.0) < 1.5 and ServerDef.transit("ballistic", 300.0) == ServerDef.TRANSIT_MIN and ServerDef.transit("shahed", 2000.0) == ServerDef.TRANSIT_MAX, "transit times")
+	# --- publishing, the list, the download
+	var def := _test_server()
+	var r: Array = await _acct_call(func(cb: Callable) -> void: Net.srv_publish(def, cb))
+	var sid := String(def.id)
+	var servers: Dictionary = m.get("servers", {})
+	check.call(r[0] and servers.get("list", {}).get(sid, {}).get("o") == "TESTAAAA" and servers.get("defs", {}).get(sid, {}).get("cities", []).size() == 2, "published: %s" % r[1])
+	check.call(not servers.defs[sid].has("published") and String(servers.defs[sid].owner) == "TESTAAAA", "the draft's own marks stay at home")
+	var box := []
+	Net.srv_list(func(ok: bool, list: Array) -> void: box.append([ok, list]))
+	await _settle()
+	check.call(box.size() == 1 and box[0][0] and box[0][1].size() == 1 and String(box[0][1][0].id) == sid and box[0][1][0].players == [0, 0], "listed")
+	box.clear()
+	Net.srv_fetch(sid, func(d: Dictionary) -> void: box.append(d))
+	await _settle()
+	check.call(box.size() == 1 and String(box[0].get("name", "")) == String(def.name) and box[0].cities[1].districts.size() == 8, "fetched")
+	Net.srv_fetch("ZZZZZZZZ", func(d: Dictionary) -> void: box.append(d))
+	await _settle()
+	check.call(box.size() == 2 and box[1].is_empty(), "a server that is not there")
+	# --- joining: alone on the side, so the captain
+	r = await _acct_call(func(cb: Callable) -> void: Net.srv_join(def, 0, cb))
+	await _settle()
+	var live: Dictionary = m.servers.get("live", {}).get(sid, {})
+	check.call(r[0] and live.get("s0", {}).has("TESTAAAA") and float(live.s0.TESTAAAA.get("j", 0)) > 0.0, "joined: %s" % r[1])
+	await _settle()
+	check.call(Net.role == "host" and Net.host == "TESTAAAA" and m.servers.live[sid].s0.get("cap") == "TESTAAAA", "alone on the side: captain (role=%s)" % Net.role)
+	check.call(Net.srv_enemy_count() == 0, "nobody on the other side yet")
+	var now := float(Net.server_now())
+	m.servers.live[sid]["x"] = {"pl": {"s1": {"n": 3, "t": now}}}
+	await _settle()
+	check.call(Net.srv_enemy_count() == 3, "the other side counted")
+	# --- a strike of ours goes out, one of theirs comes in, an outcome goes back
+	Net.srv_send_strike(1, {"id": "TESTAAAA_1_1", "w": "shahed", "c": 4, "x": 0, "z": 0, "by": "TESTAAAA", "n": "me", "t": now, "d": 98.0})
+	await _settle()
+	check.call(m.servers.live[sid].x.get("in1", {}).has("TESTAAAA_1_1"), "strike written for the other side")
+	m.servers.live[sid].x["in0"] = {"ENEMYBBB_1_1": {"id": "ENEMYBBB_1_1", "w": "cruise", "c": 2, "x": 100, "z": 200, "by": "ENEMYBBB", "n": "Враг", "t": now, "d": 25.0}}
+	await _settle()
+	check.call((Net.srv_x().get("in0", {}) as Dictionary).has("ENEMYBBB_1_1"), "their strike seen")
+	Net.srv_send_result(0, {"id": "ENEMYBBB_1_1", "h": 1, "k": 1})
+	await _settle()
+	check.call(m.servers.live[sid].x.get("res", {}).get("ENEMYBBB_1_1", {}).get("h") == 1 and not m.servers.live[sid].x.get("in0", {}).has("ENEMYBBB_1_1"), "outcome written, strike done with")
+	# --- an older player is on the side and holds the raid: we follow; they go silent: we take over
+	var changes := [0]
+	Net.srv_captain_changed.connect(func() -> void: changes[0] += 1)
+	m.servers.live[sid].s0["ELDERCCC"] = {"n": "Старший", "s": 1, "t": float(Net.server_now()), "j": 5.0}
+	m.servers.live[sid].s0["cap"] = "ELDERCCC"
+	await _settle()
+	check.call(Net.role == "guest" and Net.host == "ELDERCCC" and Net.players.size() == 2 and changes[0] == 1, "another captain: we follow (role=%s)" % Net.role)
+	m.servers.live[sid].s0["ELDERCCC"]["t"] = float(Net.server_now()) - Net.STALE_MS - 5000.0
+	Net._cap_claim_t = -99.0
+	await _settle()
+	await _settle()
+	check.call(Net.role == "host" and m.servers.live[sid].s0.get("cap") == "TESTAAAA" and changes[0] >= 2, "the captain went silent: the raid is ours (role=%s)" % Net.role)
+	# --- leaving: with the other side still there only our side goes; as the last one, everything
+	Net.close()
+	await _settle()
+	check.call(Net.role == "" and Net.srv.is_empty() and not m.servers.live[sid].has("s0") and m.servers.live[sid].has("x"), "left: our side is gone, the match stays")
+	r = await _acct_call(func(cb: Callable) -> void: Net.srv_join(def, 1, cb))
+	await _settle()
+	await _settle()
+	check.call(r[0] and Net.role == "host" and int(Net.srv.side) == 1, "back on the other side")
+	Net.close()
+	await _settle()
+	check.call(not m.servers.get("live", {}).has(sid), "the last player leaves nothing behind")
+	# --- a finished match is wiped by whoever comes next
+	m.servers["live"] = {sid: {"x": {"end": {"l": 0, "t": 1.0}, "hp": {"s0": {"v": 0, "t": 1.0}}}, "s1": {"GANEDDDD": {"n": "x", "s": 0, "t": float(Net.server_now()), "j": 1.0}}}}
+	r = await _acct_call(func(cb: Callable) -> void: Net.srv_join(def, 0, cb))
+	await _settle()
+	check.call(r[0] and not (m.servers.live[sid].get("x", {}) as Dictionary).has("end") and not m.servers.live[sid].has("s1"), "a finished match is cleared for the next one")
+	Net.close()
+	await _settle()
+	# --- a full side lets nobody in
+	var full := {}
+	for i in int(def.rules.team):
+		full["FULL%sAAA" % "ABCDEFGH"[i]] = {"n": "p", "s": i, "t": float(Net.server_now()), "j": 1.0}
+	m.servers["live"] = {sid: {"s0": full}}
+	r = await _acct_call(func(cb: Callable) -> void: Net.srv_join(def, 0, cb))
+	check.call(not r[0] and Net.role == "", "a full side: %s" % r[1])
+	r = await _acct_call(func(cb: Callable) -> void: Net.srv_unpublish(sid, cb))
+	check.call(r[0] and not m.servers.get("list", {}).has(sid) and not m.servers.get("defs", {}).has(sid), "unpublished")
+	print("UAD SRVUNIT: %s" % ("OK" if fails.is_empty() else "FAIL " + " | ".join(fails)))
+
+
 ## Depth precision: the near plane moves out as the camera climbs — 0.5 m at street level, up to
 ## 12 m high over the city. With 0.5 m everywhere the depth buffer could no longer tell the roads,
 ## their markings and the water from the ground a kilometre away, and the map flickered.
@@ -1857,6 +2302,11 @@ func _print_summary() -> void:
 		print("UAD FEED: videos=%d clips=%d playing=%s idx=%d day=%d phase=%d t=%.1f paused=%s" % [GS.videos.size(),
 			(GS.latest_video().get("clips", []) as Array).size(), str(game.reel.playing), game.reel.index,
 			GS.day, game.director.phase, game.director.phase_time, str(get_tree().paused)])
+	if game and game.pvp != null:
+		var pv = game.pvp
+		print("UAD PVP: side=%d over='%s' hp=%s incoming=%d outgoing=%s stats=%s bot(level=%d money=%d hp=%.1f)" % [pv.side, pv.over, str(pv.hp), pv.incoming.size(),
+			str(pv.outgoing.values().map(func(o) -> String: return "%s×%d:%s h%d k%d" % [o.w, int(o.c), o.st, int(o.h), int(o.k)])), str(pv.stats),
+			pv.machine.level if pv.machine != null else -1, int(pv.machine.money) if pv.machine != null else -1, pv.machine.hp if pv.machine != null else -1.0])
 	if game:
 		print("UAD LAUNCHED: ", game.launched)
 		print("UAD ALARM: on=%s for=%.1f s sheltered=%s phase=%d" % [game.alarm, game.alarm_t, game.sheltered(), game.director.phase])

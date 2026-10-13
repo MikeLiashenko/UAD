@@ -598,6 +598,11 @@ var videos: Array = []
 ## and our strikes in flight [{site, w}] that land at dusk.
 var sites := {}
 var strikes: Array = []
+## A match on a server (scripts/game/pvp.gd): {"def": ServerDef, "side": 0 | 1, "bot": bool}; {} in
+## the usual game. Never saved: main sets it after new_world.
+var pvp := {}
+## How well the city stands a hit (a rule of the server; 1 in the usual game).
+var city_armor := 1.0
 
 var font: Font
 
@@ -680,6 +685,8 @@ func new_world(wname: String, diff: int, pos: Vector3, loc: int, cid := "kyiv", 
 	videos = []
 	sites = {}
 	strikes = []
+	pvp = {}
+	city_armor = 1.0
 	money_changed.emit(money)
 	state_changed.emit()
 
@@ -864,6 +871,8 @@ func load_world(id: String) -> bool:
 	if d.is_empty():
 		return false
 	world_id = String(d.id)
+	pvp = {}
+	city_armor = 1.0
 	world_name = String(d.get("name", "Мир"))
 	city_id = String(d.get("city_id", Cities.DEFAULT))
 	if not Cities.has(city_id):

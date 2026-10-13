@@ -7,6 +7,7 @@ const Radar = preload("res://scripts/ui/radar.gd")
 const Shop = preload("res://scripts/ui/shop.gd")
 const Supply = preload("res://scripts/ui/supply.gd")
 const StrikeMap = preload("res://scripts/ui/strike_map.gd")
+const AttackMap = preload("res://scripts/ui/attack_map.gd")
 const SettingsMenu = preload("res://scripts/ui/settings_menu.gd")
 const Reticle = preload("res://scripts/ui/reticle.gd")
 const FpvOsd = preload("res://scripts/ui/fpv_osd.gd")
@@ -90,6 +91,9 @@ var _fire_touch := -1
 var alarm_btn: Button
 var alarm_lbl: Label
 var _alarm_styles: Array = []
+## A match on a server: both cities' integrity and the strikes on their way: [bar, percent] × 2, the line under them.
+var _pvp_bars: Array = []
+var _pvp_line: Label
 
 
 func _ready() -> void:
@@ -126,6 +130,8 @@ func _ready() -> void:
 	_build_status()
 	_build_radar()
 	_build_alert()
+	if not GS.pvp.is_empty():
+		_build_pvp()
 	_build_weapons()
 	_build_target_info()
 	_build_touch_buttons()
@@ -413,6 +419,79 @@ func _build_alert() -> void:
 	root.add_child(alert_lbl)
 
 
+## A match on a server: the two cities across the top of the screen — ours on the left, the
+## enemy's on the right — and, under them, what is flying between them.
+func _build_pvp() -> void:
+	alert_lbl.offset_top = 84
+	var p := UiKit.panel()
+	p.add_theme_stylebox_override("panel", UiKit.sbox(Color(0.0, 0.05, 0.04, 0.8), UiKit.NEON_DIM, 1, 6, 4))
+	p.anchor_left = 0.5
+	p.anchor_right = 0.5
+	p.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	p.offset_top = 8
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(p)
+	var v := UiKit.vbox(2)
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.add_child(v)
+	var h := UiKit.hbox(8)
+	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(h)
+	var def: Dictionary = GS.pvp.get("def", {})
+	var side := int(GS.pvp.get("side", 0))
+	for i in 2:
+		var col := UiKit.NEON if i == 0 else UiKit.RED
+		var cname := String(def.cities[side if i == 0 else 1 - side].name)
+		var nl := UiKit.label(cname, 15, col, HORIZONTAL_ALIGNMENT_RIGHT if i == 0 else HORIZONTAL_ALIGNMENT_LEFT)
+		nl.custom_minimum_size = Vector2(112, 0)
+		nl.clip_text = true
+		var b := ProgressBar.new()
+		b.max_value = 100
+		b.value = 100
+		b.show_percentage = false
+		b.custom_minimum_size = Vector2(104, 12)
+		b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		b.fill_mode = ProgressBar.FILL_END_TO_BEGIN if i == 0 else ProgressBar.FILL_BEGIN_TO_END
+		b.add_theme_stylebox_override("fill", UiKit.sbox(col, col, 0, 3, 0))
+		var pc := UiKit.label("100%", 15, col, HORIZONTAL_ALIGNMENT_CENTER)
+		pc.custom_minimum_size = Vector2(48, 0)
+		var parts: Array = [nl, pc, b] if i == 0 else [b, pc, nl]
+		for c in parts:
+			(c as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
+			h.add_child(c)
+		if i == 0:
+			h.add_child(UiKit.label("⚔", 18, UiKit.AMBER))
+		_pvp_bars.append([b, pc])
+	_pvp_line = UiKit.label("", 13, UiKit.AMBER, HORIZONTAL_ALIGNMENT_CENTER)
+	_pvp_line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(_pvp_line)
+
+
+func _update_pvp() -> void:
+	var pv = game.pvp
+	if pv == null or _pvp_line == null:
+		return
+	for i in 2:
+		var s: int = pv.side if i == 0 else 1 - pv.side
+		(_pvp_bars[i][0] as ProgressBar).value = float(pv.hp[s])
+		(_pvp_bars[i][1] as Label).text = "%d%%" % int(ceil(float(pv.hp[s])))
+	var inb: Array = pv.inbound()
+	var flying := 0
+	for id in pv.outgoing:
+		if String(pv.outgoing[id].st) != "done":
+			flying += 1
+	var parts := PackedStringArray()
+	if int(inb[0]) > 0:
+		parts.append(GS.t("⚠ к нам летит ударов: %d · первый через %s") % [int(inb[0]), pv.fmt_time(float(inb[1]))])
+	if flying > 0:
+		parts.append(GS.t("наших ударов в пути: %d") % flying)
+	if parts.is_empty():
+		parts.append(GS.t("🎯 удар по противнику — %s") % (GS.t("кнопка «УДАРЫ»") if GS.touch() else "[%s]" % GS.key_label("strikes")))
+	_pvp_line.text = " · ".join(parts)
+	_pvp_line.add_theme_color_override("font_color", Color(1.0, 0.6, 0.25) if int(inb[0]) > 0 else Color(0.6, 0.9, 0.78))
+	detect_lbl.visible = false
+
+
 ## Battery panel: four tabs — hand-aimed, automatic, SAM launchers and the Patriot — and the
 ## systems of the open tab under them. Only what is bought gets a button; the rest is in the shop.
 func _build_weapons() -> void:
@@ -670,7 +749,9 @@ func refresh() -> void:
 	city_bar.value = GS.city
 	base_bar.value = GS.base_hp
 	loc_lbl.text = GS.t("Позиция: ") + GS.loc_name(GS.base_loc)
-	if GS.won:
+	if not GS.pvp.is_empty():
+		loc_lbl.text += GS.t("  ·  сервер «%s»") % String(GS.pvp.def.name)
+	elif GS.won:
 		loc_lbl.text += GS.t("  ·  кампания пройдена ★")
 	else:
 		loc_lbl.text += GS.t("  ·  ночь %d из %d") % [GS.day, GS.CAMPAIGN_NIGHTS]
@@ -796,6 +877,7 @@ func _process(delta: float) -> void:
 		detect_lbl.add_theme_color_override("font_color", Color(0.6, 1.0, 0.8))
 	_update_fires()
 	_update_alarm()
+	_update_pvp()
 	nv_rect.visible =(game.view == "base" and game.base_view.nv) or (game.view == "fpv" and game.fpv_view.nv)
 	_update_target_info()
 	if int(_t * 4.0) != int((_t - delta) * 4.0):
@@ -884,7 +966,16 @@ func _show_pause() -> void:
 		v.add_child(UiKit.button(GS.t("Лента города [%s]") % GS.key_label("feed"), open_feed))
 	v.add_child(UiKit.button(GS.t("Настройки"), _show_settings))
 	var note := GS.t("Мир «%s». Автосохранение — каждое утро.") % GS.world_name
-	if Net.role == "guest":
+	if game.pvp != null:
+		var pv = game.pvp
+		v.add_child(UiKit.button(GS.t("Удар по противнику [%s]") % GS.key_label("strikes"), open_strikes))
+		v.add_child(UiKit.button(GS.t("Закончить тест") if pv.bot else GS.t("Покинуть сервер"), func() -> void: game.main.leave_server()))
+		note = GS.t("Сервер «%s» · вы защищаете город %s. Здесь ничего не сохраняется.") % [String(pv.def.name), pv.my_name()]
+		if pv.bot:
+			note += GS.t("\nЧерновик: за город %s играет бот.") % pv.enemy_name()
+		else:
+			note += GS.t("\nИгра на сервере не останавливается: пока вы в паузе, бой продолжается.")
+	elif Net.role == "guest":
 		v.add_child(UiKit.button(GS.t("Отключиться"), func() -> void: game.main.leave_session()))
 		var hn := String(Net.world.get("n", "?"))
 		note = GS.t("Вы в гостях у %s. Здесь ничего не сохраняется — ваши миры остаются как были.") % hn
@@ -1034,7 +1125,7 @@ func _drop_request_card(c: String) -> void:
 
 ## A shared raid is running: a guest, or a host with friends in the world.
 func _live() -> bool:
-	return Net.role == "guest" or (Net.role == "host" and Net.players.size() > 1)
+	return Net.role == "guest" or (Net.role == "host" and (Net.players.size() > 1 or not Net.srv.is_empty()))
 
 
 func _on_player_joined(nick: String) -> void:
@@ -1323,6 +1414,21 @@ func open_strikes() -> void:
 	if _overlay != null and _overlay is StrikeMap:
 		(_overlay as StrikeMap).close()
 		return
+	if game.pvp != null:
+		# a match on a server: the strikes go at the other city
+		if _overlay != null and _overlay is AttackMap:
+			(_overlay as AttackMap).close()
+			return
+		_close_overlay()
+		_set_paused(true)
+		var am := AttackMap.new()
+		am.game = game
+		am.closed.connect(func() -> void:
+			_overlay = null
+			_set_paused(false))
+		root.add_child(am)
+		_overlay = am
+		return
 	if Net.role == "guest":
 		alert(GS.t("Удары по точкам пуска наносит хозяин мира"), Color(1.0, 0.75, 0.35))
 		return
@@ -1418,6 +1524,35 @@ func show_victory(r: Dictionary) -> void:
 	if game.autotest and not game.main._args.has("opened"):
 		print("UAD: VICTORY ", r)
 		get_tree().create_timer(0.5, true).timeout.connect(to_report)
+
+
+## A match on a server is over: one of the cities has fallen.
+func show_pvp_end(won: bool) -> void:
+	_close_overlay()
+	_set_paused(true)
+	var pv = game.pvp
+	var m := UiKit.modal(root, Vector2(600, 0))
+	_overlay = m[0]
+	var v: VBoxContainer = m[1]
+	v.add_child(UiKit.glow_label(GS.t("ПОБЕДА") if won else GS.t("ГОРОД ПАЛ"), 46, UiKit.NEON if won else UiKit.RED))
+	var line := GS.t("Город %s разрушен. %s выстоял!") % [pv.enemy_name(), pv.my_name()] if won else GS.t("%s разрушен ударами города %s.") % [pv.my_name(), pv.enemy_name()]
+	var ll := UiKit.label(line, 22, UiKit.AMBER, HORIZONTAL_ALIGNMENT_CENTER)
+	ll.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	ll.custom_minimum_size = Vector2(560, 0)
+	v.add_child(ll)
+	var s := GS.stats
+	var st: Dictionary = pv.stats
+	var txt := GS.t("Наш город цел на: %d%% · город противника: %d%%\nСбито целей: %d · прилётов по городу: %d\nВаших ударов: %d (%d ракет и дронов) · в цель: %d\nПотрачено на удары: %s · премии за попадания: %s") % [
+		int(ceil(float(pv.hp[pv.side]))), int(ceil(float(pv.hp[1 - pv.side]))), int(s.kills), int(s.impacts), int(st.strikes), int(st.units), int(st.hits),
+		GS.fmt_money(int(st.spent)), GS.fmt_money(int(st.bonus))]
+	v.add_child(UiKit.label(txt, 18, Color(0.8, 1.0, 0.9), HORIZONTAL_ALIGNMENT_CENTER))
+	if pv.bot:
+		v.add_child(UiKit.button(GS.t("Сыграть тест ещё раз"), func() -> void: game.main.restart_server()))
+		v.add_child(UiKit.button(GS.t("Вернуться к серверу"), func() -> void: game.main.leave_server()))
+	else:
+		v.add_child(UiKit.button(GS.t("К списку серверов"), func() -> void: game.main.leave_server()))
+	if game.autotest:
+		print("UAD PVP END: won=%s hp=%s stats=%s" % [won, str(pv.hp), str(st)])
 
 
 func show_game_over(reason: String) -> void:
