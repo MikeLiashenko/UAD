@@ -877,6 +877,11 @@ func launch(type: String, count: int, at_base: bool, alt := -1.0, aim := "") -> 
 	var found: Dictionary = Strikes.seen(map.city, type) if pvp == null else {}
 	if not found.is_empty():
 		hud.log_event(GS.t("Разведка засекла район пуска: %s — %s, ~%d км") % [GS.t(String(found.name)), Strikes.compass(float(found.bearing)), int(found.km)], Color(1.0, 0.8, 0.4))
+	# …and the launcher itself, standing in the open for a while: HIMARS / ATACMS can go at it now
+	if pvp == null and not GS.training and Net.role != "guest":
+		var hot: Dictionary = Strikes.heat(map.city, type)
+		if not hot.is_empty():
+			hud.on_launcher_hot(hot)
 	var def: Dictionary = GS.ENEMIES[type]
 	var kind := GS.kind_of(type)
 	var tgt_pos: Vector3

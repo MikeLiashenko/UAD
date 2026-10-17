@@ -7,6 +7,7 @@ const Radar = preload("res://scripts/ui/radar.gd")
 const Shop = preload("res://scripts/ui/shop.gd")
 const Supply = preload("res://scripts/ui/supply.gd")
 const StrikeMap = preload("res://scripts/ui/strike_map.gd")
+const Strikes = preload("res://scripts/game/strikes.gd")
 const AttackMap = preload("res://scripts/ui/attack_map.gd")
 const SettingsMenu = preload("res://scripts/ui/settings_menu.gd")
 const Reticle = preload("res://scripts/ui/reticle.gd")
@@ -90,6 +91,8 @@ var _fire_touch := -1
 ## in every view, and the line of the panel that says where the people are.
 var alarm_btn: Button
 var alarm_lbl: Label
+## A launcher in the open (scripts/game/strikes.gd, hunts): the button opens the strike map on it.
+var hunt_btn: Button
 var _alarm_styles: Array = []
 ## A match on a server: both cities' integrity and the strikes on their way: [bar, percent] × 2, the line under them.
 var _pvp_bars: Array = []
@@ -136,6 +139,7 @@ func _ready() -> void:
 	_build_target_info()
 	_build_touch_buttons()
 	_build_alarm()
+	_build_hunt()
 	flash_rect = UiKit.full_rect(ColorRect.new()) as ColorRect
 	flash_rect.color = Color(1.0, 0.92, 0.8, 0.0)
 	flash_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -706,6 +710,8 @@ func _build_alarm() -> void:
 
 ## Where the left edge of the screen is free again: under the status panel and the alarm button.
 func left_column_top() -> float:
+	if hunt_btn != null and hunt_btn.visible:
+		return hunt_btn.position.y + hunt_btn.size.y
 	if alarm_btn != null and alarm_btn.visible:
 		return alarm_btn.position.y + alarm_btn.size.y
 	return _status_panel.position.y + _status_panel.size.y if _status_panel.visible else 0.0
@@ -734,6 +740,81 @@ func _update_alarm() -> void:
 	if on:
 		var left := int(ceil(game.shelter_left()))
 		alarm_lbl.text = GS.t("📢 ТРЕВОГА · люди в укрытиях") if left <= 0 else GS.t("📢 ТРЕВОГА · в укрытиях через %d с") % left
+
+
+## Under the alarm button: a launcher the radar has just caught in the act, with the seconds it
+## stays there. Pressed like the alarm (any finger), it opens the strike map on that launcher.
+func _build_hunt() -> void:
+	hunt_btn = Button.new()
+	hunt_btn.custom_minimum_size = Vector2(250, 46) if GS.touch() else Vector2(230, 36)
+	hunt_btn.add_theme_font_size_override("font_size", 16 if GS.touch() else 13)
+	hunt_btn.focus_mode = Control.FOCUS_NONE
+	hunt_btn.add_theme_color_override("font_color", Color(1.0, 0.95, 0.8))
+	for st in ["normal", "hover"]:
+		hunt_btn.add_theme_stylebox_override(st, UiKit.sbox(Color(0.35, 0.2, 0.02, 0.88), Color(1.0, 0.75, 0.25), 2, 6, 6))
+	hunt_btn.add_theme_stylebox_override("pressed", UiKit.sbox(Color(0.7, 0.45, 0.05, 0.95), Color(1.0, 0.9, 0.6), 3, 6, 6))
+	hunt_btn.gui_input.connect(func(event: InputEvent) -> void:
+		var mb := event as InputEventMouseButton
+		if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT and mb.device != InputEvent.DEVICE_ID_EMULATION:
+			_hunt_press())
+	hunt_btn.visible = false
+	root.add_child(hunt_btn)
+
+
+## The launcher in the open that has the most seconds left and can still be hit, else "".
+func hunt_target() -> String:
+	if GS.realism or game.pvp != null or Net.role == "guest" or GS.training:
+		return ""
+	var best := ""
+	var left := 0.0
+	for id in Strikes.hot:
+		var s := Strikes.site(GS.city_def(), String(id))
+		if not s.is_empty() and Strikes.can_hunt(s) and float(Strikes.hot[id]) > left:
+			best = String(id)
+			left = float(Strikes.hot[id])
+	return best
+
+
+func _hunt_press() -> void:
+	SFX.play("click", -8.0)
+	open_strikes(hunt_target())
+
+
+func _update_hunt() -> void:
+	if hunt_btn == null:
+		return
+	var id := hunt_target()
+	hunt_btn.visible = id != "" and game.view != "watch"
+	if not hunt_btn.visible:
+		return
+	hunt_btn.position = Vector2(12, (alarm_btn.position.y + alarm_btn.size.y if alarm_btn.visible else _status_panel.position.y + _status_panel.size.y) + 8.0)
+	var key := "" if GS.touch() else " [%s]" % GS.key_label("strikes")
+	hunt_btn.text = GS.t("🎯 ПУСКОВАЯ «%s» · %d с") % [GS.t(String(Strikes.KINDS[id].short)), int(ceil(float(Strikes.hot[id])))] + key
+	hunt_btn.modulate = Color(1, 1, 1, 0.75 + 0.25 * absf(sin(_t * 5.0)))
+
+
+## The hunt button under a finger, like the alarm button.
+func _hunt_input(event: InputEvent) -> bool:
+	if hunt_btn == null or not (event is InputEventScreenTouch):
+		return false
+	var st := event as InputEventScreenTouch
+	if not st.pressed or not hunt_btn.is_visible_in_tree() or get_tree().paused or _overlay != null:
+		return false
+	if not hunt_btn.get_global_rect().grow(6.0).has_point(st.position):
+		return false
+	_hunt_press()
+	get_viewport().set_input_as_handled()
+	return true
+
+
+## The radar caught a launcher in the act (game_controller.launch).
+func on_launcher_hot(s: Dictionary) -> void:
+	var nm := GS.t(String(s.short))
+	if GS.realism:
+		if game.rl != null:
+			game.rl.radio(GS.t("Засечена пусковая «%s» — %d с на удар HIMARS или ATACMS с командного пункта.") % [nm, int(Strikes.HOT_TIME)], Color(1.0, 0.8, 0.35))
+		return
+	log_event(GS.t("🎯 Засечена пусковая «%s»: %d с, чтобы накрыть её HIMARS или ATACMS — %s") % [nm, int(Strikes.HOT_TIME), GS.t("кнопка «ПУСКОВАЯ»") if GS.touch() else "[%s]" % GS.key_label("strikes")], Color(1.0, 0.8, 0.35))
 
 
 # --- Updates --------------------------------------------------------------------------
@@ -877,6 +958,7 @@ func _process(delta: float) -> void:
 		detect_lbl.add_theme_color_override("font_color", Color(0.6, 1.0, 0.8))
 	_update_fires()
 	_update_alarm()
+	_update_hunt()
 	_update_pvp()
 	nv_rect.visible =(game.view == "base" and game.base_view.nv) or (game.view == "fpv" and game.fpv_view.nv)
 	_update_target_info()
@@ -1156,7 +1238,7 @@ func _close_world() -> void:
 
 ## Y / N answer the oldest join request (checked before the game's own keys: N is night vision).
 func _input(event: InputEvent) -> void:
-	if _fire_input(event) or _alarm_input(event):
+	if _fire_input(event) or _alarm_input(event) or _hunt_input(event):
 		return
 	if _req_cards.is_empty() or not (event is InputEventKey) or not event.pressed or event.echo:
 		return
@@ -1408,10 +1490,16 @@ func open_shop(on_close := Callable()) -> void:
 
 
 ## The operational map of the launch sites (K): toggles. The raid is the host's, so are the strikes.
-func open_strikes() -> void:
+## It opens on `select`, else on a launcher in the open (a hunt), else where it picks itself.
+func open_strikes(select := "") -> void:
 	if game.game_over:
 		return
+	if select == "":
+		select = hunt_target()
 	if _overlay != null and _overlay is StrikeMap:
+		if select != "" and (_overlay as StrikeMap)._sel != select:
+			(_overlay as StrikeMap).select(select)
+			return
 		(_overlay as StrikeMap).close()
 		return
 	if game.pvp != null:
@@ -1436,6 +1524,7 @@ func open_strikes() -> void:
 	_set_paused(true)
 	var m := StrikeMap.new()
 	m.game = game
+	m._sel = select
 	m.closed.connect(func() -> void:
 		_overlay = null
 		_set_paused(false))

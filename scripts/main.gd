@@ -23,6 +23,7 @@ extends Node
 ##   --screen=menu|settings|map|worlds|create|game   --open=shop|pause|morning|gameover|feed|video|record
 ##   --daystrike=ballistic|cruise   (with --autotest) a strike in the daytime, without the dice
 ##   --touch --alarmtouch       fingers on the air-raid alarm button of the usual game
+##   --touch --hunttouch        a finger on the launcher button (a hunt) opens the strike map on it
 ##   --keytest                  verify the rebindable control map
 ##   --mptest                   multiplayer self-test, offline: codes, the Firebase event mirror and
 ##                              (with --autotest) friends in the city, watching, player list, requests
@@ -30,6 +31,7 @@ extends Node
 ##   --striketest               counter-strikes on launch sites: every city has its sites, discovery,
 ##                              reach and ships, a strike landing, the raid shrinking, repairs, saving
 ##   --sitesdown                every launch site destroyed before the night (the raid must shrink)
+##   --autohunt                 (with --autotest) HIMARS / ATACMS go at every launcher caught in the open
 ##   --open=strikes [--strikedemo]   the strike map (the demo shows every state of a site)
 ##   --acctest                  accounts self-test, offline (in-memory database, stand-in sign-in):
 ##                              register, nick rules, friends by nick, sign in / out, rename,
@@ -90,6 +92,7 @@ const ServerEditor = preload("res://scripts/ui/server_editor.gd")
 const CityEditor = preload("res://scripts/ui/city_editor.gd")
 const CityStore = preload("res://scripts/core/city_store.gd")
 const CitiesMenu = preload("res://scripts/ui/cities_menu.gd")
+const StrikesRules = preload("res://scripts/game/strikes.gd")
 
 var map
 var cam: Camera3D
@@ -115,6 +118,8 @@ var _press_i := -1
 var _press_pending := ""
 ## Clock reading when --open=video started the cut, so its real length can be reported.
 var _video_t0 := -1.0
+## --hunttouch: frames since the launcher button was first seen.
+var _ht := 0
 
 
 func _ready() -> void:
@@ -783,6 +788,21 @@ func _process(delta: float) -> void:
 			16:
 				print("UAD ALARMTOUCH only finger: alarm=%s locked=%s" % [game.alarm, game.locked != null])
 		_tt.stage = int(_tt.stage) + 1
+	if _args.has("hunttouch") and game and is_instance_valid(game) and (_ht > 0 or game.hud.hunt_btn.is_visible_in_tree()):
+		# --touch --hunttouch: the launcher button under the second finger opens the strike map on
+		# that launcher
+		var hb: Vector2 = game.hud.hunt_btn.get_global_rect().get_center()
+		var away := get_viewport().get_visible_rect().size * 0.5
+		match _ht:
+			0:
+				_finger(0, away, true)
+				_finger(1, hb, true)
+			4:
+				_finger(1, hb, false)
+				_finger(0, away, false)
+				var ov = game.hud._overlay
+				print("UAD HUNTTOUCH map=%s on=%s hot=%s" % [ov != null and ov.get_script() == preload("res://scripts/ui/strike_map.gd"), String(ov._sel) if ov != null and "_sel" in ov else "", str(StrikesRules.hot.keys())])
+		_ht += 1
 	if _args.has("f16input") and game and is_instance_valid(game) and game.view == "fighter":
 		_f16_input(delta)
 	elif _args.has("aimbot") and game and is_instance_valid(game) and game.view == "fighter":
@@ -869,6 +889,15 @@ func _process(delta: float) -> void:
 		_mp_session_selftest()
 	if _args.has("mphost") or _args.has("mpjoin"):
 		_mp_live_step()
+	if _args.has("autohunt") and game and is_instance_valid(game) and not StrikesRules.hot.is_empty():
+		for id in StrikesRules.hot:
+			var hs := StrikesRules.site(map.city, String(id))
+			if StrikesRules.hunting(String(id)) == 0 and not hs.is_empty():
+				for w in ["atacms", "himars"]:
+					if StrikesRules.blocker(hs, w, not game.director.is_night()) == "":
+						StrikesRules.send(hs, w)
+						print("UAD HUNT sent %s at %s (%.0f s left)" % [w, id, float(StrikesRules.hot[id])])
+						break
 	if _video_t0 >= 0.0 and game and is_instance_valid(game) and not game.reel.playing:
 		print("UAD VIDEO ran %.1f s for %d clips" % [_clock - _video_t0, game.reel.clips.size()])
 		_video_t0 = -1.0
@@ -2076,6 +2105,12 @@ func _strike_demo() -> void:
 			st.known = false
 		GS.sites[String(ss[i].id)] = st
 	GS.strikes = [{"site": String(ss[0].id), "w": "lyutyi"}, {"site": String(ss[min(3, ss.size() - 1)].id), "w": "neptune"}]
+	# a launcher caught in the act, with a HIMARS on its way to another one
+	for s in ss:
+		if bool(Strikes.KINDS[String(s.id)].get("hunt", false)) and bool(GS.sites[String(s.id)].known) and Strikes.hot.size() < 2:
+			Strikes.hot[String(s.id)] = 27.0 if Strikes.hot.is_empty() else 12.0
+	if Strikes.hot.size() == 2:
+		Strikes.hunts = [{"site": String(Strikes.hot.keys()[1]), "w": "himars", "t": 5.0, "flight": 12.0, "p": 0.8}]
 	GS.money = maxi(GS.money, 60000)
 	GS.day = maxi(GS.day, 3)
 
@@ -2144,6 +2179,35 @@ func _strike_selftest() -> void:
 	check.call(is_equal_approx(float(Strikes.state("s400").def), 0.08), "one reinforcement for the whole salvo")
 	GS.sites.erase("s400")
 	Strikes.seen(kyiv, "s400")
+	# hunting the launchers: a launch puts them in the open, HIMARS goes at once even by night, a hit
+	# calls off the rest of the site's launches tonight; airfields are never in the open
+	GS.day = 3
+	Strikes.reset_hunts()
+	Strikes.seen(kharkiv, "s300")
+	var s300 := Strikes.site(kharkiv, "s300")
+	check.call(Strikes.blocker(s300, "himars", false) != "", "by night only a launcher in the open")
+	check.call(not Strikes.heat(kharkiv, "s300").is_empty() and Strikes.hot.has("s300"), "a launch puts the launcher in the open")
+	check.call(Strikes.heat(kharkiv, "s300").is_empty(), "…once per launch window")
+	Strikes.seen(kharkiv, "kab")
+	Strikes.heat(kharkiv, "kab")
+	check.call(not Strikes.hot.has("kab"), "an airfield is never in the open")
+	check.call(Strikes.blocker(s300, "himars", false) == "" and Strikes.blocker(s300, "storm", false) != "", "HIMARS by night at the launcher, Storm Shadow waits for the day")
+	var mh := GS.money
+	Strikes.send(s300, "himars")
+	check.call(GS.money == mh - 7000 and Strikes.hunting("s300") == 1 and GS.strikes.is_empty(), "a hunt flies now, not at dusk")
+	Strikes.hunts[0].p = 1.0
+	var hr := Strikes.hunt_step(kharkiv, 5.0, RandomNumberGenerator.new())
+	check.call(hr.is_empty() and Strikes.hunting("s300") == 1 and is_equal_approx(float(Strikes.hot.s300), Strikes.HOT_TIME - 5.0), "it takes its seconds")
+	var before := {"s300": Strikes.output(kharkiv, "s300"), "kab": Strikes.output(kharkiv, "kab")}
+	hr = Strikes.hunt_step(kharkiv, 8.0, RandomNumberGenerator.new())
+	check.call(hr.size() == 1 and bool(hr[0].hit) and String(Strikes.state("s300").st) == "destroyed" and int(Strikes.state("s300").n) == 1, "the launcher is hit: out for tonight")
+	var night := [{"t": 50.0, "type": "s300", "count": 2}, {"t": 60.0, "type": "kab", "count": 2}, {"t": 70.0, "warn": true}]
+	check.call(Strikes.thin(night, kharkiv, before, RandomNumberGenerator.new()) == 2 and night.size() == 2 and String(night[0].type) == "kab", "its launches tonight are called off, the others fly")
+	Strikes.hunt_step(kharkiv, Strikes.HOT_TIME, RandomNumberGenerator.new())
+	check.call(Strikes.hot.is_empty(), "the launcher drives off")
+	Strikes.night_passed(kharkiv)
+	check.call(String(Strikes.state("s300").st) == "ok", "back the next night")
+	Strikes.reset_hunts()
 	GS.day = 3
 	var m0 := GS.money
 	Strikes.launch(drones, "storm")

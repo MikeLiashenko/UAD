@@ -163,6 +163,24 @@ class MapView extends Control:
 					draw_circle(head, 4.0, Color(0.6, 1.0, 0.8))
 					draw_circle(head, 8.0 + 2.0 * sin(_t * 8.0), Color(0.4, 1.0, 0.7, 0.2))
 			k += 1
+		# hunts: a solid track, the head well on its way within seconds
+		for h in Strikes.hunts:
+			for s in sites:
+				if String(s.id) == String(h.site):
+					var to := spot(s)
+					draw_line(c, to, Color(1.0, 0.8, 0.35, 0.35), 1.5)
+					var head := c.lerp(to, clampf(1.0 - float(h.t) / maxf(float(h.flight), 0.1), 0.0, 1.0))
+					draw_circle(head, 4.5, Color(1.0, 0.9, 0.5))
+					draw_circle(head, 9.0 + 2.0 * sin(_t * 12.0), Color(1.0, 0.8, 0.35, 0.25))
+		# launchers caught in the act: a beating amber ring and the seconds they stay there
+		for s in sites:
+			var id := String(s.id)
+			if Strikes.hot.has(id):
+				var p := spot(s)
+				var f := fposmod(_t * 1.6, 1.0)
+				draw_arc(p, 17.0 + 12.0 * f, 0, TAU, 28, Color(1.0, 0.75, 0.25, 0.9 * (1.0 - f)), 2.5)
+				draw_arc(p, 18.0, 0, TAU, 28, Color(1.0, 0.8, 0.3, 0.9), 2.0)
+				_txt(p + Vector2(-40, -24), GS.t("ПУСК · %d с") % int(ceil(float(Strikes.hot[id]))), 12, Color(1.0, 0.85, 0.4), HORIZONTAL_ALIGNMENT_CENTER, 80)
 		# the sites; their captions go last, nudged apart where they would overlap
 		var captions := []
 		for s in sites:
@@ -301,14 +319,29 @@ func _ready() -> void:
 	_side = UiKit.vbox(8)
 	_side.custom_minimum_size = Vector2(364, 0)
 	scroll.add_child(_side)
-	# start on a known site that still works, else any known one, else the first sector
-	for s in _map.sites:
+	# start on the launcher the HUD asked for (a hunt), else on a known site that still works, else
+	# any known one, else the first sector
+	var asked := _sel != ""
+	for s in ([] if asked else _map.sites):
 		if bool(Strikes.state(String(s.id)).known) and (_sel == "" or String(Strikes.state(_sel).st) != "ok"):
 			_sel = String(s.id)
 	if _sel == "" and not _map.sites.is_empty():
 		_sel = String(_map.sites[0].id)
 	GS.state_changed.connect(_refresh)
 	_refresh()
+
+
+var _tick := 0.0
+
+
+## While a launcher is in the open or a hunt flies (the game goes on behind a shared world's map)
+## the panel's seconds are kept current.
+func _process(delta: float) -> void:
+	_tick += delta
+	if _tick >= 0.5:
+		_tick = 0.0
+		if not get_tree().paused and (Strikes.hot.has(_sel) or Strikes.hunting(_sel) > 0 or not Strikes.hot.is_empty()):
+			_refresh()
 
 
 func select(id: String) -> void:
@@ -376,21 +409,33 @@ func _refresh() -> void:
 		var dr := Strikes.swarm_in_flight(_sel)
 		if dr > 0:
 			_note(GS.t("Прикрытие: дронов в полёте — %d, ПВО точки отвлечена (−%d%%)") % [dr, int(round(Strikes.escort(_sel) * 100.0))], Color(0.6, 1.0, 0.5), 13)
+	if Strikes.hot.has(_sel):
+		_note(GS.t("🎯 ПУСК ЗАСЕЧЁН: пусковая на виду ещё %d с — HIMARS и ATACMS долетят к ней за секунды, днём и ночью") % int(ceil(float(Strikes.hot[_sel]))), AMBER, 15)
+	if Strikes.hunting(_sel) > 0:
+		_note(GS.t("Летят к пусковой: %d") % Strikes.hunting(_sel), UiKit.CYAN, 15)
 	_side.add_child(HSeparator.new())
 	_note(GS.t("НАНЕСТИ УДАР"), UiKit.AMBER, 15)
 	for w in Strikes.WEAPON_ORDER:
 		var wd: Dictionary = Strikes.WEAPONS[w]
 		var why := Strikes.blocker(s, w, _is_day())
+		var now := Strikes.is_hunt(s, w)
 		var txt := "%s · %s" % [GS.t(String(wd.short)), GS.fmt_money(int(wd.price))]
 		if why == "" or why == GS.t("Не хватает денег") or why == GS.t("Удары наносятся днём"):
 			if known:
-				txt += GS.t(" · шанс %d%%") % int(round(Strikes.chance(s, w, Strikes.escort(_sel)) * 100.0))
+				var p := Strikes.hunt_chance(s, w) if now else Strikes.chance(s, w, Strikes.escort(_sel))
+				txt += GS.t(" · шанс %d%%") % int(round(p * 100.0))
+		if now:
+			txt = "🎯 " + txt + GS.t(" · СЕЙЧАС")
 		var b := UiKit.button(txt, func() -> void:
 			if Strikes.blocker(s, w, _is_day()) == "":
-				Strikes.launch(s, w)
+				var hunt := Strikes.is_hunt(s, w)
+				Strikes.send(s, w)
 				SFX.play("launch", -6.0)
 				if game != null:
-					game.hud.log_event(GS.t("Удар %s по цели «%s» — в полёте, долетит к ночи") % [GS.t(String(wd.short)), GS.t(String(s.name))], UiKit.CYAN)
+					if hunt:
+						game.hud.log_event(GS.t("%s по пусковой «%s» — подлёт %d с") % [GS.t(String(wd.short)), GS.t(String(s.short)), int(wd.fast)], UiKit.CYAN)
+					else:
+						game.hud.log_event(GS.t("Удар %s по цели «%s» — в полёте, долетит к ночи") % [GS.t(String(wd.short)), GS.t(String(s.name))], UiKit.CYAN)
 				_refresh(), 360, 16)
 		b.disabled = why != ""
 		_side.add_child(b)
@@ -398,6 +443,7 @@ func _refresh() -> void:
 	_side.add_child(HSeparator.new())
 	_note(GS.t("Удары наносятся днём и долетают к ночи. Повреждённая точка запускает вдвое меньше, уничтоженная молчит, пока её не восстановят. После каждого удара противник усиливает ПВО точки."), Color(0.55, 0.8, 0.7), 12)
 	_note(GS.t("Комбинированный удар: дроны («Лютый», «Паляница»), посланные в ту же точку, прилетают первыми и отвлекают её ПВО — ракеты за ними прорываются чаще."), Color(0.55, 0.8, 0.7), 12)
+	_note(GS.t("Охота за пусковыми: после пуска «Искандеры», С-300/400/500, «Бастион», операторы дронов видны радару %d с. HIMARS или ATACMS по ним летят сразу; попадание срывает их пуски до конца ночи.") % int(Strikes.HOT_TIME), Color(0.55, 0.8, 0.7), 12)
 	_close_btn()
 
 

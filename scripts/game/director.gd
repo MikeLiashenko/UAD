@@ -43,6 +43,7 @@ const PVP_PHASE := 150.0
 
 func _ready() -> void:
 	_rng.randomize()
+	Strikes.reset_hunts()
 	follower = Net.role == "guest"
 	pvp = not GS.pvp.is_empty()
 	if follower:
@@ -183,6 +184,40 @@ func _strike_results() -> void:
 			game.hud.log_event(GS.t("Удар %s по цели «%s»: сбит ПВО противника") % [wname, GS.t(String(r.name))], Color(1.0, 0.6, 0.35))
 	game.hud.alert(GS.t("УДАРЫ ПО ТОЧКАМ ПУСКА: %d из %d в цель") % [hits, res.size()], Color(0.5, 1.0, 0.6) if hits > 0 else Color(1.0, 0.6, 0.35))
 	GS.state_changed.emit()
+
+
+## Launchers in the open and the HIMARS / ATACMS sent at them (scripts/game/strikes.gd): a hit
+## calls off what that site still had to launch tonight.
+func _hunts(delta: float) -> void:
+	var city = game.map.city
+	var before := {}
+	for e in schedule:
+		if e.has("type"):
+			before[String(e.type)] = Strikes.output(city, String(e.type))
+	for r in Strikes.hunt_step(city, delta, _rng):
+		if game.autotest:
+			print("UAD HUNT %s at %s: %s" % [r.w, r.site, "HIT" if bool(r.hit) else "miss"])
+		var wname := GS.t(String(Strikes.WEAPONS[r.w].short))
+		var sname := GS.t(String(Strikes.KINDS[r.site].short))
+		if bool(r.hit):
+			var gone := Strikes.thin(schedule, city, before, _rng)
+			GS.stats["hunts"] = int(GS.stats.get("hunts", 0)) + 1
+			var txt := GS.t("%s накрыл пусковую «%s»: оставшиеся пуски этой ночи сорваны (−%d)") % [wname, sname, gone] if gone > 0 else GS.t("%s накрыл пусковую «%s»") % [wname, sname]
+			_say(txt, Color(0.5, 1.0, 0.6))
+			if not GS.realism:
+				game.hud.alert(GS.t("🎯 ПУСКОВАЯ ПОРАЖЕНА"), Color(0.5, 1.0, 0.6))
+			SFX.play("cash", -6.0)
+		else:
+			_say(GS.t("%s по пусковой «%s»: промах — расчёт успел сменить позицию") % [wname, sname], Color(1.0, 0.6, 0.35))
+		GS.state_changed.emit()
+
+
+## A line for the log, or for the radio in MaxRealism (it has no log on screen).
+func _say(text: String, col: Color) -> void:
+	if game.rl != null:
+		game.rl.radio(text, col)
+	else:
+		game.hud.log_event(text, col)
 
 
 ## Altitude layer for a wave, metres.
@@ -353,6 +388,8 @@ func _process(delta: float) -> void:
 	game.map.set_night(night_blend)
 	if follower:
 		return
+	if not pvp and (not Strikes.hot.is_empty() or not Strikes.hunts.is_empty()):
+		_hunts(delta)
 
 	while not schedule.is_empty() and float(schedule[0].t) <= phase_time:
 		var s: Dictionary = schedule.pop_front()
