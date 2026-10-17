@@ -12,9 +12,9 @@ const VERSION_BASE := 22
 ## Builds 12 … 22 came out as version 1.1.
 const V11_BASE := 11
 const STAGE := "Alpha"
-const BUILD := 32
+const BUILD := 33
 const DATE := "2026-10-17"
-const COMMIT := "1426c0d"
+const COMMIT := "88ffea9"
 
 
 ## "v1.3.1 Alpha" for the given build number (this build by default).
