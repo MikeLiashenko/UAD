@@ -958,7 +958,8 @@ func _open_screen(what: String) -> void:
 		"pause":
 			game.hud.toggle_pause()
 		"morning":
-			game.hud.show_morning({"day": 1, "kills": 12, "roofs": 2, "impacts": 1, "homes": 1, "earned": 14000, "penalties": 11000, "funding": 11000, "bonus": 0})
+			game.hud.show_morning({"day": 1, "kills": 12, "roofs": 2, "impacts": 1, "homes": 1, "earned": 14000, "penalties": 11000, "funding": 11000, "bonus": 0,
+				"order": {"done": true, "reward": 14000, "text": "%s · +%s" % [GS.t("Сбейте за ночь не меньше %d целей") % 12, GS.fmt_money(14000)]}})
 		"gameover":
 			game.hud.show_game_over(GS.t("Город получил критические разрушения"))
 		"feed":
@@ -2263,6 +2264,38 @@ func _strike_selftest() -> void:
 	check.call(bool(Strikes.state("iskander").known), "a damaged one stays to be mended")
 	GS.sites.erase("iskander")
 	GS.strikes = []
+	# orders of the command: every kind comes up, each is checked the way it reads, the bonus is paid
+	const Orders = preload("res://scripts/game/orders.gd")
+	GS.day = 1
+	GS.order = {}
+	check.call(Orders.issue(kyiv, RandomNumberGenerator.new()).is_empty(), "no orders on the first day")
+	GS.day = 5
+	Strikes.seen(kyiv, "ballistic")
+	var kinds := {}
+	var orng := RandomNumberGenerator.new()
+	for k in 200:
+		GS.order = {}
+		var o := Orders.issue(kyiv, orng)
+		kinds[String(o.kind)] = true
+		check.call(int(o.reward) > 0 and Orders.text(o) != "", "an order reads and pays")
+	check.call(kinds.size() == Orders.KINDS.size(), "every kind of order comes up: %s" % str(kinds.keys()))
+	var held := Orders.issue(kyiv, orng)
+	check.call(Orders.issue(kyiv, orng) == held, "an order stands for its day")
+	GS.order = {"kind": "strike", "site": "iskander", "n": 0, "reward": 12000, "day": 5, "base": {}}
+	var mo := GS.money
+	check.call(not bool(Orders.check({}).done) and GS.order.is_empty() and GS.money == mo, "a site still standing: not done")
+	GS.order = {"kind": "strike", "site": "iskander", "n": 0, "reward": 12000, "day": 5, "base": {}}
+	GS.sites["iskander"] = {"known": true, "st": "damaged", "n": 2, "def": 0.0}
+	check.call(bool(Orders.check({}).done) and GS.money == mo + 12000, "struck: done and paid")
+	GS.order = {"kind": "clean", "reward": 7000, "day": 5, "base": {}}
+	check.call(not bool(Orders.check({"impacts": 1, "homes": 0}).done), "a hit on the city spoils a clean night")
+	GS.order = {"kind": "kills", "n": 10, "reward": 7000, "day": 5, "base": {}}
+	check.call(bool(Orders.check({"kills": 10}).done), "ten down")
+	GS.order = {"kind": "hunt", "reward": 9000, "day": 5, "base": {"hunts": int(GS.stats.get("hunts", 0))}}
+	GS.stats["hunts"] = int(GS.stats.get("hunts", 0)) + 1
+	check.call(bool(Orders.check({}).done), "a launcher caught in the act")
+	GS.sites.erase("iskander")
+	GS.order = {"kind": "kills", "site": "", "n": 12, "reward": 9000, "day": 5, "base": {"hunts": 0, "known": 2}}
 	GS.day = 3
 	var m0 := GS.money
 	Strikes.launch(drones, "storm")
@@ -2298,6 +2331,7 @@ func _strike_selftest() -> void:
 	GS.delete_world("striketest_tmp")
 	GS.world_id = keep_id
 	check.call(loaded and String(Strikes.state("iskander").st) == "damaged" and GS.strikes.size() == 1, "saved with the world")
+	check.call(String(GS.order.get("kind", "")) == "kills" and int(GS.order.n) == 12 and int(GS.order.base.known) == 2, "the order is saved with the world")
 	print("UAD STRIKETEST: %s" % ("OK" if fails.is_empty() else "FAIL " + ", ".join(fails)))
 
 

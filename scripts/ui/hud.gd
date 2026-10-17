@@ -9,6 +9,7 @@ const Supply = preload("res://scripts/ui/supply.gd")
 const StrikeMap = preload("res://scripts/ui/strike_map.gd")
 const Strikes = preload("res://scripts/game/strikes.gd")
 const BdaView = preload("res://scripts/ui/bda_view.gd")
+const Orders = preload("res://scripts/game/orders.gd")
 const AttackMap = preload("res://scripts/ui/attack_map.gd")
 const SettingsMenu = preload("res://scripts/ui/settings_menu.gd")
 const Reticle = preload("res://scripts/ui/reticle.gd")
@@ -43,6 +44,8 @@ var root: Control
 var money_lbl: Label
 var phase_lbl: Label
 var loc_lbl: Label
+## The order of the command for the day (scripts/game/orders.gd).
+var order_lbl: Label
 var city_bar: ProgressBar
 var base_bar: ProgressBar
 var detect_lbl: Label
@@ -367,6 +370,11 @@ func _build_status() -> void:
 	v.add_child(phase_lbl)
 	loc_lbl = UiKit.label("", 13, Color(0.6, 0.85, 0.75))
 	v.add_child(loc_lbl)
+	order_lbl = UiKit.label("", 13, Color(0.6, 0.9, 1.0))
+	order_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	order_lbl.custom_minimum_size = Vector2(266, 0)
+	order_lbl.visible = false
+	v.add_child(order_lbl)
 	city_bar = _bar(v, GS.t("ГОРОД"))
 	base_bar = _bar(v, GS.t("БАЗА"))
 	detect_lbl = UiKit.label("", 14)
@@ -857,6 +865,9 @@ func refresh() -> void:
 		loc_lbl.text += GS.t("  ·  кампания пройдена ★")
 	else:
 		loc_lbl.text += GS.t("  ·  ночь %d из %d") % [GS.day, GS.CAMPAIGN_NIGHTS]
+	order_lbl.visible = not GS.order.is_empty()
+	if order_lbl.visible:
+		order_lbl.text = "📋 " + Orders.text(GS.order)
 	var own: Array = game.owned_in_group(game.weapon_group)
 	if String(game.weapon_group) + ":" + ",".join(PackedStringArray(own)) != _owned_sig:
 		_rebuild_weapon_buttons()
@@ -1585,6 +1596,9 @@ func show_morning(r: Dictionary) -> void:
 		lines.insert(4, [GS.t("Вылетов дронов · таранов"), "%d · %d" % [int(r.drones), int(r.get("rams", 0))], UiKit.CYAN])
 	if int(r.get("relief", 0)) > 0:
 		lines.append([GS.t("Экстренная помощь (списание долга)"), "+" + GS.fmt_money(int(r.relief)), UiKit.AMBER])
+	var od: Dictionary = r.get("order", {})
+	if not od.is_empty():
+		lines.append([GS.t("Задание командования"), "+" + GS.fmt_money(int(od.reward)) if bool(od.done) else GS.t("не выполнено"), UiKit.CYAN if bool(od.done) else UiKit.AMBER])
 	for ln in lines:
 		var h := UiKit.hbox()
 		var a := UiKit.label(ln[0], 18)
@@ -1592,6 +1606,11 @@ func show_morning(r: Dictionary) -> void:
 		h.add_child(a)
 		h.add_child(UiKit.label(ln[1], 18, ln[2]))
 		v.add_child(h)
+	if not od.is_empty():
+		var ol := UiKit.label("📋 " + String(od.text), 13, Color(0.6, 0.9, 1.0) if bool(od.done) else Color(0.85, 0.75, 0.55))
+		ol.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		ol.custom_minimum_size = Vector2(520, 0)
+		v.add_child(ol)
 	v.add_child(UiKit.label(GS.t("Бюджет: ") + GS.fmt_money(GS.money), 22, UiKit.NEON, HORIZONTAL_ALIGNMENT_CENTER))
 	var next := func() -> void:
 		_close_overlay()

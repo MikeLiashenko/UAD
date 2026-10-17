@@ -17,6 +17,7 @@ extends Node
 ##  other without a morning report, and what flies is what the other city's players launch.
 
 const Strikes = preload("res://scripts/game/strikes.gd")
+const Orders = preload("res://scripts/game/orders.gd")
 
 enum Phase { DAY, NIGHT, MORNING }
 
@@ -89,6 +90,10 @@ func start_day() -> void:
 	for i in scouts:
 		schedule.append({"t": _rng.randf_range(3.0, phase_len - 24.0), "type": "scout", "count": 1})
 	day_strike(GS.day)
+	# the order of the command for this day (a world loaded mid-day keeps the one it had)
+	var o := Orders.issue(game.map.city, _rng)
+	if not o.is_empty():
+		_say(GS.t("📋 Задание командования: %s") % Orders.text(o), Color(0.6, 0.9, 1.0))
 	schedule.sort_custom(func(a, b) -> bool: return float(a.t) < float(b.t))
 	_print_plan("day %d (%d s)" % [GS.day, int(phase_len)])
 	game.hud.alert(GS.t("ДЕНЬ %d — разведка противника в воздухе") % GS.day, Color(0.5, 0.9, 1.0))
@@ -439,11 +444,6 @@ func _morning() -> void:
 	SFX.play_music("day")
 	var s := GS.stats
 	var ns := night_start_stats
-	for name in Strikes.night_passed(game.map.city):
-		game.hud.log_event(GS.t("Противник восстановил: %s") % GS.t(String(name)), Color(1.0, 0.7, 0.4))
-	if not follower and not pvp:
-		for name in Strikes.relocate(game.map.city, _rng):
-			game.hud.log_event(GS.t("Мобильная цель сменила позицию: %s — нужен новый снимок со спутника или новый пуск") % GS.t(String(name)), Color(1.0, 0.7, 0.4))
 	var report := {
 		"day": GS.day,
 		"night_s": night_s,
@@ -459,6 +459,14 @@ func _morning() -> void:
 		"earned": int(s.earned) - int(ns.get("earned", 0)),
 		"penalties": int(s.penalties) - int(ns.get("penalties", 0)),
 	}
+	# the order of the command is checked before the enemy has mended anything overnight
+	if not follower and not pvp:
+		report["order"] = Orders.check(report)
+	for name in Strikes.night_passed(game.map.city):
+		game.hud.log_event(GS.t("Противник восстановил: %s") % GS.t(String(name)), Color(1.0, 0.7, 0.4))
+	if not follower and not pvp:
+		for name in Strikes.relocate(game.map.city, _rng):
+			game.hud.log_event(GS.t("Мобильная цель сменила позицию: %s — нужен новый снимок со спутника или новый пуск") % GS.t(String(name)), Color(1.0, 0.7, 0.4))
 	# Repair crews work through the day: the city is worn down by a bad night, not by attrition.
 	var repaired := minf(5.0, 100.0 - GS.city)
 	GS.city += repaired

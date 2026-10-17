@@ -1849,4 +1849,13 @@ const T := {
 	"ПОРАЖЕНИЕ": "TARGET HIT",
 	"СБИТ ПВО ПРОТИВНИКА": "SHOT DOWN BY ENEMY AIR DEFENCE",
 	"и ещё ударов: %d": "and %d more strikes",
+	# --- orders of the command ----------------------------------------------------------------
+	"Поразите цель «%s»": "Strike «%s»",
+	"Накройте пусковую в момент пуска": "Hit a launcher in the act",
+	"Найдите новый район пуска": "Find a new launch area",
+	"Ни одного прилёта по городу этой ночью": "Not one hit on the city tonight",
+	"Сбейте за ночь не меньше %d целей": "Bring down at least %d targets tonight",
+	"📋 Задание командования: %s": "📋 Order of the command: %s",
+	"Задание командования": "Order of the command",
+	"не выполнено": "not done",
 }
