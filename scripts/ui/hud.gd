@@ -1596,6 +1596,9 @@ func show_morning(r: Dictionary) -> void:
 		lines.insert(4, [GS.t("Вылетов дронов · таранов"), "%d · %d" % [int(r.drones), int(r.get("rams", 0))], UiKit.CYAN])
 	if int(r.get("relief", 0)) > 0:
 		lines.append([GS.t("Экстренная помощь (списание долга)"), "+" + GS.fmt_money(int(r.relief)), UiKit.AMBER])
+	var landed: Array = r.get("strikes", [0, 0])
+	if landed.size() == 2 and int(landed[1]) > 0:
+		lines.append([GS.t("Наши удары по точкам пуска"), GS.t("%d из %d в цель") % [int(landed[0]), int(landed[1])], UiKit.NEON if int(landed[0]) > 0 else UiKit.AMBER])
 	var aid: Array = r.get("aid", [])
 	if not aid.is_empty():
 		lines.append([GS.t("Помощь партнёров"), Strikes.aid_text(aid), UiKit.CYAN])
@@ -1648,6 +1651,11 @@ func show_victory(r: Dictionary) -> void:
 		int(s.kills), int(s.impacts), int(s.get("homes", 0)), int(s.roofs), GS.ctext("water_into"), int(s.splash), int(GS.city),
 		GS.fmt_money(int(s.earned)), GS.fmt_money(int(s.penalties))]
 	v.add_child(UiKit.label(txt, 18, Color(0.8, 1.0, 0.9), HORIZONTAL_ALIGNMENT_CENTER))
+	if int(s.get("strikes", 0)) > 0:
+		var sl := UiKit.label(Strikes.totals(), 15, Color(0.6, 0.9, 1.0), HORIZONTAL_ALIGNMENT_CENTER)
+		sl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		sl.custom_minimum_size = Vector2(580, 0)
+		v.add_child(sl)
 	if int(r.get("award", 0)) > 0:
 		v.add_child(UiKit.label(GS.t("Награда за операцию: +%s") % GS.fmt_money(int(r.award)), 22, UiKit.CYAN, HORIZONTAL_ALIGNMENT_CENTER))
 	v.add_child(UiKit.label(GS.t("Налёты не прекращаются — оборону можно продолжать сколько угодно."), 16, Color(0.65, 0.88, 0.78), HORIZONTAL_ALIGNMENT_CENTER))

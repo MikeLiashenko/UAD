@@ -404,6 +404,40 @@ static func swarm_in_flight(id: String) -> int:
 	return n
 
 
+# --- The log ---------------------------------------------------------------------------------
+const LOG_KEEP := 40
+
+
+## A strike has landed (`r` as resolve / hunt_step give it): into the log and the world's stats.
+static func record(r: Dictionary, hunt := false) -> void:
+	GS.strike_log.append({"d": GS.day, "w": String(r.w), "s": String(r.site), "h": bool(r.hit), "st": String(r.st), "hunt": hunt})
+	while GS.strike_log.size() > LOG_KEEP:
+		GS.strike_log.pop_front()
+	GS.stats["strikes"] = int(GS.stats.get("strikes", 0)) + 1
+	if bool(r.hit):
+		GS.stats["strike_hits"] = int(GS.stats.get("strike_hits", 0)) + 1
+		if String(r.st) == "destroyed":
+			GS.stats["sites_out"] = int(GS.stats.get("sites_out", 0)) + 1
+
+
+## One line of the log: "День 5 · ATACMS → «Искандеры» · поражение, уничтожена".
+static func log_line(x: Dictionary) -> String:
+	var what := "%s → %s" % [GS.t(String(WEAPONS.get(String(x.w), {}).get("short", x.w))), GS.t(String(KINDS.get(String(x.s), {}).get("short", x.s)))]
+	var res := GS.t("мимо")
+	if bool(x.h):
+		res = GS.t("уничтожена") if String(x.st) == "destroyed" else GS.t("повреждена")
+	return GS.t("День %d · %s%s · %s") % [int(x.d), "🎯 " if bool(x.get("hunt", false)) else "", what, res]
+
+
+## The world's strike record as one line.
+static func totals() -> String:
+	var n := int(GS.stats.get("strikes", 0))
+	var h := int(GS.stats.get("strike_hits", 0))
+	return GS.t("Ударов: %d · в цель: %d (%d%%) · точек выведено: %d · пусковых накрыто: %d · снимков: %d · заданий: %d") % [
+		n, h, int(round(100.0 * h / n)) if n > 0 else 0, int(GS.stats.get("sites_out", 0)), int(GS.stats.get("hunts", 0)),
+		int(GS.stats.get("intel", 0)), int(GS.stats.get("orders", 0))]
+
+
 # --- Partner aid ---------------------------------------------------------------------------
 ## Every AID_EVERY mornings the partners deliver a package of strike weapons to our own stock
 ## (GS.arsenal, saved with the world): two kinds of what is in service, so many of each. A strike

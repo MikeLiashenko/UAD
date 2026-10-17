@@ -1863,4 +1863,16 @@ const T := {
 	"со склада: %d": "from stock: %d",
 	"Склад: %s": "Stock: %s",
 	"Помощь партнёров: каждое %d-е утро на склад приходят ракеты и дроны для ударов — удар со склада денег не стоит.": "Partner aid: every %dth morning missiles and drones for strikes reach the stock — a strike from the stock costs no money.",
+	# --- strike log ---------------------------------------------------------------------------
+	"мимо": "missed",
+	"уничтожена": "destroyed",
+	"повреждена": "damaged",
+	"День %d · %s%s · %s": "Day %d · %s%s · %s",
+	"Ударов: %d · в цель: %d (%d%%) · точек выведено: %d · пусковых накрыто: %d · снимков: %d · заданий: %d": "Strikes: %d · on target: %d (%d%%) · sites knocked out: %d · launchers caught: %d · satellite pictures: %d · orders: %d",
+	"Наши удары по точкам пуска": "Our strikes on launch sites",
+	"%d из %d в цель": "%d of %d on target",
+	"📜 Журнал ударов (%d)": "📜 Strike log (%d)",
+	"← К целям": "← Back to targets",
+	"ЖУРНАЛ УДАРОВ": "STRIKE LOG",
+	"Пока ни один удар не долетел. Удары наносятся днём и долетают к ночи.": "No strike has landed yet. Strikes are sent by day and land at dusk.",
 }

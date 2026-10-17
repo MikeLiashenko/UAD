@@ -32,6 +32,8 @@ var night_blend := 1.0
 var schedule: Array = []
 var night_start_stats := {}
 var _rng := RandomNumberGenerator.new()
+## Our strikes that landed since the last morning, [in the target, all] (the morning report).
+var _landed := [0, 0]
 ## Multiplayer guest: the host runs the raid. The clock and the phases follow its snapshots
 ## (net_follow) and nothing is launched here; the morning report is still our own.
 var follower := false
@@ -179,6 +181,8 @@ func _strike_results() -> void:
 	game.hud.show_bda(res)
 	var hits := 0
 	for r in res:
+		Strikes.record(r)
+		_landed = [int(_landed[0]) + (1 if bool(r.hit) else 0), int(_landed[1]) + 1]
 		var wname := GS.t(String(Strikes.WEAPONS[r.w].short))
 		if float(r.get("escort", 0.0)) > 0.0 and not bool(Strikes.WEAPONS[r.w].get("swarm", false)):
 			wname += GS.t(" (под прикрытием дронов)")
@@ -204,6 +208,8 @@ func _hunts(delta: float) -> void:
 		if game.autotest:
 			print("UAD HUNT %s at %s: %s" % [r.w, r.site, "HIT" if bool(r.hit) else "miss"])
 		game.hud.show_bda([r])
+		Strikes.record(r, true)
+		_landed = [int(_landed[0]) + (1 if bool(r.hit) else 0), int(_landed[1]) + 1]
 		var wname := GS.t(String(Strikes.WEAPONS[r.w].short))
 		var sname := GS.t(String(Strikes.KINDS[r.site].short))
 		if bool(r.hit):
@@ -463,6 +469,8 @@ func _morning() -> void:
 	if not follower and not pvp:
 		report["order"] = Orders.check(report)
 		report["aid"] = Strikes.aid(_rng)
+		report["strikes"] = _landed
+		_landed = [0, 0]
 	for name in Strikes.night_passed(game.map.city):
 		game.hud.log_event(GS.t("Противник восстановил: %s") % GS.t(String(name)), Color(1.0, 0.7, 0.4))
 	if not follower and not pvp:

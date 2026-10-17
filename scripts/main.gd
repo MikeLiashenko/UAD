@@ -950,6 +950,9 @@ func _open_screen(what: String) -> void:
 			if _args.has("strikedemo"):
 				_strike_demo()
 			game.hud.open_strikes(String(_args.get("strikesel", "")))
+			if _args.has("strikelog") and game.hud._overlay != null:
+				game.hud._overlay._show_log = true
+				game.hud._overlay._refresh()
 		"bda":
 			# the footage of four strikes: an airfield and a plant hit, ships missed, launchers hit
 			game.hud.show_bda([{"site": "strategic", "w": "flamingo", "hit": true}, {"site": "fleet", "w": "neptune", "hit": false}, {"site": "iskander", "w": "atacms", "hit": true}, {"site": "factory", "w": "flamingo", "hit": true}])
@@ -2122,6 +2125,11 @@ func _strike_demo() -> void:
 		Strikes.hunts = [{"site": String(Strikes.hot.keys()[1]), "w": "himars", "t": 5.0, "flight": 12.0, "p": 0.8}]
 	GS.money = maxi(GS.money, 60000)
 	GS.arsenal = {"storm": 2, "atacms": 1}
+	GS.strike_log = [{"d": 4, "w": "lyutyi", "s": "drones", "h": true, "st": "damaged", "hunt": false}, {"d": 5, "w": "storm", "s": "s400", "h": false, "st": "ok", "hunt": false},
+		{"d": 6, "w": "atacms", "s": "iskander", "h": true, "st": "destroyed", "hunt": true}, {"d": 6, "w": "flamingo", "s": "refinery", "h": true, "st": "destroyed", "hunt": false}]
+	var demo_stats := {"strikes": 4, "strike_hits": 3, "sites_out": 2, "hunts": 1, "intel": 1, "orders": 2}
+	for k in demo_stats:
+		GS.stats[k] = demo_stats[k]
 	GS.day = maxi(GS.day, 3)
 
 
@@ -2315,6 +2323,17 @@ func _strike_selftest() -> void:
 	check.call(GS.money == 0 and Strikes.stock("storm") == 0 and not GS.arsenal.has("storm"), "the stock is spent, not the money")
 	GS.money = mstock
 	GS.strikes = []
+	# the log: every strike that lands goes in, the oldest go out, the totals add up
+	GS.strike_log = []
+	var st0 := {"strikes": int(GS.stats.get("strikes", 0)), "strike_hits": int(GS.stats.get("strike_hits", 0)), "sites_out": int(GS.stats.get("sites_out", 0))}
+	Strikes.record({"w": "storm", "site": "s400", "hit": true, "st": "destroyed"})
+	Strikes.record({"w": "himars", "site": "s300", "hit": false, "st": "ok"}, true)
+	check.call(GS.strike_log.size() == 2 and int(GS.stats.strikes) == st0.strikes + 2 and int(GS.stats.strike_hits) == st0.strike_hits + 1 and int(GS.stats.sites_out) == st0.sites_out + 1, "strikes are logged and counted")
+	check.call(Strikes.log_line(GS.strike_log[0]) != "" and Strikes.totals() != "", "the log reads")
+	for k in Strikes.LOG_KEEP + 5:
+		Strikes.record({"w": "lyutyi", "site": "drones", "hit": false, "st": "ok"})
+	check.call(GS.strike_log.size() == Strikes.LOG_KEEP and String(GS.strike_log[-1].w) == "lyutyi", "the log keeps the newest %d" % Strikes.LOG_KEEP)
+	GS.strike_log = [GS.strike_log[-1]]
 	GS.arsenal = {"atacms": 2}
 	GS.order = {"kind": "kills", "site": "", "n": 12, "reward": 9000, "day": 5, "base": {"hunts": 0, "known": 2}}
 	GS.day = 3
@@ -2354,6 +2373,7 @@ func _strike_selftest() -> void:
 	check.call(loaded and String(Strikes.state("iskander").st) == "damaged" and GS.strikes.size() == 1, "saved with the world")
 	check.call(String(GS.order.get("kind", "")) == "kills" and int(GS.order.n) == 12 and int(GS.order.base.known) == 2, "the order is saved with the world")
 	check.call(Strikes.stock("atacms") == 2, "the stock is saved with the world")
+	check.call(GS.strike_log.size() == 1 and String(GS.strike_log[0].s) == "drones", "the log is saved with the world")
 	print("UAD STRIKETEST: %s" % ("OK" if fails.is_empty() else "FAIL " + ", ".join(fails)))
 
 

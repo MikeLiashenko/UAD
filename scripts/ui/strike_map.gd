@@ -29,6 +29,8 @@ var _money: Label
 ## What the partners have delivered (Strikes.aid): it is spent before money.
 var _stock: Label
 var _sel := ""
+## The side panel shows the log of the strikes instead of the selected site.
+var _show_log := false
 
 
 ## The map itself: rings, bearings, the city, the sites and the strikes in flight.
@@ -353,6 +355,7 @@ func _process(delta: float) -> void:
 
 
 func select(id: String) -> void:
+	_show_log = false
 	if id != _sel:
 		SFX.play("click", -8.0)
 	_sel = id
@@ -388,6 +391,13 @@ func _refresh() -> void:
 	_map.sel = _sel
 	for ch in _side.get_children():
 		ch.queue_free()
+	if _show_log:
+		_log_panel()
+		return
+	_side.add_child(UiKit.button(GS.t("📜 Журнал ударов (%d)") % GS.strike_log.size(), func() -> void:
+		_show_log = true
+		SFX.play("click", -8.0)
+		_refresh(), 360, 14))
 	var s := {}
 	for x in _map.sites:
 		if String(x.id) == _sel:
@@ -476,6 +486,25 @@ func _refresh() -> void:
 	_note(GS.t("Охота за пусковыми: после пуска «Искандеры», С-300/400/500, «Бастион», операторы дронов видны радару %d с. HIMARS или ATACMS по ним летят сразу; попадание срывает их пуски до конца ночи.") % int(Strikes.HOT_TIME), Color(0.55, 0.8, 0.7), 12)
 	_note(GS.t("Мобильные пусковые («Искандеры», С-300/400/500, «Бастион») по утрам могут сменить позицию — тогда их снова нужно найти."), Color(0.55, 0.8, 0.7), 12)
 	_note(GS.t("Помощь партнёров: каждое %d-е утро на склад приходят ракеты и дроны для ударов — удар со склада денег не стоит.") % Strikes.AID_EVERY, Color(0.55, 0.8, 0.7), 12)
+	_close_btn()
+
+
+## The side panel as the log of the strikes that have landed, newest first, under the totals.
+func _log_panel() -> void:
+	_side.add_child(UiKit.button(GS.t("← К целям"), func() -> void:
+		_show_log = false
+		SFX.play("click", -8.0)
+		_refresh(), 360, 14))
+	var title := UiKit.glow_label(GS.t("ЖУРНАЛ УДАРОВ"), 20, UiKit.CYAN)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_side.add_child(title)
+	_note(Strikes.totals(), Color(0.6, 0.9, 1.0), 13)
+	_side.add_child(HSeparator.new())
+	if GS.strike_log.is_empty():
+		_note(GS.t("Пока ни один удар не долетел. Удары наносятся днём и долетают к ночи."), Color(0.55, 0.8, 0.7), 13)
+	for i in range(GS.strike_log.size() - 1, -1, -1):
+		var x: Dictionary = GS.strike_log[i]
+		_note(Strikes.log_line(x), Color(0.55, 1.0, 0.6) if bool(x.h) else Color(1.0, 0.65, 0.4), 13)
 	_close_btn()
 
 
