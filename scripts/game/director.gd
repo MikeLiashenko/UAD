@@ -367,6 +367,12 @@ func _briefing(d: int) -> void:
 		names.append(GS.t(String(GS.ENEMIES[w].plural)))
 	if not names.is_empty():
 		game.hud.log_event(GS.t("Разведка: этой ночью ожидаются %s") % ", ".join(names), Color(1.0, 0.75, 0.4))
+	var rear := []
+	for id in Strikes.KINDS:
+		if Strikes.KINDS[id].has("supply") and String(Strikes.state(id).st) != "ok":
+			rear.append(GS.t(String(Strikes.KINDS[id].short)))
+	if not rear.is_empty():
+		game.hud.log_event(GS.t("Тыл противника подорван (%s): налёт этой ночью слабее") % ", ".join(rear), Color(0.5, 1.0, 0.6))
 	var note: String = game.map.city.raid_note
 	if d <= 2 and note != "":
 		game.hud.log_event(GS.t(note), Color(1.0, 0.85, 0.55))

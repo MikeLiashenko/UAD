@@ -256,6 +256,10 @@ class MapView extends Control:
 				draw_line(p + Vector2(0, -10), p + Vector2(0, 10), col, 3.0)
 				draw_line(p + Vector2(-10, -1), p + Vector2(10, -1), col, 3.0)
 				draw_line(p + Vector2(-5, 8), p + Vector2(5, 8), col, 2.5)
+			"factory":
+				draw_rect(Rect2(p + Vector2(-9, -2), Vector2(18, 9)), col)
+				draw_rect(Rect2(p + Vector2(3, -10), Vector2(4, 8)), col)
+				draw_colored_polygon(PackedVector2Array([p + Vector2(-9, -2), p + Vector2(-5, -7), p + Vector2(-5, -2), p + Vector2(-1, -7), p + Vector2(-1, -2)]), col)
 			"ship":
 				draw_colored_polygon(PackedVector2Array([p + Vector2(-11, 1), p + Vector2(11, 1), p + Vector2(7, 7), p + Vector2(-8, 7)]), col)
 				draw_rect(Rect2(p + Vector2(-4, -6), Vector2(8, 7)), col)
@@ -390,10 +394,14 @@ func _refresh() -> void:
 	name_l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	name_l.custom_minimum_size = Vector2(360, 0)
 	_side.add_child(name_l)
-	var what := []
-	for w in s.weapons:
-		what.append(GS.t(String(GS.ENEMIES[w].plural)))
-	_note(GS.t("Запускает: %s") % ", ".join(what), Color(0.85, 1.0, 0.92), 14)
+	if String(s.get("supply", "")) != "":
+		_note(GS.t("СТРАТЕГИЧЕСКАЯ ЦЕЛЬ · ничего не запускает"), AMBER, 14)
+		_note(GS.t(String(Strikes.KINDS[_sel].what)), Color(0.85, 1.0, 0.92), 14)
+	else:
+		var what := []
+		for w in s.weapons:
+			what.append(GS.t(String(GS.ENEMIES[w].plural)))
+		_note(GS.t("Запускает: %s") % ", ".join(what), Color(0.85, 1.0, 0.92), 14)
 	_note(GS.t("Направление: %s · ~%d км") % [Strikes.compass(float(s.bearing)), int(s.km)], Color(0.6, 0.9, 0.78), 14)
 	if not known:
 		_note(GS.t("Район пуска ещё не установлен: разведка засечёт его, когда оттуда прилетит первая цель."), UiKit.AMBER, 14)
@@ -418,7 +426,7 @@ func _refresh() -> void:
 	for w in Strikes.WEAPON_ORDER:
 		var wd: Dictionary = Strikes.WEAPONS[w]
 		var why := Strikes.blocker(s, w, _is_day())
-		var now := Strikes.is_hunt(s, w)
+		var now := Strikes.is_hunt(s, w) and (why == "" or why == GS.t("Не хватает денег"))
 		var txt := "%s · %s" % [GS.t(String(wd.short)), GS.fmt_money(int(wd.price))]
 		if why == "" or why == GS.t("Не хватает денег") or why == GS.t("Удары наносятся днём"):
 			if known:

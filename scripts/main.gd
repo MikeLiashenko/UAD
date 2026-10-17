@@ -2095,13 +2095,17 @@ func _fit_near() -> void:
 func _strike_demo() -> void:
 	const Strikes = preload("res://scripts/game/strikes.gd")
 	var ss: Array = Strikes.sites(map.city)
+	var hidden := -1 # the last launch site stays unknown (the rear is known from the start)
+	for i in ss.size():
+		if String(ss[i].supply) == "":
+			hidden = i
 	for i in ss.size():
 		var st := {"known": true, "st": "ok", "n": 0, "def": 0.0}
 		if i == 1:
 			st = {"known": true, "st": "damaged", "n": 2, "def": 0.08}
 		elif i == 2:
 			st = {"known": true, "st": "destroyed", "n": 3, "def": 0.16}
-		elif i == ss.size() - 1:
+		elif i == hidden:
 			st.known = false
 		GS.sites[String(ss[i].id)] = st
 	GS.strikes = [{"site": String(ss[0].id), "w": "lyutyi"}, {"site": String(ss[min(3, ss.size() - 1)].id), "w": "neptune"}]
@@ -2208,6 +2212,25 @@ func _strike_selftest() -> void:
 	Strikes.night_passed(kharkiv)
 	check.call(String(Strikes.state("s300").st) == "ok", "back the next night")
 	Strikes.reset_hunts()
+	# the enemy's rear: known from the start, launching nothing, thinning what it feeds
+	var fac := Strikes.site(kyiv, "factory")
+	check.call(not fac.is_empty() and bool(Strikes.state("factory").known) and (fac.weapons as Array).is_empty(), "the factory is on the map from the start")
+	check.call(Strikes.blocker(fac, "lyutyi", true) != "", "the Lyutyi does not reach Alabuga")
+	GS.day = 7
+	check.call(Strikes.blocker(fac, "flamingo", true) == "", "the Flamingo does")
+	GS.sites["factory"] = {"known": true, "st": "destroyed", "n": 2, "def": 0.0}
+	check.call(is_equal_approx(Strikes.output(kyiv, "shahed"), 0.6) and is_equal_approx(Strikes.output(kyiv, "cruise"), 1.0) and is_equal_approx(Strikes.output(kyiv, "scout"), 1.0), "no factory: fewer Shaheds, the missiles fly on")
+	GS.sites["refinery"] = {"known": true, "st": "damaged", "n": 2, "def": 0.0}
+	GS.sites["arsenal"] = {"known": true, "st": "destroyed", "n": 2, "def": 0.0}
+	check.call(is_equal_approx(Strikes.output(kyiv, "cruise"), 0.8) and is_equal_approx(Strikes.output(kyiv, "ballistic"), 0.6) and is_equal_approx(Strikes.output(kyiv, "kalibr"), 1.0), "no fuel: fewer bombers; no arsenal: fewer Iskanders; the fleet sails on")
+	GS.sites["rail"] = {"known": true, "st": "destroyed", "n": 1, "def": 0.0}
+	Strikes.night_passed(kyiv)
+	check.call(int(Strikes.state("factory").n) == 2 and String(Strikes.state("rail").st) == "ok", "the rail hub out: nothing is rebuilt but the hub")
+	Strikes.night_passed(kyiv)
+	check.call(int(Strikes.state("factory").n) == 1, "…then the repairs go on")
+	for id in ["factory", "refinery", "arsenal", "rail"]:
+		GS.sites.erase(id)
+		check.call(GS.t(String(Strikes.KINDS[id].what)) != "" and Strikes.status_text(id) != "", "%s described" % id)
 	GS.day = 3
 	var m0 := GS.money
 	Strikes.launch(drones, "storm")

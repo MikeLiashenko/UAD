@@ -76,7 +76,28 @@ const KINDS := {
 		"km": {"kharkiv": 140.0}, "def": 0.4},
 	"su24": {"short": "Аэродром Су-24", "name": "Аэродром Су-24 в Крыму (Х-31П)", "icon": "plane", "weapons": ["kh31p"],
 		"km": {"odesa": 240.0}, "def": 0.4},
+	# --- the war's supply: launch nothing, feed what launches (they are no secret: known from the start)
+	"refinery": {"short": "НПЗ", "name": "Нефтеперерабатывающий завод (топливо для авиации)", "icon": "factory", "weapons": [],
+		"supply": "air", "turn": -28.0, "def": 0.45,
+		"km": {"kyiv": 560.0, "kharkiv": 260.0, "dnipro": 420.0, "odesa": 480.0},
+		"what": "Пока он не работает, бомбардировщикам и истребителям не хватает топлива: ракет с самолётов летит меньше."},
+	"factory": {"short": "Завод «Алабуга»", "name": "Завод «Алабуга» — сборка шахедов", "icon": "factory", "weapons": [],
+		"supply": "drones", "turn": 18.0, "def": 0.5,
+		"km": {"kyiv": 1350.0, "kharkiv": 1150.0, "dnipro": 1300.0, "odesa": 1550.0},
+		"what": "Отсюда идут шахеды и «Герани»: пока завод стоит, ударных дронов в налётах меньше. Достаёт только «Фламинго»."},
+	"arsenal": {"short": "Арсенал", "name": "Арсенал ракет и боеприпасов", "icon": "factory", "weapons": [],
+		"supply": "missiles", "turn": 34.0, "def": 0.5,
+		"km": {"kyiv": 480.0, "kharkiv": 330.0, "dnipro": 430.0, "odesa": 470.0},
+		"what": "Склад ракет для «Искандеров», С-300/400/500 и «Бастиона»: пока он горит, наземных ракет летит меньше."},
+	"rail": {"short": "Ж/д узел", "name": "Железнодорожный узел снабжения", "icon": "factory", "weapons": [],
+		"supply": "repair", "turn": -42.0, "def": 0.35,
+		"km": {"kyiv": 380.0, "kharkiv": 120.0, "dnipro": 300.0, "odesa": 350.0},
+		"what": "По нему везут всё для ремонта: пока узел разбит, противник не восстанавливает поражённые точки пуска."},
 }
+## How much of a weapon group still flies while its supply target is damaged / destroyed.
+const SUPPLY_CUT := {"damaged": 0.8, "destroyed": 0.6}
+## The launch sites whose weapons count as "missiles" for the arsenal.
+const MISSILE_SITES := ["iskander", "bastion", "s300", "s400", "s500"]
 
 
 ## Every weapon the city is attacked with (the director's slots, extras and events) plus the scouts.
@@ -106,18 +127,20 @@ static func sites(city) -> Array:
 		for w in k.weapons:
 			if used.has(String(w)):
 				ws.append(String(w))
-		if ws.is_empty():
+		var feeds := String(k.get("supply", ""))
+		if ws.is_empty() and feeds == "":
 			continue
 		out.append({"id": id, "name": String(k.name), "short": String(k.get("short", k.name)), "icon": String(k.icon), "weapons": ws,
-			"bearing": _bearing(city, ws), "km": float(km[where]), "def": float(k.def),
-			"naval": bool(k.get("naval", false))})
+			"bearing": fposmod(_bearing(city, ws) + float(k.get("turn", 0.0)), 360.0), "km": float(km[where]), "def": float(k.def),
+			"naval": bool(k.get("naval", false)), "supply": feeds})
 	return out
 
 
-## Mean bearing of the sectors the site's weapons come in on (the city's own sectors for drones).
+## Mean bearing of the sectors the site's weapons come in on (the city's own sectors for drones;
+## for a supply target, which launches nothing, the city's threat sectors as a whole).
 static func _bearing(city, ws: Array) -> float:
 	var v := Vector2.ZERO
-	for w in ws:
+	for w in (ws if not ws.is_empty() else [""]):
 		var sec: Array = city.raid_sectors.get(w, city.threat_sectors)
 		for a in sec:
 			v += Vector2(sin(deg_to_rad(float(a))), cos(deg_to_rad(float(a))))
@@ -136,7 +159,8 @@ static func state(id: String) -> Dictionary:
 	var s = GS.sites.get(id)
 	if s is Dictionary:
 		return s
-	return {"known": false, "st": "ok", "n": 0, "def": 0.0}
+	# the war's factories and depots are no secret: they are on the map from the start
+	return {"known": KINDS.get(id, {}).has("supply"), "st": "ok", "n": 0, "def": 0.0}
 
 
 static func _put(id: String, s: Dictionary) -> void:
@@ -163,7 +187,36 @@ static func output(city, weapon: String) -> float:
 		if (s.weapons as Array).has(weapon):
 			n += 1
 			sum += site_output(String(s.id))
-	return sum / n if n > 0 else 1.0
+	return (sum / n if n > 0 else 1.0) * supply_cut(weapon)
+
+
+## What is left of `weapon` while the supply targets that feed it are out (1 when all work).
+static func supply_cut(weapon: String) -> float:
+	var m := 1.0
+	for id in KINDS:
+		var feeds := String(KINDS[id].get("supply", ""))
+		if feeds == "":
+			continue
+		var st := String(state(id).st)
+		if st != "ok" and feeds_weapon(feeds, weapon):
+			m *= float(SUPPLY_CUT.get(st, 1.0))
+	return m
+
+
+## Does a supply line ("air", "drones", "missiles", "repair") feed this weapon?
+static func feeds_weapon(feeds: String, weapon: String) -> bool:
+	match feeds:
+		"air":
+			for id in KINDS:
+				if String(KINDS[id].icon) == "plane" and (KINDS[id].weapons as Array).has(weapon):
+					return true
+		"drones":
+			return weapon != "scout" and GS.kind_of(weapon) == "shahed"
+		"missiles":
+			for id in MISSILE_SITES:
+				if (KINDS[id].weapons as Array).has(weapon):
+					return true
+	return false
 
 
 ## The radar tracked `weapon` back to where it came from: the site becomes known. Returns the
@@ -411,9 +464,14 @@ static func resolve(city, rng: RandomNumberGenerator) -> Array:
 ## Morning: a night has passed — the enemy repairs. Returns the names of sites back in service.
 static func night_passed(city) -> Array:
 	var back := []
+	# with the railway hub out nothing reaches the struck sites to rebuild them (only the hub
+	# itself is mended)
+	var stalled := String(state("rail").st) != "ok"
 	for s in sites(city):
 		var id := String(s.id)
 		var st := state(id)
+		if stalled and id != "rail":
+			continue
 		if String(st.st) != "ok" and int(st.n) > 0:
 			st.n = int(st.n) - 1
 			if int(st.n) <= 0:
@@ -428,6 +486,13 @@ static func status_text(id: String) -> String:
 	var st := state(id)
 	if not bool(st.known):
 		return GS.t("Не обнаружена")
+	if KINDS.get(id, {}).has("supply"):
+		match String(st.st):
+			"damaged":
+				return GS.t("Повреждён — снабжение урезано ещё %d ноч.") % int(st.n)
+			"destroyed":
+				return GS.t("Выведен из строя — ещё %d ноч.") % int(st.n)
+		return GS.t("Работает на войну")
 	match String(st.st):
 		"damaged":
 			return GS.t("Повреждена — вполсилы ещё %d ноч.") % int(st.n)
