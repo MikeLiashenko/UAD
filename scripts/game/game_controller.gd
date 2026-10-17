@@ -66,6 +66,11 @@ var fx_root: Node3D
 var enemy_root: Node3D
 var base_node: Node3D
 var camo_node: Node3D
+## The outposts on the map (GS.outposts), one node each, and a label over every base.
+var outpost_nodes: Array = []
+var _base_labels: Array = []
+## Waiting for a tap on the map where the next outpost is to stand.
+var placing_base := false
 var predict_marker: MeshInstance3D
 var predict_info := {}
 var range_ring: MeshInstance3D
@@ -139,6 +144,7 @@ func _ready() -> void:
 	camo_node.position = GS.base_pos
 	camo_node.visible = GS.camo
 	add_child(camo_node)
+	_build_outposts()
 	for id in GS.WEAPON_ORDER:
 		if GS.unlocked.get(id, false):
 			add_weapon(id)
@@ -480,6 +486,7 @@ func spawn_drone(pos: Vector3, dir: Vector3, tgt) -> void:
 	d.game = self
 	d.target = tgt
 	d.serial = _drone_seq
+	d.home = Vector3(pos.x, 0, pos.z)
 	d.speed = 30.0 * GS.TEMPO
 	d.vel = (dir.normalized() + Vector3.UP * 0.35).normalized() * d.speed
 	d.position = pos
@@ -579,9 +586,215 @@ func add_weapon(id: String) -> void:
 	if weapons.has(id):
 		return
 	var w := WeaponUnit.new()
-	w.setup(self, id, GS.base_pos + slot_pos(id))
+	w.setup(self, id, GS.base_at(GS.base_of(id)) + slot_pos(id))
 	add_child(w)
 	weapons[id] = w
+
+
+# --- Bases ---------------------------------------------------------------------------------
+## The main base is where the battery began; outposts (GS.outposts, up to GS.OUTPOSTS_MAX) are set
+## up on the map beside it and the bought systems are driven between them (GS.unit_base). In the
+## map view a target tapped goes to the base nearest to it that has a system able to take it.
+## The enemy's recon, the strikes on "the base" and the camera's home stay with the main base.
+
+## Bases can be set up and systems moved here: not in MaxRealism (one man, one position), not on a
+## server, not in a friend's world, not on the training range.
+func bases_allowed() -> bool:
+	return rl == null and pvp == null and Net.role != "guest" and not GS.training
+
+
+func _build_outposts() -> void:
+	for n in outpost_nodes:
+		n.queue_free()
+	outpost_nodes.clear()
+	for l in _base_labels:
+		l.queue_free()
+	_base_labels.clear()
+	for i in GS.outposts.size():
+		var n := Meshes.base()
+		n.position = GS.base_at(i + 1)
+		add_child(n)
+		outpost_nodes.append(n)
+	if GS.outposts.is_empty():
+		return
+	# with more than one base each carries its name over it in the map view
+	for i in GS.base_count():
+		var l := Label3D.new()
+		l.text = GS.base_name(i)
+		l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		l.no_depth_test = true
+		l.fixed_size = true
+		l.pixel_size = 0.0012
+		l.font_size = 30
+		l.outline_size = 8
+		l.modulate = Color(0.6, 1.0, 0.8) if i == 0 else Color(0.6, 0.9, 1.0)
+		l.position = GS.base_at(i) + Vector3(0, 60, 0)
+		add_child(l)
+		_base_labels.append(l)
+
+
+## Why an outpost cannot stand at `p` now, or "".
+func outpost_blocker(p: Vector3) -> String:
+	if not bases_allowed():
+		return GS.t("Здесь только одна позиция")
+	if GS.outpost_price() <= 0:
+		return GS.t("Больше опорных пунктов не поставить")
+	if GS.money < GS.outpost_price():
+		return GS.t("Не хватает денег")
+	if map.location_at(p.x, p.z) < 0:
+		return GS.t("Здесь базу не поставить: вода, дорога или застройка")
+	for i in GS.base_count():
+		if Vector2(p.x - GS.base_at(i).x, p.z - GS.base_at(i).z).length() < 400.0:
+			return GS.t("Слишком близко к другой базе (нужно 400 м)")
+	return ""
+
+
+## Sets up an outpost at `p` (paid). Returns true when it stands.
+func add_outpost(p: Vector3) -> bool:
+	var why := outpost_blocker(p)
+	if why != "":
+		hud.alert(why, Color(1.0, 0.6, 0.3))
+		return false
+	var loc: int = map.location_at(p.x, p.z)
+	GS.add_money(-GS.outpost_price())
+	GS.outposts.append({"x": p.x, "z": p.z, "loc": loc})
+	_build_outposts()
+	SFX.play("cash", -4.0)
+	var i := GS.base_count() - 1
+	hud.alert(GS.t("%s развёрнут: %s") % [GS.base_name(i), GS.loc_name(loc)], Color(0.5, 1.0, 0.7))
+	hud.log_event(GS.t("%s развёрнут — перевезите туда системы на экране баз") % GS.base_name(i), Color(0.5, 1.0, 0.7))
+	GS.state_changed.emit()
+	return true
+
+
+## Takes outpost `i` (1..) down: its systems drive back to the main base.
+func remove_outpost(i: int) -> void:
+	if i <= 0 or i > GS.outposts.size():
+		return
+	for id in GS.unit_base.keys():
+		var b := int(GS.unit_base[id])
+		if b == i:
+			move_weapon(String(id), 0)
+		elif b > i:
+			GS.unit_base[id] = b - 1
+	# a system still on its way to a higher outpost keeps driving to the same spot
+	GS.outposts.remove_at(i - 1)
+	_build_outposts()
+	hud.log_event(GS.t("Опорный пункт свёрнут, системы возвращаются на главную базу"), Color(0.8, 0.8, 0.6))
+	GS.state_changed.emit()
+
+
+## Why system `id` cannot drive to base `to` now, or "".
+func move_blocker(id: String, to: int) -> String:
+	var w = weapons.get(id)
+	if w == null:
+		return GS.t("Не куплено")
+	if not bases_allowed():
+		return GS.t("Здесь только одна позиция")
+	if to < 0 or to >= GS.base_count() or GS.base_of(id) == to:
+		return GS.t("Уже там")
+	if not w.ready_to_fire():
+		return GS.t("В пути")
+	if view == "base" and selected_weapon == id:
+		return GS.t("Сначала выйдите из прицела")
+	return ""
+
+
+## Sends system `id` to base `to`: it is on the road for GS.RELOCATE_TIME seconds.
+func move_weapon(id: String, to: int) -> bool:
+	var w = weapons.get(id)
+	if w == null:
+		return false
+	if to == 0:
+		GS.unit_base.erase(id)
+	else:
+		GS.unit_base[id] = to
+	if GS.base_of(id) != to:
+		return false
+	w.relocate(GS.base_at(to) + slot_pos(id))
+	if locked != null and w.target == locked:
+		locked = null
+	hud.log_event(GS.t("%s выехал: %s, прибудет через %d с") % [GS.t(String(w.def.short)), GS.base_name(to), int(GS.RELOCATE_TIME)], Color(0.6, 0.9, 1.0))
+	GS.state_changed.emit()
+	return true
+
+
+## A system has arrived at its new base.
+func on_unit_arrived(w) -> void:
+	hud.log_event(GS.t("%s на позиции: %s") % [GS.t(String(w.def.short)), GS.base_name(GS.base_of(String(w.id)))], Color(0.5, 1.0, 0.7))
+	if String(w.id) == selected_weapon:
+		range_ring.position = w.global_position + Vector3(0, 1.5, 0)
+	hud.refresh()
+
+
+## The base nearest to the target that has a system able to take it, and that system: the one
+## selected on the panel if it stands there and can, else the one there that does it best.
+## Returns the unit, or null when no base of ours can engage it.
+func shooter_for(e):
+	var best_base := -1
+	var best_d := INF
+	var able := {}
+	for id in weapons:
+		var w = weapons[id]
+		if not w.ready_to_fire() or not w.can_engage(e):
+			continue
+		var b := GS.base_of(String(id))
+		if not able.has(b):
+			able[b] = []
+		able[b].append(w)
+	for b in able:
+		var d := Vector2(e.position.x - GS.base_at(b).x, e.position.z - GS.base_at(b).z).length()
+		if d < best_d:
+			best_d = d
+			best_base = b
+	if best_base < 0:
+		return null
+	var pick = null
+	var score := -INF
+	for w in able[best_base]:
+		if String(w.id) == selected_weapon:
+			return w
+		# in reach beats out of reach; then the more effective
+		var s := (10.0 if w.in_range(e) else 0.0) + GS.eff(String(w.id), e) * 5.0
+		if s > score:
+			score = s
+			pick = w
+	return pick
+
+
+## Map view: wait for a tap on the map to set the next outpost up there.
+func start_place_base() -> void:
+	var why := ""
+	if not bases_allowed():
+		why = GS.t("Здесь только одна позиция")
+	elif GS.outpost_price() <= 0:
+		why = GS.t("Больше опорных пунктов не поставить")
+	elif GS.money < GS.outpost_price():
+		why = GS.t("Не хватает денег")
+	if why != "":
+		hud.alert(why, Color(1.0, 0.6, 0.3))
+		return
+	if view != "top":
+		set_view("top")
+	placing_base = true
+	hud.alert(GS.t("Выберите место для нового опорного пункта на карте"), Color(0.6, 0.9, 1.0))
+
+
+func cancel_place_base() -> void:
+	if placing_base:
+		placing_base = false
+		hud.log_event(GS.t("Постановка базы отменена"), Color(0.7, 0.8, 0.8))
+
+
+## The point of the ground under a screen position (the plane at sea level is close enough).
+func ground_point(screen: Vector2):
+	var o := cam.project_ray_origin(screen)
+	var d := cam.project_ray_normal(screen)
+	var hit = Plane(Vector3.UP, 0.0).intersects_ray(o, d)
+	if hit == null:
+		return null
+	var p: Vector3 = hit
+	return Vector3(p.x, 0, p.z)
 
 
 ## The systems actually bought, in roster order — what the panel and the number keys address.
@@ -642,6 +855,9 @@ func select_weapon(id: String) -> void:
 	var r: float = weapons[id].effective_range()
 	range_ring.mesh = Fx.ring_mesh(r, maxf(8.0, r * 0.006))
 	range_ring.material_override = Fx.ghost(Color(0.2, 1.0, 0.6, 0.18), 1.0)
+	# the ring stands around the base the system is at (or will be, once it arrives)
+	if weapons[id].ready_to_fire():
+		range_ring.position = weapons[id].global_position + Vector3(0, 1.5, 0)
 	if view == "base":
 		base_view.on_weapon_changed(prev)
 	hud.refresh()
@@ -1460,24 +1676,36 @@ func pick_enemy(screen_pos: Vector2):
 func _on_click(pos: Vector2) -> void:
 	if game_over or view != "top":
 		return
+	if placing_base:
+		var gp = ground_point(pos)
+		if gp != null and add_outpost(gp):
+			placing_base = false
+		return
 	var e = pick_enemy(pos)
-	var w = weapons.get(selected_weapon)
-	if w == null:
-		return
 	if e == null:
-		if w.target != null:
-			w.target = null
-			hud.log_event(GS.t("%s: прекратить огонь") % GS.t(String(w.def.short)), Color(0.7, 0.8, 0.8))
+		var sw = weapons.get(selected_weapon)
+		if sw != null and sw.target != null:
+			sw.target = null
+			hud.log_event(GS.t("%s: прекратить огонь") % GS.t(String(sw.def.short)), Color(0.7, 0.8, 0.8))
 		return
-	if not w.can_engage(e):
-		hud.alert(GS.t("%s не может поразить: %s") % [GS.t(String(w.def.short)), GS.t(String(e.def.name))], Color(1.0, 0.6, 0.2))
+	# the base nearest to the target fires: the selected system if it stands there and can, else
+	# the one of that base that does it best
+	var w = shooter_for(e)
+	if w == null:
+		hud.alert(GS.t("Ни одна база не может поразить: %s") % GS.t(String(e.def.name)), Color(1.0, 0.6, 0.2))
 		return
+	if String(w.id) != selected_weapon:
+		select_weapon(String(w.id))
 	w.target = e
 	w.auto_assigned = false
 	locked = e
 	SFX.play("click", -4.0)
+	var who := GS.t(String(w.def.short))
+	if GS.base_count() > 1:
+		who = "%s · %s" % [GS.base_name(GS.base_of(String(w.id))), who]
+		hud.log_event(GS.t("%s: огонь по цели «%s»") % [who, GS.t(String(e.def.name))], Color(0.6, 0.9, 1.0))
 	if not w.in_range(e):
-		hud.log_event(GS.t("%s: цель вне зоны — огонь при входе") % GS.t(String(w.def.short)), Color(1.0, 0.8, 0.4))
+		hud.log_event(GS.t("%s: цель вне зоны — огонь при входе") % who, Color(1.0, 0.8, 0.4))
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -1488,7 +1716,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	# Esc always opens the pause menu, however the controls are rebound — or first closes the
 	# player list / stops watching a friend
 	if kc == KEY_ESCAPE:
-		if hud.players_open():
+		if placing_base:
+			cancel_place_base()
+		elif hud.players_open():
 			hud.toggle_players()
 		elif view == "watch":
 			set_view("top")
@@ -1528,6 +1758,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		"fighter":
 			if view != "walk":
 				toggle_fighter()
+		"bases":
+			hud.open_bases()
 		"strikes":
 			hud.open_strikes()
 		"warp":
@@ -1583,6 +1815,11 @@ func _input(event: InputEvent) -> void:
 
 func _process(delta: float) -> void:
 	_t += delta
+	# the names of the bases only over the map; a pending outpost only while the map is shown
+	for l in _base_labels:
+		l.visible = view == "top"
+	if placing_base and (view != "top" or game_over):
+		placing_base = false
 	if view == "watch":
 		var eye = remote.eye_of(watch_code) if Net.players.has(watch_code) else null
 		if eye == null:

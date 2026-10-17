@@ -114,7 +114,34 @@ func status_text() -> String:
 	return GS.t("ПУСК")
 
 
+## Seconds left on the road to another base (game.move_weapon); meanwhile it neither shows nor fires.
+var relocating := 0.0
+var _dest := Vector3.ZERO
+
+
+## Off to another base: gone from here now, standing at `to` in GS.RELOCATE_TIME seconds.
+func relocate(to: Vector3) -> void:
+	relocating = GS.RELOCATE_TIME
+	_dest = to
+	target = null
+	visible = false
+
+
+## Here and ready (not on the road between bases).
+func ready_to_fire() -> bool:
+	return relocating <= 0.0
+
+
 func _process(delta: float) -> void:
+	if relocating > 0.0:
+		relocating -= delta
+		if relocating <= 0.0:
+			position = _dest
+			var d := Vector3(position.x, 0, position.z).normalized()
+			rotation.y = atan2(-d.x, -d.z)
+			visible = true
+			game.on_unit_arrived(self)
+		return
 	cooldown -= delta
 	if spin:
 		spin.rotate_y(delta * 4.0)

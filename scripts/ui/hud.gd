@@ -7,6 +7,7 @@ const Radar = preload("res://scripts/ui/radar.gd")
 const Shop = preload("res://scripts/ui/shop.gd")
 const Supply = preload("res://scripts/ui/supply.gd")
 const StrikeMap = preload("res://scripts/ui/strike_map.gd")
+const BasesPanel = preload("res://scripts/ui/bases_panel.gd")
 const Strikes = preload("res://scripts/game/strikes.gd")
 const BdaView = preload("res://scripts/ui/bda_view.gd")
 const Orders = preload("res://scripts/game/orders.gd")
@@ -98,6 +99,9 @@ var alarm_btn: Button
 var alarm_lbl: Label
 ## A launcher in the open (scripts/game/strikes.gd, hunts): the button opens the strike map on it.
 var hunt_btn: Button
+## The bases [U] in the battery panel, and the way out of placing a new outpost on the map.
+var bases_btn: Button
+var _place_btn: Button
 ## The footage of our strikes as they land (scripts/ui/bda_view.gd).
 var bda: Control
 var _alarm_styles: Array = []
@@ -147,6 +151,7 @@ func _ready() -> void:
 	_build_touch_buttons()
 	_build_alarm()
 	_build_hunt()
+	_build_place()
 	bda = BdaView.new()
 	root.add_child(bda)
 	flash_rect = UiKit.full_rect(ColorRect.new()) as ColorRect
@@ -544,6 +549,7 @@ func _build_weapons() -> void:
 	auto_btn = _small_btn(side, GS.t("АВТО [%s]") % GS.key_label("auto"), func() -> void: game.toggle_auto())
 	_small_btn(side, GS.t("МАГАЗИН [%s]") % GS.key_label("shop"), open_shop)
 	_small_btn(side, GS.t("🎯 УДАРЫ [%s]") % GS.key_label("strikes"), open_strikes)
+	bases_btn = _small_btn(side, GS.t("🏕 БАЗЫ [%s]") % GS.key_label("bases"), open_bases)
 	var side2 := UiKit.vbox(6)
 	h.add_child(side2)
 	_small_btn(side2, GS.t("❚❚ ПАУЗА"), toggle_pause)
@@ -892,6 +898,8 @@ func refresh() -> void:
 	if money_lbl == null:
 		return
 	money_lbl.text = GS.fmt_money(GS.money)
+	if bases_btn != null:
+		bases_btn.visible = game.bases_allowed()
 	money_lbl.add_theme_color_override("font_color", UiKit.NEON if GS.money >= 0 else UiKit.RED)
 	city_bar.value = GS.city
 	base_bar.value = GS.base_hp
@@ -1028,6 +1036,7 @@ func _process(delta: float) -> void:
 	_update_fires()
 	_update_alarm()
 	_update_hunt()
+	_update_place()
 	_place_bda()
 	_update_pvp()
 	nv_rect.visible =(game.view == "base" and game.base_view.nv) or (game.view == "fpv" and game.fpv_view.nv)
@@ -1310,7 +1319,7 @@ func _close_world() -> void:
 
 ## Y / N answer the oldest join request (checked before the game's own keys: N is night vision).
 func _input(event: InputEvent) -> void:
-	if _fire_input(event) or _alarm_input(event) or _hunt_input(event):
+	if _fire_input(event) or _alarm_input(event) or _hunt_input(event) or _place_input(event):
 		return
 	if _req_cards.is_empty() or not (event is InputEventKey) or not event.pressed or event.echo:
 		return
@@ -1559,6 +1568,71 @@ func open_shop(on_close := Callable()) -> void:
 	s.closed.connect(after)
 	root.add_child(s)
 	_overlay = s
+
+
+## The bases [U]: the main base, the outposts and where each system stands (ui/bases_panel.gd).
+func open_bases() -> void:
+	if game.game_over:
+		return
+	if _overlay != null and _overlay is BasesPanel:
+		(_overlay as BasesPanel).close()
+		return
+	if not game.bases_allowed():
+		alert(GS.t("Здесь только одна позиция") if not GS.realism else GS.t("MaxRealism: одна позиция, вы на ней"), Color(1.0, 0.75, 0.35))
+		return
+	game.cancel_place_base()
+	_close_overlay()
+	_set_paused(true)
+	var m := BasesPanel.new()
+	m.game = game
+	m.closed.connect(func() -> void:
+		_overlay = null
+		_set_paused(false))
+	root.add_child(m)
+	_overlay = m
+
+
+## While a new outpost waits for its place: a line across the top and a button that calls it off
+## (any finger, like the alarm).
+func _build_place() -> void:
+	_place_btn = Button.new()
+	_place_btn.custom_minimum_size = Vector2(520, 46) if GS.touch() else Vector2(480, 38)
+	_place_btn.add_theme_font_size_override("font_size", 16 if GS.touch() else 14)
+	_place_btn.focus_mode = Control.FOCUS_NONE
+	_place_btn.add_theme_color_override("font_color", Color(0.9, 1.0, 1.0))
+	for st in ["normal", "hover"]:
+		_place_btn.add_theme_stylebox_override(st, UiKit.sbox(Color(0.02, 0.2, 0.3, 0.9), Color(0.5, 0.9, 1.0), 2, 6, 6))
+	_place_btn.anchor_left = 0.5
+	_place_btn.anchor_right = 0.5
+	_place_btn.offset_left = -_place_btn.custom_minimum_size.x * 0.5
+	_place_btn.offset_right = _place_btn.custom_minimum_size.x * 0.5
+	_place_btn.offset_top = 70
+	_place_btn.gui_input.connect(func(event: InputEvent) -> void:
+		var mb := event as InputEventMouseButton
+		if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT and mb.device != InputEvent.DEVICE_ID_EMULATION:
+			game.cancel_place_base())
+	_place_btn.visible = false
+	root.add_child(_place_btn)
+
+
+func _update_place() -> void:
+	if _place_btn == null:
+		return
+	_place_btn.visible = game.placing_base
+	if game.placing_base:
+		_place_btn.text = GS.t("🏕 Коснитесь места для опорного пункта · %s · ✕ отмена") % GS.fmt_money(GS.outpost_price())
+
+
+## The cancel line under a finger, like the alarm button.
+func _place_input(event: InputEvent) -> bool:
+	if _place_btn == null or not (event is InputEventScreenTouch):
+		return false
+	var st := event as InputEventScreenTouch
+	if not st.pressed or not _place_btn.is_visible_in_tree() or not _place_btn.get_global_rect().grow(6.0).has_point(st.position):
+		return false
+	game.cancel_place_base()
+	get_viewport().set_input_as_handled()
+	return true
 
 
 ## The operational map of the launch sites (K): toggles. The raid is the host's, so are the strikes.

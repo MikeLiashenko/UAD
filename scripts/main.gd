@@ -24,6 +24,8 @@ extends Node
 ##   --daystrike=ballistic|cruise   (with --autotest) a strike in the daytime, without the dice
 ##   --touch --alarmtouch       fingers on the air-raid alarm button of the usual game
 ##   --touch --hunttouch        a finger on the launcher button (a hunt) opens the strike map on it
+##   --basetest                 (with --autotest) an outpost set up by a tap, a system driven there, the
+##                              nearest base firing at a target, outposts saved, an outpost taken down
 ##   --keytest                  verify the rebindable control map
 ##   --mptest                   multiplayer self-test, offline: codes, the Firebase event mirror and
 ##                              (with --autotest) friends in the city, watching, player list, requests
@@ -126,6 +128,8 @@ var _press_pending := ""
 var _video_t0 := -1.0
 ## --hunttouch: frames since the launcher button was first seen.
 var _ht := 0
+## --basetest: the stage the bases self-test has reached, and what it found wrong.
+var _bt := {"stage": 0, "t": 0.0, "fails": []}
 
 
 func _ready() -> void:
@@ -811,6 +815,8 @@ func _process(delta: float) -> void:
 			16:
 				print("UAD ALARMTOUCH only finger: alarm=%s locked=%s" % [game.alarm, game.locked != null])
 		_tt.stage = int(_tt.stage) + 1
+	if _args.has("basetest") and game and is_instance_valid(game) and _clock >= 3.0:
+		_base_selftest_step()
 	if _args.has("hunttouch") and game and is_instance_valid(game) and (_ht > 0 or game.hud.hunt_btn.is_visible_in_tree()):
 		# --touch --hunttouch: the launcher button under the second finger opens the strike map on
 		# that launcher
@@ -975,6 +981,19 @@ func _open_screen(what: String) -> void:
 			if _args.has("strikelog") and game.hud._overlay != null:
 				game.hud._overlay._show_log = true
 				game.hud._overlay._refresh()
+		"bases":
+			if _args.has("basedemo"):
+				_base_demo()
+			game.hud.open_bases()
+		"basemap":
+			# the map view over two bases, with their names
+			if _args.has("basedemo"):
+				_base_demo()
+			game.set_view("top")
+			var mid := (GS.base_pos + GS.base_at(GS.base_count() - 1)) * 0.5
+			game.rig.focus(mid)
+			game.rig._t_dist = 7500.0
+			game.rig._t_pitch = 0.9
 		"bda":
 			# the footage of four strikes: an airfield and a plant hit, ships missed, launchers hit
 			game.hud.show_bda([{"site": "strategic", "w": "flamingo", "hit": true}, {"site": "fleet", "w": "neptune", "hit": false}, {"site": "iskander", "w": "atacms", "hit": true}, {"site": "factory", "w": "flamingo", "hit": true}])
@@ -2428,6 +2447,109 @@ func _strike_selftest() -> void:
 	check.call(Strikes.stock("atacms") == 2, "the stock is saved with the world")
 	check.call(GS.strike_log.size() == 1 and String(GS.strike_log[0].s) == "drones", "the log is saved with the world")
 	print("UAD STRIKETEST: %s" % ("OK" if fails.is_empty() else "FAIL " + ", ".join(fails)))
+
+
+## --basedemo: two outposts 2–4 km out, a few systems standing there and one on the road.
+func _base_demo() -> void:
+	GS.money = maxi(GS.money, 120000)
+	for id in ["mg", "gepard", "drone", "iris", "patriot"]:
+		if not GS.unlocked.get(id, false):
+			game.purchase_weapon(id)
+	var placed := 0
+	for k in 200:
+		if placed >= 2:
+			break
+		var a := TAU * k / 37.0 + 0.4
+		var p := GS.base_pos + Vector3(cos(a), 0, sin(a)) * (2500.0 + 300.0 * (k % 4))
+		if game.outpost_blocker(p) == "":
+			game.add_outpost(p)
+			placed += 1
+	if GS.base_count() >= 3:
+		for pair in [["gepard", 1], ["iris", 1], ["mg", 2]]:
+			GS.unit_base[pair[0]] = pair[1]
+			game.weapons[pair[0]].position = GS.base_at(pair[1]) + game.slot_pos(pair[0])
+		game.move_weapon("drone", 2)
+
+
+## --basetest (with --autotest): an outpost set up through the map click, a system driven there,
+## the target of the map view given to the base nearest to it, the world saved and loaded with its
+## outposts, the outpost taken down. A step a frame; prints UAD BASETEST at the end.
+func _base_selftest_step() -> void:
+	var fails: Array = _bt.fails
+	var check := func(ok: bool, what: String) -> void:
+		if not ok:
+			fails.append(what)
+	match int(_bt.stage):
+		0:
+			GS.money = 500000
+			for id in ["mg", "gepard", "patriot"]:
+				if not GS.unlocked.get(id, false):
+					game.purchase_weapon(id)
+			# a free spot 2–4 km from the main base
+			var spot = null
+			for k in 200:
+				var a := TAU * k / 37.0
+				var r := 2000.0 + 2000.0 * float(k % 5) / 4.0
+				var p := GS.base_pos + Vector3(cos(a) * r, 0, sin(a) * r)
+				if map.location_at(p.x, p.z) >= 0:
+					spot = p
+					break
+			check.call(spot != null, "a free spot for an outpost")
+			if spot == null:
+				_bt.stage = 99
+				return
+			check.call(game.outpost_blocker(GS.base_pos + Vector3(50, 0, 50)) != "", "not on top of the main base")
+			game.set_view("top")
+			game.placing_base = true
+			# the map click puts it down (the screen point of the spot, as a finger would)
+			game.cam.global_position = Vector3(spot.x, 3000.0, spot.z + 1.0)
+			game.cam.look_at(spot, Vector3.UP)
+			var m0 := GS.money
+			game._on_click(game.cam.unproject_position(spot))
+			check.call(GS.outposts.size() == 1 and not game.placing_base and GS.money == m0 - GS.OUTPOST_PRICE and game.outpost_nodes.size() == 1, "an outpost set up by a tap on the map (%d)" % GS.outposts.size())
+			check.call(GS.outposts.size() == 1 and Vector2(GS.base_at(1).x - spot.x, GS.base_at(1).z - spot.z).length() < 30.0, "where it was tapped")
+			check.call(game.move_blocker("gepard", 1) == "" and game.move_weapon("gepard", 1), "a system sent to the outpost")
+			check.call(not game.weapons.gepard.ready_to_fire() and GS.base_of("gepard") == 1, "on the road")
+			check.call(game.move_blocker("gepard", 0) != "", "not again while on the road")
+			_bt.stage = 1
+		1:
+			# the road takes RELOCATE_TIME of game time
+			if not game.weapons.gepard.ready_to_fire():
+				return
+			var gp: Vector3 = game.weapons.gepard.global_position
+			check.call(Vector2(gp.x - GS.base_at(1).x, gp.z - GS.base_at(1).z).length() < 200.0, "it stands at the outpost")
+			game.select_weapon("mg")
+			var e = null
+			for x in game.enemies:
+				if not x.dead and GS.kind_of(String(x.type)) == "shahed":
+					e = x
+					break
+			if e == null:
+				game.launch("shahed", 1, false, 300.0)
+				return
+			# a Shahed over the outpost: the outpost fires; over the main base: the selected system there
+			e.position = GS.base_at(1) + Vector3(300, 300, 0)
+			var w = game.shooter_for(e)
+			check.call(w != null and GS.base_of(String(w.id)) == 1 and String(w.id) == "gepard", "over the outpost the outpost fires (%s)" % (String(w.id) if w != null else "-"))
+			e.position = GS.base_pos + Vector3(300, 300, 0)
+			w = game.shooter_for(e)
+			check.call(w != null and GS.base_of(String(w.id)) == 0 and String(w.id) == "mg", "over the main base the selected system there fires (%s)" % (String(w.id) if w != null else "-"))
+			# the world keeps its outposts and who stands where
+			var keep := GS.world_id
+			GS.world_id = "basetest_tmp"
+			GS.save_world()
+			GS.outposts = []
+			GS.unit_base = {}
+			var loaded := GS.load_world("basetest_tmp")
+			GS.delete_world("basetest_tmp")
+			GS.world_id = keep
+			check.call(loaded and GS.outposts.size() == 1 and GS.base_of("gepard") == 1, "saved with the world")
+			game.remove_outpost(1)
+			check.call(GS.outposts.is_empty() and GS.base_of("gepard") == 0 and not game.weapons.gepard.ready_to_fire(), "taken down: its systems drive home")
+			_bt.stage = 99
+		99:
+			_bt.stage = 100
+			print("UAD BASETEST: %s" % ("OK" if fails.is_empty() else "FAIL " + " | ".join(fails)))
 
 
 ## --achtest: achievements earned from the world's state, kept in a file of the test's own (never the

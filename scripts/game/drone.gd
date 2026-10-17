@@ -21,6 +21,8 @@ const TERMINAL := 250.0
 ## Soft ceiling: above this the drone stops climbing and settles back down.
 const MAX_ALT := 4000.0
 
+## The rack it took off from (it patrols around it and comes back to it): the base its system stands at.
+var home := Vector3.ZERO
 var game
 var target
 var weapon_id := "drone"
@@ -116,7 +118,7 @@ func retarget() -> bool:
 	for e in game.enemies:
 		if e.dead or GS.eff(weapon_id, e) <= 0.0 or e.inbound >= e.hp:
 			continue
-		if e.position.distance_to(GS.base_pos) > PATROL_RADIUS:
+		if e.position.distance_to(home) > PATROL_RADIUS:
 			continue
 		var d: float = position.distance_to(e.position)
 		if not bool(game.predict_debris(e).safe):
@@ -223,7 +225,7 @@ func _process(delta: float) -> void:
 					want = (Bullet.lead(position, target.position, target.vel, maxf(speed, 40.0)) - position).normalized()
 					if position.distance_to(target.position) > TERMINAL:
 						want = _avoid(want)
-					if position.distance_to(GS.base_pos) > PATROL_RADIUS:
+					if position.distance_to(home) > PATROL_RADIUS:
 						order_home()
 			"loiter":
 				_loiter -= delta
@@ -237,9 +239,9 @@ func _process(delta: float) -> void:
 					want = _avoid((c + Vector3(cos(ang), 0, sin(ang)) * 300.0 - position).normalized())
 					want_speed = max_speed * 0.45
 			"rtb":
-				var home: Vector3 = GS.base_pos + Vector3(0, 26, 0)
-				var d_home: float = position.distance_to(home)
-				want = (home - position).normalized()
+				var nest: Vector3 = home + Vector3(0, 26, 0)
+				var d_home: float = position.distance_to(nest)
+				want = (nest - position).normalized()
 				if d_home > 150.0:
 					want = _avoid(want)
 				want_speed = max_speed * (0.3 if d_home < 220.0 else 0.85)

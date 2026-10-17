@@ -441,6 +441,11 @@ const CAMPAIGN_NIGHTS := 15
 const CREW_PRICE := 9000
 const CREW_MAX := 6
 const CAMO_PRICE := 6000
+## Outposts: how many beside the main base, the price of the first (each next one costs that much
+## more), and the seconds a system is on the road when it moves between bases.
+const OUTPOSTS_MAX := 3
+const OUTPOST_PRICE := 12000
+const RELOCATE_TIME := 20.0
 const REPAIR_PRICE := 5000
 ## Rebuilding the districts: the late game has money to spare and a worn-down city.
 const CITY_REPAIR_PRICE := 14000
@@ -487,6 +492,7 @@ const KEY_ACTIONS := [
 	["fpv_next", "FPV: следующий дрон", KEY_SPACE],
 	["fpv_home", "FPV: отправить дрон на базу", KEY_R],
 	["strikes", "Удары по точкам пуска", KEY_K],
+	["bases", "Базы: новый опорный пункт и перевозка систем", KEY_U],
 	["mfg", "Мобильная огневая группа (пикап)", KEY_M],
 	["fighter", "Вылет истребителя F-16", KEY_J],
 	["warp", "Ускорение времени ×1 / ×2 / ×4 / ×8", KEY_BRACKETRIGHT],
@@ -608,6 +614,11 @@ var strike_log: Array = []
 ## salvo of its own the next night. revenge_night: the night that salvo flies (0 = none).
 var anger := 0.0
 var revenge_night := 0
+## Outposts: bases of ours beside the main one (GS.base_pos), [{x, z, loc}], OUTPOSTS_MAX at most.
+## The main base is index 0, outpost i is index i + 1. unit_base: {system id: base index} — where
+## each bought system stands (0 when not listed).
+var outposts: Array = []
+var unit_base := {}
 ## A match on a server (scripts/game/pvp.gd): {"def": ServerDef, "side": 0 | 1, "bot": bool}; {} in
 ## the usual game. Never saved: main sets it after new_world.
 var pvp := {}
@@ -700,10 +711,45 @@ func new_world(wname: String, diff: int, pos: Vector3, loc: int, cid := "kyiv", 
 	strike_log = []
 	anger = 0.0
 	revenge_night = 0
+	outposts = []
+	unit_base = {}
 	pvp = {}
 	city_armor = 1.0
 	money_changed.emit(money)
 	state_changed.emit()
+
+
+# --- Bases ---------------------------------------------------------------------------------
+## The main base and the outposts: 1 + outposts.
+func base_count() -> int:
+	return 1 + outposts.size()
+
+
+## Where base `i` stands (0 — the main base).
+func base_at(i: int) -> Vector3:
+	if i <= 0 or i > outposts.size():
+		return base_pos
+	return Vector3(float(outposts[i - 1].x), 0, float(outposts[i - 1].z))
+
+
+func base_loc_of(i: int) -> int:
+	return base_loc if i <= 0 or i > outposts.size() else int(outposts[i - 1].loc)
+
+
+## The base a bought system stands at.
+func base_of(id: String) -> int:
+	var i := int(unit_base.get(id, 0))
+	return i if i <= outposts.size() else 0
+
+
+## "Главная база" / "Опорный пункт 2".
+func base_name(i: int) -> String:
+	return t("Главная база") if i <= 0 else t("Опорный пункт %d") % (i + 1)
+
+
+## What the next outpost costs (0 when no more can be set up).
+func outpost_price() -> int:
+	return 0 if outposts.size() >= OUTPOSTS_MAX else OUTPOST_PRICE * (outposts.size() + 1)
 
 
 ## Zeroed ammunition counters for every system that fires bought rounds.
@@ -851,6 +897,7 @@ func save_world() -> void:
 		"detection": detection, "camo": camo, "crews": crews, "base_pos": [base_pos.x, base_pos.z],
 		"base_loc": base_loc, "stats": stats, "damaged": damaged, "crushed": crushed, "won": won,
 		"videos": videos, "sites": sites, "strikes": strikes, "order": order, "arsenal": arsenal, "strike_log": strike_log, "anger": anger, "revenge_night": revenge_night,
+		"outposts": outposts, "unit_base": unit_base,
 	}
 	if Cities.is_custom(city_id):
 		# a city drawn in the map editor: the world keeps its own copy and plays on without the editor's
@@ -960,6 +1007,8 @@ func load_world(id: String) -> bool:
 	strike_log = []
 	anger = 0.0
 	revenge_night = 0
+	outposts = []
+	unit_base = {}
 	var o = d.get("order", {})
 	if o is Dictionary and o.has("kind") and o.has("reward"):
 		var ob = o.get("base", {})
@@ -972,6 +1021,14 @@ func load_world(id: String) -> bool:
 				arsenal[String(k)] = int(ars[k])
 	anger = float(d.get("anger", 0.0))
 	revenge_night = int(d.get("revenge_night", 0))
+	for op in d.get("outposts", []):
+		if op is Dictionary and op.has("x") and op.has("z") and outposts.size() < OUTPOSTS_MAX:
+			outposts.append({"x": float(op.x), "z": float(op.z), "loc": int(op.get("loc", Loc.FIELD))})
+	var ub = d.get("unit_base", {})
+	if ub is Dictionary:
+		for k in ub:
+			if int(ub[k]) > 0 and int(ub[k]) <= outposts.size():
+				unit_base[String(k)] = int(ub[k])
 	for x in d.get("strike_log", []):
 		if x is Dictionary and x.has("w") and x.has("s"):
 			strike_log.append({"d": int(x.get("d", 0)), "w": String(x.w), "s": String(x.s), "h": bool(x.get("h", false)), "st": String(x.get("st", "ok")), "hunt": bool(x.get("hunt", false))})
