@@ -2112,6 +2112,20 @@ func _strike_selftest() -> void:
 	var fleet := Strikes.site(odesa, "fleet")
 	Strikes.seen(odesa, "kalibr")
 	check.call(Strikes.blocker(fleet, "lyutyi", true) != "" and Strikes.blocker(fleet, "neptune", true) == "", "ships: Neptune yes, drone no")
+	# the weapons of v1.3: reach, the day they come into service, the ballistic missile's pierce
+	var kharkiv = Cities.get_def("kharkiv")
+	Strikes.seen(kharkiv, "molniya")
+	var mol := Strikes.site(kharkiv, "molniya")
+	check.call(Strikes.blocker(mol, "himars", true) == "" and Strikes.blocker(drones, "himars", true) != "", "HIMARS: the border positions only")
+	check.call(Strikes.blocker(drones, "atacms", true) != "" and Strikes.blocker(strat, "flamingo", true) != "", "ATACMS and Flamingo wait for their days")
+	GS.day = 7
+	check.call(Strikes.blocker(strat, "flamingo", true) == "" and Strikes.blocker(strat, "storm", true) != "", "the Flamingo reaches the bombers")
+	var s400 := Strikes.site(kyiv, "s400")
+	Strikes.seen(kyiv, "s400")
+	check.call(Strikes.blocker(s400, "atacms", true) == "" and Strikes.chance(s400, "atacms") > Strikes.chance(s400, "storm") + 0.1, "ATACMS gets through a strong air defence")
+	for w in Strikes.WEAPON_ORDER:
+		check.call(Strikes.WEAPONS.has(w) and GS.t(String(Strikes.WEAPONS[w].desc)) != "", "%s described" % w)
+	GS.day = 3
 	var m0 := GS.money
 	Strikes.launch(drones, "storm")
 	check.call(GS.money == m0 - 21000 and Strikes.in_flight("drones") == 1, "a strike is paid and in flight")

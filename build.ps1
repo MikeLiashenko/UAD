@@ -8,12 +8,12 @@
      (from tools\templates.tpz, downloading it if missing).
   3. Stamps the next build number: scripts\build_info.gd (BUILD, date, commit), the Windows file
      version and the Android versionCode / versionName in export_presets.cfg. People see the
-     version name "v1.1.N Alpha": VERSION and STAGE from build_info.gd, N = the build number
-     counted from VERSION_BASE (build 12 = v1.1.1).
+     version name "v1.3.N Alpha": VERSION and STAGE from build_info.gd, N = the build number
+     counted from VERSION_BASE (build 23 = v1.3.1).
   4. Imports the project headlessly and exports the requested targets. Release APKs are signed with
      the project key in %USERPROFILE%\.uad (created on the first release build — back it up: an
      update signed with another key will not install over the old app).
-  5. With -Publish: commits the stamp, pushes, creates the GitHub release v1.1.N-alpha with the .exe and
+  5. With -Publish: commits the stamp, pushes, creates the GitHub release v1.3.N-alpha with the .exe and
      the .apk, and writes the newest build into the database (uad/release) — every game that is
      older offers the update in its main menu.
 
@@ -99,7 +99,7 @@ $InfoPath = Join-Path $Root 'scripts\build_info.gd'
 $info = [System.IO.File]::ReadAllText($InfoPath)
 $Build = [int]([regex]::Match($info, 'const BUILD := (\d+)').Groups[1].Value)
 if (-not $NoBump) { $Build += 1 }
-# the version people see: v<VERSION>.<build - VERSION_BASE> <STAGE> ("v1.1.3 Alpha" is build 14),
+# the version people see: v<VERSION>.<build - VERSION_BASE> <STAGE> ("v1.3.1 Alpha" is build 23),
 # all three from build_info.gd; the build number itself goes on counting (Android versionCode,
 # the update check)
 $Base = [regex]::Match($info, 'const VERSION := "([^"]+)"').Groups[1].Value

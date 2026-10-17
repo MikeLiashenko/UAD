@@ -14,6 +14,13 @@ signal closed
 const RED := Color(1.0, 0.32, 0.26)
 const AMBER := Color(1.0, 0.72, 0.3)
 const GREY := Color(0.5, 0.55, 0.53)
+## The dashed ring of each strike weapon's reach.
+const REACH_COLS := {
+	"lyutyi": Color(0.35, 0.85, 1.0, 0.35), "himars": Color(0.6, 1.0, 0.45, 0.35),
+	"palianytsia": Color(1.0, 0.62, 0.3, 0.35), "neptune": Color(1.0, 0.85, 0.35, 0.35),
+	"storm": Color(1.0, 0.45, 0.9, 0.35), "atacms": Color(0.75, 0.6, 1.0, 0.35),
+	"flamingo": Color(1.0, 0.5, 0.6, 0.35),
+}
 
 var game
 var _map: MapView
@@ -118,12 +125,27 @@ class MapView extends Control:
 			draw_arc(c, r, 0, TAU, 96, Color(0.2, 1.0, 0.65, 0.18), 1.2)
 			_txt(c + Vector2(4, -r - 3), GS.t("%d км") % int(km), 11, Color(0.4, 0.9, 0.7, 0.55))
 		# reach of our strike weapons
-		var reach_cols := {"lyutyi": Color(0.35, 0.85, 1.0, 0.35), "neptune": Color(1.0, 0.85, 0.35, 0.35), "storm": Color(1.0, 0.45, 0.9, 0.35)}
+		var i := 0
+		var ring_caps: Array[Rect2] = []
+		var everywhere := []
 		for w in Strikes.WEAPON_ORDER:
 			var r := radius(float(Strikes.WEAPONS[w].range))
-			if r < minf(sz.x, sz.y) * 0.5:
-				_dashed_circle(c, r, reach_cols[w])
-				_txt(c + Vector2(-r * 0.71 - 110, r * 0.71 + 14), GS.t(String(Strikes.WEAPONS[w].short)), 11, reach_cols[w] * Color(1, 1, 1, 2.2), HORIZONTAL_ALIGNMENT_RIGHT, 110)
+			var rc: Color = REACH_COLS.get(w, Color(0.7, 0.9, 0.8, 0.35))
+			if float(Strikes.WEAPONS[w].range) >= _max_km:
+				# radius() stops at the edge of the map: a ring there would claim a reach it has not
+				everywhere.append(GS.t(String(Strikes.WEAPONS[w].short)))
+			elif r < minf(sz.x, sz.y) * 0.5:
+				_dashed_circle(c, r, rc)
+				# each caption on its own bearing of the lower left quarter: rings of close reach
+				# (Storm Shadow 260 km, ATACMS 300 km) would otherwise print one over the other
+				var a := deg_to_rad(205.0 + 13.0 * i)
+				var p := c + Vector2(sin(a), -cos(a)) * r
+				_txt(p + Vector2(-114, 4), GS.t(String(Strikes.WEAPONS[w].short)), 11, rc * Color(1, 1, 1, 2.2), HORIZONTAL_ALIGNMENT_RIGHT, 110)
+				var tw := GS.font.get_string_size(GS.t(String(Strikes.WEAPONS[w].short)), HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x
+				ring_caps.append(Rect2(p + Vector2(-4 - tw, -8), Vector2(tw, 14)))
+			i += 1
+		if not everywhere.is_empty():
+			_txt(Vector2(12, sz.y - 12), GS.t("Достают до любой точки карты: %s") % ", ".join(everywhere), 12, Color(0.6, 0.9, 0.78, 0.8))
 		# compass
 		_txt(c + Vector2(-5, -radius(_max_km) - 20), GS.t("С"), 14, Color(0.6, 1.0, 0.8, 0.8))
 		# strikes in flight: dotted tracks with a head crawling towards the target until dusk
@@ -172,16 +194,32 @@ class MapView extends Control:
 					draw_line(p + q * 25.0, p + q * 33.0, Color(1, 1, 1, 0.9), 2.0)
 			captions.append([p, "%s · %d км" % [GS.t(String(s.short)), int(s.km)], col])
 		var taken: Array[Rect2] = [Rect2(c - Vector2(60, 12), Vector2(120, 40))]
+		taken.append_array(ring_caps)
+		for s in sites:
+			taken.append(Rect2(spot(s) - Vector2(14, 14), Vector2(28, 28)))
 		captions.sort_custom(func(a, b) -> bool: return (a[0] as Vector2).y < (b[0] as Vector2).y)
 		for cap in captions:
 			var p: Vector2 = cap[0]
 			var right := p.x < sz.x * 0.7
 			var w := GS.font.get_string_size(String(cap[1]), HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
-			var r := Rect2(Vector2(p.x + 18 if right else p.x - 18 - w, p.y - 18), Vector2(w, 16))
-			for tries in 8:
-				if not taken.any(func(t: Rect2) -> bool: return t.intersects(r)):
+			# the caption stays beside its own icon: the preferred side, the other side, then a
+			# little higher or lower on either — only then is it pushed further down
+			var spots := []
+			for dy in [0.0, -14.0, 14.0, -28.0, 28.0]:
+				for side in ([true, false] if right else [false, true]):
+					spots.append(Rect2(Vector2(p.x + 18 if side else p.x - 18 - w, p.y - 8 + dy), Vector2(w, 16)))
+			var r: Rect2 = spots[0]
+			var placed := false
+			for q in spots:
+				if not taken.any(func(t: Rect2) -> bool: return t.intersects(q)) and Rect2(Vector2.ZERO, sz).encloses(q):
+					r = q
+					placed = true
 					break
-				r.position.y += 16.0
+			if not placed:
+				for tries in 8:
+					if not taken.any(func(t: Rect2) -> bool: return t.intersects(r)):
+						break
+					r.position.y += 16.0
 			taken.append(r)
 			var cc: Color = cap[2]
 			_txt(r.position + Vector2(0, 13), String(cap[1]), 12, Color(cc.r, cc.g, cc.b, 0.95))

@@ -13,19 +13,32 @@ extends RefCounted
 const FIRST_DAY := 2
 
 ## What we strike with. range: km; hit: chance against an undefended site; effect on a hit;
-## nights it lasts; naval: can hit ships.
+## nights it lasts; naval: can hit ships; from: the day it comes into service; pierce: the share
+## of the site's air defence it gets through regardless (a ballistic missile is seldom caught).
 const WEAPONS := {
 	"lyutyi": {"name": "Дальний дрон «Лютый»", "short": "«ЛЮТЫЙ»", "price": 4500, "range": 1100.0, "hit": 0.6,
 		"effect": "damaged", "nights": 2, "naval": false,
 		"desc": "Дёшево и далеко — достаёт даже до аэродромов стратегической авиации, но чаще повреждает, чем уничтожает."},
+	"himars": {"name": "РСЗО HIMARS (ракеты GMLRS)", "short": "HIMARS", "price": 7000, "range": 85.0, "hit": 0.86,
+		"effect": "destroyed", "nights": 2, "naval": false,
+		"desc": "Высокоточные ракеты GMLRS: только ближние позиции у границы — до 85 км, зато дёшево и почти наверняка."},
+	"palianytsia": {"name": "Ракета-дрон «Паляница»", "short": "«ПАЛЯНИЦА»", "price": 9000, "range": 650.0, "hit": 0.7,
+		"effect": "damaged", "nights": 3, "naval": false, "from": 3,
+		"desc": "Реактивный дрон-ракета до 650 км: прорывается чаще «Лютого», а подожжённая точка горит дольше."},
 	"neptune": {"name": "Ракета «Нептун»", "short": "«НЕПТУН»", "price": 12000, "range": 400.0, "hit": 0.72,
 		"effect": "destroyed", "nights": 2, "naval": true,
 		"desc": "Крылатая ракета: бьёт и по кораблям, и по наземным позициям до 400 км."},
 	"storm": {"name": "Ракета Storm Shadow", "short": "STORM SHADOW", "price": 21000, "range": 260.0, "hit": 0.88,
 		"effect": "destroyed", "nights": 3, "naval": false,
 		"desc": "Малозаметная и точная — почти наверняка уничтожает наземную цель в пределах 260 км."},
+	"atacms": {"name": "Баллистическая ракета ATACMS", "short": "ATACMS", "price": 26000, "range": 300.0, "hit": 0.86,
+		"effect": "destroyed", "nights": 3, "naval": false, "from": 5, "pierce": 0.6,
+		"desc": "Баллистика до 300 км: ПВО точки почти не успевает её перехватить — лучшая по сильно защищённым позициям."},
+	"flamingo": {"name": "Крылатая ракета FP-5 «Фламинго»", "short": "«ФЛАМИНГО»", "price": 34000, "range": 3000.0, "hit": 0.8,
+		"effect": "destroyed", "nights": 4, "naval": false, "from": 7,
+		"desc": "Тяжёлая крылатая ракета на 3000 км и тонна взрывчатки: уничтожает даже аэродромы стратегической авиации."},
 }
-const WEAPON_ORDER := ["lyutyi", "neptune", "storm"]
+const WEAPON_ORDER := ["lyutyi", "himars", "palianytsia", "neptune", "storm", "atacms", "flamingo"]
 
 ## Launch-site kinds: which threats start there, how far (km) from each city, and the site's
 ## own air defence (0..1, it grows after every strike). reserve: the share that still flies with
@@ -167,6 +180,8 @@ static func blocker(s: Dictionary, weapon: String, is_day: bool) -> String:
 	var w: Dictionary = WEAPONS[weapon]
 	if GS.day < FIRST_DAY:
 		return GS.t("Удары — со второго дня")
+	if GS.day < int(w.get("from", FIRST_DAY)):
+		return GS.t("Поступит на вооружение на %d-й день") % int(w.from)
 	if not bool(state(String(s.id)).known):
 		return GS.t("Район пуска ещё не установлен")
 	if float(s.km) > float(w.range):
@@ -182,8 +197,9 @@ static func blocker(s: Dictionary, weapon: String, is_day: bool) -> String:
 
 ## Chance that `weapon` gets through the site's air defence.
 static func chance(s: Dictionary, weapon: String) -> float:
-	var d := clampf(float(s.def) + float(state(String(s.id)).def), 0.0, 0.9)
-	return clampf(float(WEAPONS[weapon].hit) * (1.0 - d * 0.75), 0.05, 0.95)
+	var w: Dictionary = WEAPONS[weapon]
+	var d := clampf(float(s.def) + float(state(String(s.id)).def), 0.0, 0.9) * (1.0 - float(w.get("pierce", 0.0)))
+	return clampf(float(w.hit) * (1.0 - d * 0.75), 0.05, 0.95)
 
 
 ## Pays and sends the strike; it lands at dusk.

@@ -747,8 +747,8 @@ function fmtDate(s) {
 
 function trusted(url) { return typeof url === "string" && url.startsWith("https://github.com/" + REPO + "/releases/"); }
 
-// build N is called "v1.1.(N - 11) Alpha"; the builds up to 11 came out as "v1.0.N Alpha"
-function label(n) { return n ? (n > 11 ? "v1.1." + (n - 11) : "v1.0." + n) + " Alpha" : "v —"; }
+// build N is called "v1.3.(N - 22) Alpha"; builds 12 … 22 came out as "v1.1.(N - 11)", the ones up to 11 as "v1.0.N"
+function label(n) { return n ? (n > 22 ? "v1.3." + (n - 22) : n > 11 ? "v1.1." + (n - 11) : "v1.0." + n) + " Alpha" : "v —"; }
 
 function renderRelease() {
 	const tag = document.getElementById("build-tag");
