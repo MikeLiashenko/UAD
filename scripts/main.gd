@@ -33,6 +33,7 @@ extends Node
 ##                              reach and ships, a strike landing, the raid shrinking, repairs, saving
 ##   --sitesdown                every launch site destroyed before the night (the raid must shrink)
 ##   --autohunt                 (with --autotest) HIMARS / ATACMS go at every launcher caught in the open
+##   --anger=N                  (with --autotest) the enemy starts that angry (N ≥ 3: its answer comes)
 ##   --open=strikes [--strikedemo] [--strikesel=id]   the strike map (the demo shows every state of a site;
 ##                              --strikesel opens it on that site)
 ##   --acctest                  accounts self-test, offline (in-memory database, stand-in sign-in):
@@ -1243,6 +1244,7 @@ func _start_autotest() -> void:
 	for id in ids:
 		game.purchase_weapon(id)
 	GS.money = int(_args.get("money", "25000"))
+	GS.anger = float(_args.get("anger", "0"))
 	for aid in GS.AMMO_ORDER:
 		GS.ammo[aid] = 40
 	game.auto_fire = 1
@@ -2360,6 +2362,20 @@ func _strike_selftest() -> void:
 	check.call(isk_share == 0.0 and Strikes.raid_strength(kyiv) < 0.95, "the Iskanders out: 0%%, the raid lighter (%.2f)" % Strikes.raid_strength(kyiv))
 	GS.sites.erase("iskander")
 	GS.day = 3
+	# the enemy's answer: hits anger it, misses do not; enough anger, from night 4, is a salvo
+	GS.anger = 0.0
+	check.call(is_equal_approx(Strikes.anger_of({"hit": true, "site": "iskander", "st": "destroyed"}), Strikes.ANGER_SITE)
+		and is_equal_approx(Strikes.anger_of({"hit": true, "site": "iskander", "st": "damaged"}), Strikes.ANGER_SITE * 0.5)
+		and is_equal_approx(Strikes.anger_of({"hit": true, "site": "refinery", "st": "damaged"}), Strikes.ANGER_REAR)
+		and Strikes.anger_of({"hit": false, "site": "iskander", "st": "ok"}) == 0.0, "what angers the enemy")
+	Strikes.record({"w": "storm", "site": "iskander", "hit": true, "st": "destroyed"})
+	Strikes.record({"w": "flamingo", "site": "refinery", "hit": true, "st": "destroyed"})
+	check.call(is_equal_approx(GS.anger, 2.5) and Strikes.revenge_count(6) == 0, "not angry enough yet")
+	Strikes.record({"w": "himars", "site": "s300", "hit": true, "st": "damaged"}, true)
+	check.call(Strikes.revenge_count(3) == 0 and Strikes.revenge_count(6) == 3, "the answer: 3 missiles, not before night 4")
+	GS.anger = 20.0
+	check.call(Strikes.revenge_count(6) == 7, "seven at most")
+	GS.anger = 0.0
 	# the log: every strike that lands goes in, the oldest go out, the totals add up
 	GS.strike_log = []
 	var st0 := {"strikes": int(GS.stats.get("strikes", 0)), "strike_hits": int(GS.stats.get("strike_hits", 0)), "sites_out": int(GS.stats.get("sites_out", 0))}

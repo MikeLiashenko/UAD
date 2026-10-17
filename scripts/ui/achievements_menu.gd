@@ -1,5 +1,5 @@
 extends Control
-## The achievements screen (main menu → "Achievements"): all twenty, earned ones lit with the date,
+## The achievements screen (main menu → "Achievements"): all of them, earned ones lit with the date,
 ## the rest dim with what it takes to earn them (scripts/core/achievements.gd).
 
 const UiKit = preload("res://scripts/ui/ui_kit.gd")

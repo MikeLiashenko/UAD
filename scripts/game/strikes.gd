@@ -445,8 +445,36 @@ static func raid_strength(city) -> float:
 const LOG_KEEP := 40
 
 
+# --- The enemy's answer ------------------------------------------------------------------------
+## Every hit of ours angers the enemy (GS.anger): a launch site destroyed ANGER_SITE, damaged half
+## that, a target in its rear ANGER_REAR. At ANGER_RETALIATE, from night REVENGE_FROM, it answers
+## with a salvo of its own missiles at the city that night — announced at dusk; held off without a
+## single hit on the city, it pays a bonus in the morning.
+const ANGER_SITE := 1.0
+const ANGER_REAR := 1.5
+const ANGER_RETALIATE := 3.0
+const REVENGE_FROM := 4
+
+
+## How much angrier a hit makes the enemy.
+static func anger_of(r: Dictionary) -> float:
+	if not bool(r.hit):
+		return 0.0
+	if KINDS.get(String(r.site), {}).has("supply"):
+		return ANGER_REAR
+	return ANGER_SITE if String(r.st) == "destroyed" else ANGER_SITE * 0.5
+
+
+## Missiles in the answer tonight (0 when none is due): more the angrier the enemy is.
+static func revenge_count(night: int) -> int:
+	if night < REVENGE_FROM or GS.anger < ANGER_RETALIATE:
+		return 0
+	return clampi(2 + int(GS.anger / 2.0), 3, 7)
+
+
 ## A strike has landed (`r` as resolve / hunt_step give it): into the log and the world's stats.
 static func record(r: Dictionary, hunt := false) -> void:
+	GS.anger += anger_of(r)
 	GS.strike_log.append({"d": GS.day, "w": String(r.w), "s": String(r.site), "h": bool(r.hit), "st": String(r.st), "hunt": hunt})
 	while GS.strike_log.size() > LOG_KEEP:
 		GS.strike_log.pop_front()

@@ -340,6 +340,24 @@ func start_night() -> void:
 			var bb := _weapon("ballistic", maxi(d, ball_from))
 			if _left(bb, 1) > 0:
 				schedule.append({"t": span * _rng.randf_range(0.3, 0.8), "type": bb, "count": 1, "base": true})
+	# the enemy's answer to our strikes: a salvo of its own from what it has left (scripts/game/strikes.gd)
+	var rc := Strikes.revenge_count(d)
+	if rc > 0:
+		var at := span * _rng.randf_range(0.35, 0.65)
+		schedule.append({"t": at - span * 0.06, "alert": "⚠ ОТВЕТНЫЙ УДАР: ракетный залп по городу!"})
+		for i in rc:
+			var slot := "ballistic" if d >= ball_from and _rng.randf() < 0.35 else "cruise"
+			var rw := _weapon(slot, maxi(d, cruise_from))
+			if rw == "":
+				rw = "cruise"
+			var glide: bool = GS.ENEMIES[rw].get("glide", false)
+			var e := {"t": at + i * _rng.randf_range(0.5, 2.5), "type": rw, "count": 1}
+			if GS.kind_of(rw) != "ballistic":
+				e["alt"] = -1.0 if glide or GS.ENEMIES[rw].alt_max < 100.0 else _layer("cruise")
+			schedule.append(e)
+		GS.anger = 0.0
+		GS.revenge_night = d
+		_say(GS.t("⚠ Разведка: противник готовит ответный удар за наши удары — этой ночью ~%d ракет по городу. Отразите его без прилётов — будет премия.") % rc, Color(1.0, 0.55, 0.3))
 	if GS.realism:
 		# a ballistic missile leaves seconds; the early warning gives the time to walk to a console
 		for s in schedule.duplicate():
@@ -472,6 +490,13 @@ func _morning() -> void:
 	# the order of the command is checked before the enemy has mended anything overnight
 	if not follower and not pvp:
 		report["order"] = Orders.check(report)
+		if GS.revenge_night == GS.day:
+			# the enemy's answer flew tonight: held off without a hit on the city, it pays
+			GS.revenge_night = 0
+			var held := int(report.impacts) == 0 and int(report.homes) == 0
+			var rb := int((8000 + 1000 * GS.day) * GS.income_mult()) if held else 0
+			GS.add_money(rb)
+			report["revenge"] = {"held": held, "bonus": rb}
 		for id in Achievements.night_done(report):
 			game.hud.on_achievement(id)
 		report["aid"] = Strikes.aid(_rng)

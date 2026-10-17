@@ -1,5 +1,5 @@
 extends RefCounted
-## Achievements: twenty marks of what the player has done, kept for good across every world in
+## Achievements: twenty-one marks of what the player has done, kept for good across every world in
 ## user://achievements.cfg — the first target brought down, a hundred of them, a week of nights, the
 ## campaign held, the first strike on target, a launcher caught in the act, the Alabuga plant
 ## stopped, all four cities defended and so on. The HUD scans for new ones once a second
@@ -34,6 +34,7 @@ const LIST := [
 	["rich", "💰", "Бюджет обороны", "Накопите $500 000."],
 	["realism", "🎖", "MaxRealism", "Переживите три ночи в мире MaxRealism."],
 	["all_cities", "🗺", "Все четыре города", "Доживите до 5-го дня в Киеве, Харькове, Днепре и Одессе."],
+	["revenge", "🧱", "Не дождётесь", "Отразите ответный удар противника без единого прилёта по городу."],
 ]
 const CITIES := ["kyiv", "kharkiv", "dnipro", "odesa"]
 
@@ -144,4 +145,6 @@ static func night_done(report: Dictionary) -> Array:
 	var out := []
 	if int(report.get("impacts", 0)) == 0 and int(report.get("homes", 0)) == 0 and int(report.get("kills", 0)) >= 10 and earn("clean_night"):
 		out.append("clean_night")
+	if bool(report.get("revenge", {}).get("held", false)) and earn("revenge"):
+		out.append("revenge")
 	return out

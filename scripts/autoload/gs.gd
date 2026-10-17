@@ -604,6 +604,10 @@ var order := {}
 var arsenal := {}
 ## The strikes that have landed, newest last (Strikes.record): [{d, w, s, h, st, hunt}], 40 at most.
 var strike_log: Array = []
+## How much our strikes have angered the enemy (Strikes.ANGER_*): at RETALIATE it answers with a
+## salvo of its own the next night. revenge_night: the night that salvo flies (0 = none).
+var anger := 0.0
+var revenge_night := 0
 ## A match on a server (scripts/game/pvp.gd): {"def": ServerDef, "side": 0 | 1, "bot": bool}; {} in
 ## the usual game. Never saved: main sets it after new_world.
 var pvp := {}
@@ -694,6 +698,8 @@ func new_world(wname: String, diff: int, pos: Vector3, loc: int, cid := "kyiv", 
 	order = {}
 	arsenal = {}
 	strike_log = []
+	anger = 0.0
+	revenge_night = 0
 	pvp = {}
 	city_armor = 1.0
 	money_changed.emit(money)
@@ -844,7 +850,7 @@ func save_world() -> void:
 		"city": city, "base_hp": base_hp, "day": day, "base_found": base_found,
 		"detection": detection, "camo": camo, "crews": crews, "base_pos": [base_pos.x, base_pos.z],
 		"base_loc": base_loc, "stats": stats, "damaged": damaged, "crushed": crushed, "won": won,
-		"videos": videos, "sites": sites, "strikes": strikes, "order": order, "arsenal": arsenal, "strike_log": strike_log,
+		"videos": videos, "sites": sites, "strikes": strikes, "order": order, "arsenal": arsenal, "strike_log": strike_log, "anger": anger, "revenge_night": revenge_night,
 	}
 	if Cities.is_custom(city_id):
 		# a city drawn in the map editor: the world keeps its own copy and plays on without the editor's
@@ -952,6 +958,8 @@ func load_world(id: String) -> bool:
 	order = {}
 	arsenal = {}
 	strike_log = []
+	anger = 0.0
+	revenge_night = 0
 	var o = d.get("order", {})
 	if o is Dictionary and o.has("kind") and o.has("reward"):
 		var ob = o.get("base", {})
@@ -962,6 +970,8 @@ func load_world(id: String) -> bool:
 		for k in ars:
 			if int(ars[k]) > 0:
 				arsenal[String(k)] = int(ars[k])
+	anger = float(d.get("anger", 0.0))
+	revenge_night = int(d.get("revenge_night", 0))
 	for x in d.get("strike_log", []):
 		if x is Dictionary and x.has("w") and x.has("s"):
 			strike_log.append({"d": int(x.get("d", 0)), "w": String(x.w), "s": String(x.s), "h": bool(x.get("h", false)), "st": String(x.get("st", "ok")), "hunt": bool(x.get("hunt", false))})

@@ -1618,6 +1618,9 @@ func show_morning(r: Dictionary) -> void:
 	var landed: Array = r.get("strikes", [0, 0])
 	if landed.size() == 2 and int(landed[1]) > 0:
 		lines.append([GS.t("Наши удары по точкам пуска"), GS.t("%d из %d в цель") % [int(landed[0]), int(landed[1])], UiKit.NEON if int(landed[0]) > 0 else UiKit.AMBER])
+	var rv: Dictionary = r.get("revenge", {})
+	if not rv.is_empty():
+		lines.append([GS.t("Ответный удар противника"), (GS.t("отражён") + " · +" + GS.fmt_money(int(rv.bonus))) if bool(rv.held) else GS.t("были прилёты"), UiKit.CYAN if bool(rv.held) else UiKit.RED])
 	var aid: Array = r.get("aid", [])
 	if not aid.is_empty():
 		lines.append([GS.t("Помощь партнёров"), Strikes.aid_text(aid), UiKit.CYAN])

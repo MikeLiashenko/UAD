@@ -261,7 +261,7 @@ class MapView extends Control:
 			return
 		var p := Vector2(12, 12)
 		var w := 300.0
-		var h := 34.0 + 17.0 * forecast.size()
+		var h := 34.0 + 17.0 * forecast.size() + 22.0
 		draw_rect(Rect2(p, Vector2(w, h)), Color(0, 0.04, 0.035, 0.82))
 		draw_rect(Rect2(p, Vector2(w, h)), Color(0.2, 1.0, 0.65, 0.35), false, 1.0)
 		var sc := Color(0.55, 1.0, 0.6) if strength < 0.95 else Color(0.85, 1.0, 0.92)
@@ -276,6 +276,14 @@ class MapView extends Control:
 			draw_rect(Rect2(bar.position, Vector2(bar.size.x * clampf(share, 0.0, 1.0), bar.size.y)), col)
 			_txt(Vector2(p.x + 266, y), "%d%%" % int(round(share * 100.0)), 10, col)
 			y += 17.0
+		# how close the enemy is to answering our strikes with a salvo of its own
+		var due := Strikes.revenge_count(maxi(GS.day, Strikes.REVENGE_FROM)) > 0
+		var ang := clampf(GS.anger / Strikes.ANGER_RETALIATE, 0.0, 1.0)
+		var ac := Color(1.0, 0.45, 0.3) if due else Color(1.0, 0.75, 0.4)
+		_txt(Vector2(p.x + 8, y + 4), GS.t("⚠ ОТВЕТНЫЙ УДАР ГОТОВИТСЯ") if due else GS.t("Злость противника"), 10, ac, HORIZONTAL_ALIGNMENT_LEFT, 196)
+		var abar := Rect2(Vector2(p.x + 208, y - 5), Vector2(54, 8))
+		draw_rect(abar, Color(1, 1, 1, 0.1))
+		draw_rect(Rect2(abar.position, Vector2(abar.size.x * ang, abar.size.y)), ac)
 
 	func _icon(p: Vector2, kind: String, col: Color) -> void:
 		draw_circle(p, 13.0, Color(0, 0, 0, 0.55))
@@ -513,6 +521,7 @@ func _refresh() -> void:
 	_note(GS.t("Комбинированный удар: дроны («Лютый», «Паляница»), посланные в ту же точку, прилетают первыми и отвлекают её ПВО — ракеты за ними прорываются чаще."), Color(0.55, 0.8, 0.7), 12)
 	_note(GS.t("Охота за пусковыми: после пуска «Искандеры», С-300/400/500, «Бастион», операторы дронов видны радару %d с. HIMARS или ATACMS по ним летят сразу; попадание срывает их пуски до конца ночи.") % int(Strikes.HOT_TIME), Color(0.55, 0.8, 0.7), 12)
 	_note(GS.t("Мобильные пусковые («Искандеры», С-300/400/500, «Бастион») по утрам могут сменить позицию — тогда их снова нужно найти."), Color(0.55, 0.8, 0.7), 12)
+	_note(GS.t("Ответный удар: каждое наше попадание злит противника. Когда шкала полна, ночью он ответит залпом ракет по городу (с %d-й ночи); отразите его без прилётов — будет премия.") % Strikes.REVENGE_FROM, Color(0.55, 0.8, 0.7), 12)
 	_note(GS.t("Помощь партнёров: каждое %d-е утро на склад приходят ракеты и дроны для ударов — удар со склада денег не стоит.") % Strikes.AID_EVERY, Color(0.55, 0.8, 0.7), 12)
 	_close_btn()
 

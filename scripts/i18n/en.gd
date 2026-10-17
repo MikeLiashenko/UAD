@@ -1796,7 +1796,7 @@ const T := {
 	"Поступит на вооружение на %d-й день": "In service from day %d",
 	"Достают до любой точки карты: %s": "Reach anywhere on the map: %s",
 	# --- combined strikes ---------------------------------------------------------------------
-	"Прикрытие: дронов в полёте — %d, ПВО точки отвлечена (−%d%%)": "Cover: %d drones in flight, the site's air defence is busy (−%d%%)",
+	"Прикрытие: дронов в полёте — %d, ПВО точки отвлечена (−%d%%)": "Cover: drones in flight — %d, the site's air defence is busy (−%d%%)",
 	"Комбинированный удар: дроны («Лютый», «Паляница»), посланные в ту же точку, прилетают первыми и отвлекают её ПВО — ракеты за ними прорываются чаще.": "A combined strike: drones (Lyutyi, Palianytsia) sent at the same site arrive first and keep its air defence busy — the missiles behind them get through more often.",
 	" (под прикрытием дронов)": " (under drone cover)",
 	# --- hunting the launchers ----------------------------------------------------------------
@@ -1923,4 +1923,15 @@ const T := {
 	"Получено: %d из %d · во всех мирах": "Earned: %d of %d · across all worlds",
 	"🏆 Достижения · %d/%d": "🏆 Achievements · %d/%d",
 	"🏆 ДОСТИЖЕНИЕ: %s": "🏆 ACHIEVEMENT: %s",
+	# --- the enemy's answer -------------------------------------------------------------------
+	"⚠ ОТВЕТНЫЙ УДАР: ракетный залп по городу!": "⚠ THE ENEMY'S ANSWER: a missile salvo at the city!",
+	"⚠ Разведка: противник готовит ответный удар за наши удары — этой ночью ~%d ракет по городу. Отразите его без прилётов — будет премия.": "⚠ Intelligence: the enemy is preparing an answer to our strikes — ~%d missiles at the city tonight. Hold it off without a hit and there is a bonus.",
+	"Ответный удар противника": "The enemy's answer",
+	"отражён": "held off",
+	"были прилёты": "the city was hit",
+	"⚠ ОТВЕТНЫЙ УДАР ГОТОВИТСЯ": "⚠ AN ANSWER IS COMING",
+	"Злость противника": "Enemy's anger",
+	"Ответный удар: каждое наше попадание злит противника. Когда шкала полна, ночью он ответит залпом ракет по городу (с %d-й ночи); отразите его без прилётов — будет премия.": "The enemy's answer: every hit of ours angers the enemy. When the bar is full it answers at night with a missile salvo at the city (from night %d); hold it off without a hit and there is a bonus.",
+	"Не дождётесь": "Not today",
+	"Отразите ответный удар противника без единого прилёта по городу.": "Hold off the enemy's answer without a single hit on the city.",
 }
