@@ -18,6 +18,7 @@ extends Node
 
 const Strikes = preload("res://scripts/game/strikes.gd")
 const Orders = preload("res://scripts/game/orders.gd")
+const Achievements = preload("res://scripts/core/achievements.gd")
 
 enum Phase { DAY, NIGHT, MORNING }
 
@@ -471,6 +472,8 @@ func _morning() -> void:
 	# the order of the command is checked before the enemy has mended anything overnight
 	if not follower and not pvp:
 		report["order"] = Orders.check(report)
+		for id in Achievements.night_done(report):
+			game.hud.on_achievement(id)
 		report["aid"] = Strikes.aid(_rng)
 		report["strikes"] = _landed
 		_landed = [0, 0]

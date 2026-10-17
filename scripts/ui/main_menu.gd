@@ -3,6 +3,7 @@ extends Control
 
 const UiKit = preload("res://scripts/ui/ui_kit.gd")
 const BuildInfo = preload("res://scripts/build_info.gd")
+const Achievements = preload("res://scripts/core/achievements.gd")
 
 const SPLASHES := [
 	"Небо под защитой!", "Обломки — в Днепр!", "Шахеды не пройдут!", "Слава ПВО!",
@@ -66,7 +67,9 @@ func _ready() -> void:
 	var spacer := Control.new()
 	spacer.custom_minimum_size = Vector2(0, 8)
 	v.add_child(spacer)
-	for spec in [[GS.t("Играть"), func() -> void: main.show_worlds()], [GS.t("Редактор карт"), func() -> void: main.show_cities()], [GS.t("Настройки"), func() -> void: main.show_settings()], [GS.t("Выход"), func() -> void: main.quit_game()]]:
+	for spec in [[GS.t("Играть"), func() -> void: main.show_worlds()], [GS.t("Редактор карт"), func() -> void: main.show_cities()],
+			[GS.t("🏆 Достижения · %d/%d") % [Achievements.count(), Achievements.LIST.size()], func() -> void: main.show_achievements()],
+			[GS.t("Настройки"), func() -> void: main.show_settings()], [GS.t("Выход"), func() -> void: main.quit_game()]]:
 		var b := UiKit.button(spec[0], spec[1], 340, 26)
 		b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		b.custom_minimum_size = Vector2(340, 52)

@@ -28,6 +28,7 @@ extends Node
 ##   --mptest                   multiplayer self-test, offline: codes, the Firebase event mirror and
 ##                              (with --autotest) friends in the city, watching, player list, requests
 ##   --mpid=CODE                play as another friend code (a second copy on the same computer)
+##   --achtest                  achievements: earned from the state, once each, kept in a test file
 ##   --striketest               counter-strikes on launch sites: every city has its sites, discovery,
 ##                              reach and ships, a strike landing, the raid shrinking, repairs, saving
 ##   --sitesdown                every launch site destroyed before the night (the raid must shrink)
@@ -63,6 +64,7 @@ extends Node
 ##                              city (saved, loaded, the editor's copy deleted), launch sites, the
 ##                              drawing handed to a guest of a friend's world
 ##   --screen=cities            the map editor's list (with --offline: two cities to look at)
+##   --screen=achievements [--achdemo]   the achievements screen (the demo earns eight, in memory)
 ##   --srvunit                  servers self-test, offline (in-memory database): hostile city and
 ##                              server data, publishing, the list, joining a side, the captain and
 ##                              the handover, strikes and outcomes, leaving
@@ -94,6 +96,8 @@ const CityEditor = preload("res://scripts/ui/city_editor.gd")
 const CityStore = preload("res://scripts/core/city_store.gd")
 const CitiesMenu = preload("res://scripts/ui/cities_menu.gd")
 const StrikesRules = preload("res://scripts/game/strikes.gd")
+const AchievementsMenu = preload("res://scripts/ui/achievements_menu.gd")
+const Achievements = preload("res://scripts/core/achievements.gd")
 
 var map
 var cam: Camera3D
@@ -173,6 +177,8 @@ func _ready() -> void:
 		_acct_selftest()
 	if _args.has("striketest"):
 		_strike_selftest()
+	if _args.has("achtest"):
+		_ach_selftest()
 	if _args.has("srvunit"):
 		_srv_unit_selftest()
 	if _args.has("edittest"):
@@ -214,6 +220,12 @@ func _ready() -> void:
 			show_map_select()
 		"worlds":
 			show_worlds()
+		"achievements":
+			if _args.has("achdemo"):
+				Achievements.dry = true
+				for id in ["first_blood", "kills_100", "week", "first_strike", "hunter", "alabuga", "orders_5", "clean_night"]:
+					Achievements.earn(id)
+			show_achievements()
 		"settings":
 			show_settings()
 		"create":
@@ -333,6 +345,8 @@ func _parse_args() -> void:
 			if kv.size() == 2:
 				GS.set_key(kv[0].strip_edges(), OS.find_keycode_from_string(kv[1].strip_edges()))
 	GS.track_missing = _args.has("i18ncheck")
+	# a test run never writes the player's achievements
+	Achievements.dry = _args.has("quit-at") or _args.has("autotest")
 
 
 ## Replaces the map with another city's (synchronous — callers show the loading screen first).
@@ -419,6 +433,13 @@ func show_settings() -> void:
 	var s := SettingsMenu.new()
 	s.closed.connect(show_menu)
 	_show(s, "settings")
+
+
+func show_achievements() -> void:
+	var a := AchievementsMenu.new()
+	a.closed.connect(show_menu)
+	# "settings" mode: the menu camera keeps circling the city behind it
+	_show(a, "settings")
 
 
 func show_worlds() -> void:
@@ -2391,6 +2412,47 @@ func _strike_selftest() -> void:
 	check.call(Strikes.stock("atacms") == 2, "the stock is saved with the world")
 	check.call(GS.strike_log.size() == 1 and String(GS.strike_log[0].s) == "drones", "the log is saved with the world")
 	print("UAD STRIKETEST: %s" % ("OK" if fails.is_empty() else "FAIL " + ", ".join(fails)))
+
+
+## --achtest: achievements earned from the world's state, kept in a file of the test's own (never the
+## player's), read back, one city's best day remembered across worlds.
+func _ach_selftest() -> void:
+	var fails := []
+	var check := func(ok: bool, what: String) -> void:
+		if not ok:
+			fails.append(what)
+	Achievements.dry = false
+	Achievements.path = "user://achievements_selftest.cfg"
+	Achievements._loaded = false
+	DirAccess.remove_absolute(Achievements.path)
+	var keep := {"stats": GS.stats.duplicate(), "day": GS.day, "city": GS.city_id, "money": GS.money, "won": GS.won, "sites": GS.sites.duplicate(true)}
+	GS.stats = {"kills": 120, "strikes": 3, "strike_hits": 1, "hunts": 0}
+	GS.day = 5
+	GS.money = 1000
+	GS.won = false
+	GS.sites = {}
+	GS.city_id = "kyiv"
+	var got := Achievements.scan(null)
+	check.call(got.has("first_blood") and got.has("kills_100") and got.has("first_strike") and not got.has("kills_500") and not got.has("hunter"), "earned from the state: %s" % str(got))
+	check.call(Achievements.scan(null).is_empty(), "each only once")
+	check.call(Achievements.night_done({"impacts": 0, "homes": 0, "kills": 12}) == ["clean_night"] and Achievements.night_done({"impacts": 0, "kills": 30}).is_empty(), "a clean night, once")
+	for c in ["kharkiv", "dnipro", "odesa"]:
+		GS.city_id = c
+		Achievements.scan(null)
+	check.call(Achievements.has("all_cities"), "five days in all four cities")
+	Achievements._loaded = false
+	check.call(Achievements.count() == 5 and Achievements.has("clean_night") and int(Achievements.best_day.get("odesa", 0)) == 5, "read back from the file (%d)" % Achievements.count())
+	DirAccess.remove_absolute(Achievements.path)
+	Achievements.path = Achievements.PATH
+	Achievements.dry = true
+	Achievements._loaded = false
+	GS.stats = keep.stats
+	GS.day = keep.day
+	GS.city_id = keep.city
+	GS.money = keep.money
+	GS.won = keep.won
+	GS.sites = keep.sites
+	print("UAD ACHTEST: %s" % ("OK" if fails.is_empty() else "FAIL " + ", ".join(fails)))
 
 
 ## Waits for an account call that answers through cb(ok: bool, text: String); returns [ok, text].

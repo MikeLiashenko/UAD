@@ -10,6 +10,7 @@ const StrikeMap = preload("res://scripts/ui/strike_map.gd")
 const Strikes = preload("res://scripts/game/strikes.gd")
 const BdaView = preload("res://scripts/ui/bda_view.gd")
 const Orders = preload("res://scripts/game/orders.gd")
+const Achievements = preload("res://scripts/core/achievements.gd")
 const AttackMap = preload("res://scripts/ui/attack_map.gd")
 const SettingsMenu = preload("res://scripts/ui/settings_menu.gd")
 const Reticle = preload("res://scripts/ui/reticle.gd")
@@ -836,6 +837,21 @@ func _hunt_input(event: InputEvent) -> bool:
 	return true
 
 
+## A new achievement (scripts/core/achievements.gd): a toast, or the radio in MaxRealism.
+func on_achievement(id: String) -> void:
+	var a: Array = Achievements.info(id)
+	var txt := GS.t("🏆 ДОСТИЖЕНИЕ: %s") % GS.t(String(a[2]))
+	if game.autotest:
+		print("UAD ACHIEVEMENT %s" % id)
+	SFX.play("cash", -4.0)
+	if GS.realism:
+		if game.rl != null:
+			game.rl.radio(txt + " — " + GS.t(String(a[3])), Color(1.0, 0.85, 0.35))
+		return
+	alert(txt, Color(1.0, 0.85, 0.35))
+	log_event("%s %s — %s" % [String(a[1]), GS.t(String(a[2])), GS.t(String(a[3]))], Color(1.0, 0.85, 0.35))
+
+
 ## The radar caught a launcher in the act (game_controller.launch).
 func on_launcher_hot(s: Dictionary) -> void:
 	var nm := GS.t(String(s.short))
@@ -995,6 +1011,9 @@ func _process(delta: float) -> void:
 	_update_pvp()
 	nv_rect.visible =(game.view == "base" and game.base_view.nv) or (game.view == "fpv" and game.fpv_view.nv)
 	_update_target_info()
+	if int(_t) != int(_t - delta) and game.pvp == null and not GS.training:
+		for id in Achievements.scan(game.map.city):
+			on_achievement(id)
 	if int(_t * 4.0) != int((_t - delta) * 4.0):
 		refresh()
 
