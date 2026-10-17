@@ -2323,6 +2323,22 @@ func _strike_selftest() -> void:
 	check.call(GS.money == 0 and Strikes.stock("storm") == 0 and not GS.arsenal.has("storm"), "the stock is spent, not the money")
 	GS.money = mstock
 	GS.strikes = []
+	# the forecast: only what is in service, shares as the sites stand, the raid's weight from them
+	GS.sites = {}
+	GS.day = 1
+	var fc := Strikes.forecast(kyiv)
+	check.call(fc.any(func(f) -> bool: return String(f[0]) == "shahed") and not fc.any(func(f) -> bool: return String(f[0]) == "ballistic"), "day 1: Shaheds yes, no Iskanders yet")
+	check.call(is_equal_approx(Strikes.raid_strength(kyiv), 1.0), "untouched: the full raid")
+	GS.day = 8
+	GS.sites["iskander"] = {"known": true, "st": "destroyed", "n": 2, "def": 0.0}
+	fc = Strikes.forecast(kyiv)
+	var isk_share := -1.0
+	for f in fc:
+		if String(f[0]) == "ballistic":
+			isk_share = float(f[1])
+	check.call(isk_share == 0.0 and Strikes.raid_strength(kyiv) < 0.95, "the Iskanders out: 0%%, the raid lighter (%.2f)" % Strikes.raid_strength(kyiv))
+	GS.sites.erase("iskander")
+	GS.day = 3
 	# the log: every strike that lands goes in, the oldest go out, the totals add up
 	GS.strike_log = []
 	var st0 := {"strikes": int(GS.stats.get("strikes", 0)), "strike_hits": int(GS.stats.get("strike_hits", 0)), "sites_out": int(GS.stats.get("sites_out", 0))}

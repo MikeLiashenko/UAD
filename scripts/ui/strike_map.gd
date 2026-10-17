@@ -38,6 +38,9 @@ class MapView extends Control:
 	var owner_screen
 	var sites: Array = []
 	var sel := ""
+	## Tonight's raid as the enemy can still launch it: [[weapon, share], …] and its weight 0..1.
+	var forecast: Array = []
+	var strength := 1.0
 	var _t := 0.0
 	var _max_km := 1000.0
 	## Where each site is drawn: its bearing, eased apart from neighbours in the same sector.
@@ -250,6 +253,29 @@ class MapView extends Control:
 		draw_circle(c, 7.0, Color(0.2, 1.0, 0.65))
 		draw_arc(c, 11.0, 0, TAU, 24, Color(0.7, 1.0, 0.85), 1.5)
 		_txt(c + Vector2(-100, 30), GS.t(String(GS.city_def().name)), 15, Color(0.7, 1.0, 0.85), HORIZONTAL_ALIGNMENT_CENTER, 200)
+		_forecast_box()
+
+	## Top left: what the enemy can still launch tonight, a bar a weapon, and the raid's weight.
+	func _forecast_box() -> void:
+		if forecast.is_empty():
+			return
+		var p := Vector2(12, 12)
+		var w := 300.0
+		var h := 34.0 + 17.0 * forecast.size()
+		draw_rect(Rect2(p, Vector2(w, h)), Color(0, 0.04, 0.035, 0.82))
+		draw_rect(Rect2(p, Vector2(w, h)), Color(0.2, 1.0, 0.65, 0.35), false, 1.0)
+		var sc := Color(0.55, 1.0, 0.6) if strength < 0.95 else Color(0.85, 1.0, 0.92)
+		_txt(p + Vector2(8, 17), GS.t("ПРОГНОЗ НА НОЧЬ · сила налёта %d%%") % int(round(strength * 100.0)), 12, sc)
+		var y := p.y + 36.0
+		for f in forecast:
+			var share := float(f[1])
+			var col := Color(1.0, 0.45, 0.35) if share >= 0.99 else (AMBER if share > 0.0 else Color(0.55, 1.0, 0.6))
+			_txt(Vector2(p.x + 8, y), GS.t(String(GS.ENEMIES[f[0]].plural)), 10, Color(0.8, 0.95, 0.88), HORIZONTAL_ALIGNMENT_LEFT, 196)
+			var bar := Rect2(Vector2(p.x + 208, y - 9), Vector2(54, 8))
+			draw_rect(bar, Color(1, 1, 1, 0.1))
+			draw_rect(Rect2(bar.position, Vector2(bar.size.x * clampf(share, 0.0, 1.0), bar.size.y)), col)
+			_txt(Vector2(p.x + 266, y), "%d%%" % int(round(share * 100.0)), 10, col)
+			y += 17.0
 
 	func _icon(p: Vector2, kind: String, col: Color) -> void:
 		draw_circle(p, 13.0, Color(0, 0, 0, 0.55))
@@ -389,6 +415,8 @@ func _refresh() -> void:
 			have.append([w, Strikes.stock(w)])
 	_stock.text = GS.t("Склад: %s") % Strikes.aid_text(have) + "   " if not have.is_empty() else ""
 	_map.sel = _sel
+	_map.forecast = Strikes.forecast(GS.city_def())
+	_map.strength = Strikes.raid_strength(GS.city_def())
 	for ch in _side.get_children():
 		ch.queue_free()
 	if _show_log:

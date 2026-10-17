@@ -404,6 +404,43 @@ static func swarm_in_flight(id: String) -> int:
 	return n
 
 
+# --- The forecast ------------------------------------------------------------------------------
+## The day a weapon of the city's raids comes into service (1 when nothing says otherwise).
+static func in_service_from(city, weapon: String) -> int:
+	var best := 1000
+	for slot in city.raid:
+		for o in city.raid[slot]:
+			if String(o[0]) == weapon:
+				best = mini(best, int(o[2]))
+	for x in city.raid_extra:
+		if String(x.weapon) == weapon:
+			best = mini(best, int(x.get("from", 1)))
+	return 1 if best == 1000 else best
+
+
+## What the enemy can still launch tonight, weapon by weapon: [[weapon, share 0..1], …] for every
+## weapon of the city's raids in service by now (the Oreshnik comes when it comes: left out).
+static func forecast(city) -> Array:
+	var out := []
+	for w in city_weapons(city):
+		if w == "oreshnik" or GS.day < in_service_from(city, w):
+			continue
+		out.append([w, output(city, w)])
+	return out
+
+
+## The weight of tonight's raid against an untouched enemy, 0..1: every weapon counted by the harm
+## one of it does (hit_cost; a scout by what it costs to be found).
+static func raid_strength(city) -> float:
+	var sum := 0.0
+	var full := 0.0
+	for f in forecast(city):
+		var k := maxf(float(GS.ENEMIES[f[0]].get("hit_cost", 0)), 2000.0)
+		sum += k * float(f[1])
+		full += k
+	return sum / full if full > 0.0 else 1.0
+
+
 # --- The log ---------------------------------------------------------------------------------
 const LOG_KEEP := 40
 

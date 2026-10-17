@@ -386,6 +386,9 @@ func _briefing(d: int) -> void:
 			rear.append(GS.t(String(Strikes.KINDS[id].short)))
 	if not rear.is_empty():
 		game.hud.log_event(GS.t("Тыл противника подорван (%s): налёт этой ночью слабее") % ", ".join(rear), Color(0.5, 1.0, 0.6))
+	var strength := Strikes.raid_strength(game.map.city)
+	if strength < 0.99:
+		_say(GS.t("Наши удары: налёт этой ночью на %d%% слабее, чем мог бы быть") % int(round((1.0 - strength) * 100.0)), Color(0.5, 1.0, 0.6))
 	var note: String = game.map.city.raid_note
 	if d <= 2 and note != "":
 		game.hud.log_event(GS.t(note), Color(1.0, 0.85, 0.55))

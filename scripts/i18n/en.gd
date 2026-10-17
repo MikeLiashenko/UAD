@@ -1875,4 +1875,7 @@ const T := {
 	"← К целям": "← Back to targets",
 	"ЖУРНАЛ УДАРОВ": "STRIKE LOG",
 	"Пока ни один удар не долетел. Удары наносятся днём и долетают к ночи.": "No strike has landed yet. Strikes are sent by day and land at dusk.",
+	# --- raid forecast ------------------------------------------------------------------------
+	"ПРОГНОЗ НА НОЧЬ · сила налёта %d%%": "TONIGHT'S FORECAST · raid strength %d%%",
+	"Наши удары: налёт этой ночью на %d%% слабее, чем мог бы быть": "Our strikes: tonight's raid is %d%% weaker than it could have been",
 }
