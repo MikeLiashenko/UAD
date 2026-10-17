@@ -17,13 +17,13 @@ const FIRST_DAY := 2
 ## of the site's air defence it gets through regardless (a ballistic missile is seldom caught).
 const WEAPONS := {
 	"lyutyi": {"name": "Дальний дрон «Лютый»", "short": "«ЛЮТЫЙ»", "price": 4500, "range": 1100.0, "hit": 0.6,
-		"effect": "damaged", "nights": 2, "naval": false,
+		"effect": "damaged", "nights": 2, "naval": false, "swarm": true,
 		"desc": "Дёшево и далеко — достаёт даже до аэродромов стратегической авиации, но чаще повреждает, чем уничтожает."},
 	"himars": {"name": "РСЗО HIMARS (ракеты GMLRS)", "short": "HIMARS", "price": 7000, "range": 85.0, "hit": 0.86,
 		"effect": "destroyed", "nights": 2, "naval": false,
 		"desc": "Высокоточные ракеты GMLRS: только ближние позиции у границы — до 85 км, зато дёшево и почти наверняка."},
 	"palianytsia": {"name": "Ракета-дрон «Паляница»", "short": "«ПАЛЯНИЦА»", "price": 9000, "range": 650.0, "hit": 0.7,
-		"effect": "damaged", "nights": 3, "naval": false, "from": 3,
+		"effect": "damaged", "nights": 3, "naval": false, "from": 3, "swarm": true,
 		"desc": "Реактивный дрон-ракета до 650 км: прорывается чаще «Лютого», а подожжённая точка горит дольше."},
 	"neptune": {"name": "Ракета «Нептун»", "short": "«НЕПТУН»", "price": 12000, "range": 400.0, "hit": 0.72,
 		"effect": "destroyed", "nights": 2, "naval": true,
@@ -195,11 +195,32 @@ static func blocker(s: Dictionary, weapon: String, is_day: bool) -> String:
 	return ""
 
 
-## Chance that `weapon` gets through the site's air defence.
-static func chance(s: Dictionary, weapon: String) -> float:
+## A combined strike: every drone (the swarm weapons) flying at a site together with the others
+## keeps its air defence busy — each takes ESCORT_STEP off it, ESCORT_MAX at most.
+const ESCORT_STEP := 0.1
+const ESCORT_MAX := 0.3
+
+
+## Chance that `weapon` gets through the site's air defence; `escort` is what the drones flying
+## with it take off that defence.
+static func chance(s: Dictionary, weapon: String, escort := 0.0) -> float:
 	var w: Dictionary = WEAPONS[weapon]
-	var d := clampf(float(s.def) + float(state(String(s.id)).def), 0.0, 0.9) * (1.0 - float(w.get("pierce", 0.0)))
+	var d := maxf(clampf(float(s.def) + float(state(String(s.id)).def), 0.0, 0.9) - escort, 0.0) * (1.0 - float(w.get("pierce", 0.0)))
 	return clampf(float(w.hit) * (1.0 - d * 0.75), 0.05, 0.95)
+
+
+## The cover the drones already in flight at this site give one more strike sent there now.
+static func escort(id: String) -> float:
+	return minf(swarm_in_flight(id) * ESCORT_STEP, ESCORT_MAX)
+
+
+## Drones (swarm weapons) in flight at this site.
+static func swarm_in_flight(id: String) -> int:
+	var n := 0
+	for x in GS.strikes:
+		if String(x.site) == id and bool(WEAPONS.get(String(x.w), {}).get("swarm", false)):
+			n += 1
+	return n
 
 
 ## Pays and sends the strike; it lands at dusk.
@@ -218,29 +239,47 @@ static func in_flight(id: String) -> int:
 	return n
 
 
-## Dusk: every strike in flight arrives. Returns [{site, name, w, hit, st, n}] for the briefing.
+## Dusk: every strike in flight arrives. Returns [{site, name, w, hit, st, n, escort}] for the
+## briefing. At each site the drones come in first and draw the fire; the missiles behind them
+## meet an air defence that is busy with them (escort). The enemy reinforces a struck site once a
+## dusk, however many came at it.
 static func resolve(city, rng: RandomNumberGenerator) -> Array:
 	var out := []
+	var groups := {}
 	for x in GS.strikes:
-		var s := site(city, String(x.site))
-		if s.is_empty() or not WEAPONS.has(String(x.w)):
+		if WEAPONS.has(String(x.w)):
+			if not groups.has(String(x.site)):
+				groups[String(x.site)] = []
+			groups[String(x.site)].append(String(x.w))
+	for id in groups:
+		var s := site(city, String(id))
+		if s.is_empty():
 			continue
-		var w: Dictionary = WEAPONS[String(x.w)]
+		var ws: Array = groups[id]
+		ws.sort_custom(func(a, b) -> bool: return bool(WEAPONS[a].get("swarm", false)) and not bool(WEAPONS[b].get("swarm", false)))
+		var drones := 0
+		for wid in ws:
+			if bool(WEAPONS[wid].get("swarm", false)):
+				drones += 1
 		var st := state(String(s.id))
-		var hit := rng.randf() < chance(s, String(x.w))
-		if hit:
-			var eff := String(w.effect)
-			if eff == "destroyed" or String(st.st) == "destroyed":
-				st.st = "destroyed"
-			elif String(st.st) == "damaged":
-				st.st = "destroyed" # a second blow on a damaged site finishes it
-			else:
-				st.st = "damaged"
-			st.n = maxi(int(st.n), int(w.nights))
-		# struck or not, the enemy brings in more air defence
+		for wid in ws:
+			var w: Dictionary = WEAPONS[wid]
+			# a drone is covered by the other drones, a missile by all of them
+			var cover := minf((drones - (1 if bool(w.get("swarm", false)) else 0)) * ESCORT_STEP, ESCORT_MAX)
+			var hit := rng.randf() < chance(s, String(wid), cover)
+			if hit:
+				var eff := String(w.effect)
+				if eff == "destroyed" or String(st.st) == "destroyed":
+					st.st = "destroyed"
+				elif String(st.st) == "damaged":
+					st.st = "destroyed" # a second blow on a damaged site finishes it
+				else:
+					st.st = "damaged"
+				st.n = maxi(int(st.n), int(w.nights))
+			out.append({"site": String(s.id), "name": String(s.name), "w": String(wid), "hit": hit, "st": String(st.st), "n": int(st.n), "escort": cover})
+		# struck or not, the enemy brings in more air defence — once for the whole raid on it
 		st.def = minf(float(st.def) + 0.08, 0.35)
 		_put(String(s.id), st)
-		out.append({"site": String(s.id), "name": String(s.name), "w": String(x.w), "hit": hit, "st": String(st.st), "n": int(st.n)})
 	GS.strikes = []
 	return out
 

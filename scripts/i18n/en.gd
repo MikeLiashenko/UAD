@@ -1795,4 +1795,8 @@ const T := {
 	"Тяжёлая крылатая ракета на 3000 км и тонна взрывчатки: уничтожает даже аэродромы стратегической авиации.": "A heavy cruise missile with 3000 km of reach and a tonne of explosive: destroys even the strategic bomber airfields.",
 	"Поступит на вооружение на %d-й день": "In service from day %d",
 	"Достают до любой точки карты: %s": "Reach anywhere on the map: %s",
+	# --- combined strikes ---------------------------------------------------------------------
+	"Прикрытие: дронов в полёте — %d, ПВО точки отвлечена (−%d%%)": "Cover: %d drones in flight, the site's air defence is busy (−%d%%)",
+	"Комбинированный удар: дроны («Лютый», «Паляница»), посланные в ту же точку, прилетают первыми и отвлекают её ПВО — ракеты за ними прорываются чаще.": "A combined strike: drones (Lyutyi, Palianytsia) sent at the same site arrive first and keep its air defence busy — the missiles behind them get through more often.",
+	" (под прикрытием дронов)": " (under drone cover)",
 }

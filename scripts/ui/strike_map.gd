@@ -373,6 +373,9 @@ func _refresh() -> void:
 	var flying := Strikes.in_flight(_sel)
 	if flying > 0:
 		_note(GS.t("В полёте: %d — долетят к ночи") % flying, UiKit.CYAN, 15)
+		var dr := Strikes.swarm_in_flight(_sel)
+		if dr > 0:
+			_note(GS.t("Прикрытие: дронов в полёте — %d, ПВО точки отвлечена (−%d%%)") % [dr, int(round(Strikes.escort(_sel) * 100.0))], Color(0.6, 1.0, 0.5), 13)
 	_side.add_child(HSeparator.new())
 	_note(GS.t("НАНЕСТИ УДАР"), UiKit.AMBER, 15)
 	for w in Strikes.WEAPON_ORDER:
@@ -381,7 +384,7 @@ func _refresh() -> void:
 		var txt := "%s · %s" % [GS.t(String(wd.short)), GS.fmt_money(int(wd.price))]
 		if why == "" or why == GS.t("Не хватает денег") or why == GS.t("Удары наносятся днём"):
 			if known:
-				txt += GS.t(" · шанс %d%%") % int(round(Strikes.chance(s, w) * 100.0))
+				txt += GS.t(" · шанс %d%%") % int(round(Strikes.chance(s, w, Strikes.escort(_sel)) * 100.0))
 		var b := UiKit.button(txt, func() -> void:
 			if Strikes.blocker(s, w, _is_day()) == "":
 				Strikes.launch(s, w)
@@ -394,6 +397,7 @@ func _refresh() -> void:
 		_note(why if why != "" else GS.t(String(wd.desc)), RED if why != "" else Color(0.55, 0.8, 0.7), 12)
 	_side.add_child(HSeparator.new())
 	_note(GS.t("Удары наносятся днём и долетают к ночи. Повреждённая точка запускает вдвое меньше, уничтоженная молчит, пока её не восстановят. После каждого удара противник усиливает ПВО точки."), Color(0.55, 0.8, 0.7), 12)
+	_note(GS.t("Комбинированный удар: дроны («Лютый», «Паляница»), посланные в ту же точку, прилетают первыми и отвлекают её ПВО — ракеты за ними прорываются чаще."), Color(0.55, 0.8, 0.7), 12)
 	_close_btn()
 
 

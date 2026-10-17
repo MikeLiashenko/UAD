@@ -173,6 +173,8 @@ func _strike_results() -> void:
 	var hits := 0
 	for r in res:
 		var wname := GS.t(String(Strikes.WEAPONS[r.w].short))
+		if float(r.get("escort", 0.0)) > 0.0 and not bool(Strikes.WEAPONS[r.w].get("swarm", false)):
+			wname += GS.t(" (под прикрытием дронов)")
 		if bool(r.hit):
 			hits += 1
 			var what := GS.t("уничтожена, молчит %d ноч.") % int(r.n) if String(r.st) == "destroyed" else GS.t("повреждена, вполсилы %d ноч.") % int(r.n)

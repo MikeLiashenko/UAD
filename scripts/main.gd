@@ -2125,6 +2125,25 @@ func _strike_selftest() -> void:
 	check.call(Strikes.blocker(s400, "atacms", true) == "" and Strikes.chance(s400, "atacms") > Strikes.chance(s400, "storm") + 0.1, "ATACMS gets through a strong air defence")
 	for w in Strikes.WEAPON_ORDER:
 		check.call(Strikes.WEAPONS.has(w) and GS.t(String(Strikes.WEAPONS[w].desc)) != "", "%s described" % w)
+	# a combined strike: the drones keep the site's air defence busy, the missiles get through more
+	# often; the site is reinforced once a dusk, not once per drone
+	var base_ch := Strikes.chance(s400, "storm")
+	GS.strikes = [{"site": "s400", "w": "lyutyi"}, {"site": "s400", "w": "lyutyi"}]
+	check.call(is_equal_approx(Strikes.escort("s400"), 0.2) and Strikes.chance(s400, "storm", Strikes.escort("s400")) > base_ch + 0.05, "drones cover the missiles")
+	GS.strikes.append_array([{"site": "s400", "w": "storm"}, {"site": "s400", "w": "lyutyi"}, {"site": "s400", "w": "lyutyi"}, {"site": "s400", "w": "lyutyi"}])
+	check.call(is_equal_approx(Strikes.escort("s400"), Strikes.ESCORT_MAX), "the cover has its limit")
+	var cr := Strikes.resolve(kyiv, RandomNumberGenerator.new())
+	var storm_cover := 0.0
+	var lyutyi_cover := 0.0
+	for r in cr:
+		if String(r.w) == "storm":
+			storm_cover = float(r.escort)
+		else:
+			lyutyi_cover = float(r.escort)
+	check.call(cr.size() == 6 and String(cr[0].w) == "lyutyi" and is_equal_approx(storm_cover, 0.3) and is_equal_approx(lyutyi_cover, 0.3), "drones come first, everything covered")
+	check.call(is_equal_approx(float(Strikes.state("s400").def), 0.08), "one reinforcement for the whole salvo")
+	GS.sites.erase("s400")
+	Strikes.seen(kyiv, "s400")
 	GS.day = 3
 	var m0 := GS.money
 	Strikes.launch(drones, "storm")
