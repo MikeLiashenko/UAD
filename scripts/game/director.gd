@@ -439,6 +439,9 @@ func _morning() -> void:
 	var ns := night_start_stats
 	for name in Strikes.night_passed(game.map.city):
 		game.hud.log_event(GS.t("Противник восстановил: %s") % GS.t(String(name)), Color(1.0, 0.7, 0.4))
+	if not follower and not pvp:
+		for name in Strikes.relocate(game.map.city, _rng):
+			game.hud.log_event(GS.t("Мобильная цель сменила позицию: %s — нужен новый снимок со спутника или новый пуск") % GS.t(String(name)), Color(1.0, 0.7, 0.4))
 	var report := {
 		"day": GS.day,
 		"night_s": night_s,

@@ -32,7 +32,8 @@ extends Node
 ##                              reach and ships, a strike landing, the raid shrinking, repairs, saving
 ##   --sitesdown                every launch site destroyed before the night (the raid must shrink)
 ##   --autohunt                 (with --autotest) HIMARS / ATACMS go at every launcher caught in the open
-##   --open=strikes [--strikedemo]   the strike map (the demo shows every state of a site)
+##   --open=strikes [--strikedemo] [--strikesel=id]   the strike map (the demo shows every state of a site;
+##                              --strikesel opens it on that site)
 ##   --acctest                  accounts self-test, offline (in-memory database, stand-in sign-in):
 ##                              register, nick rules, friends by nick, sign in / out, rename,
 ##                              saved session, deletion, a session revoked elsewhere
@@ -948,7 +949,7 @@ func _open_screen(what: String) -> void:
 		"strikes":
 			if _args.has("strikedemo"):
 				_strike_demo()
-			game.hud.open_strikes()
+			game.hud.open_strikes(String(_args.get("strikesel", "")))
 		"attack":
 			game.hud.open_strikes()
 		"pause":
@@ -2231,6 +2232,34 @@ func _strike_selftest() -> void:
 	for id in ["factory", "refinery", "arsenal", "rail"]:
 		GS.sites.erase(id)
 		check.call(GS.t(String(Strikes.KINDS[id].what)) != "" and Strikes.status_text(id) != "", "%s described" % id)
+	# intelligence: the GUR's saboteurs ignore the site's air defence and leave it as it was; a
+	# satellite finds a site at once; mobile launchers in working order may move away by morning
+	GS.day = 3
+	check.call(is_equal_approx(Strikes.chance(s400, "gur"), 0.5) and Strikes.blocker(fleet, "gur", true) != "", "sabotage: no air defence in the way, no ships")
+	GS.strikes = [{"site": "s400", "w": "gur"}]
+	var def0 := float(Strikes.state("s400").def)
+	Strikes.resolve(kyiv, RandomNumberGenerator.new())
+	check.call(is_equal_approx(float(Strikes.state("s400").def), def0), "nobody saw the saboteurs: no reinforcement")
+	GS.sites.erase("s400")
+	var isk := Strikes.site(odesa, "iskander")
+	GS.sites.erase("iskander")
+	var ms := GS.money
+	check.call(Strikes.sat_blocker(isk, true) == "" and Strikes.sat_blocker(isk, false) != "", "satellite: by day, an unknown site")
+	Strikes.satellite(isk)
+	check.call(bool(Strikes.state("iskander").known) and GS.money == ms - Strikes.SAT_PRICE and Strikes.sat_blocker(isk, true) != "", "the satellite finds it")
+	var mrng := RandomNumberGenerator.new()
+	var moved := false
+	for k in 40:
+		if not Strikes.relocate(odesa, mrng).is_empty():
+			moved = true
+			break
+	check.call(moved and not bool(Strikes.state("iskander").known), "the Iskanders move away")
+	GS.sites["iskander"] = {"known": true, "st": "damaged", "n": 2, "def": 0.0}
+	for k in 40:
+		Strikes.relocate(odesa, mrng)
+	check.call(bool(Strikes.state("iskander").known), "a damaged one stays to be mended")
+	GS.sites.erase("iskander")
+	GS.strikes = []
 	GS.day = 3
 	var m0 := GS.money
 	Strikes.launch(drones, "storm")

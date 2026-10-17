@@ -17,6 +17,7 @@ const FIRST_DAY := 2
 ## of the site's air defence it gets through regardless (a ballistic missile is seldom caught);
 ## swarm: a drone that draws the site's fire off the others; fast: seconds of flight when it goes
 ## at a launcher caught in the act (a hunt, any hour) instead of waiting for dusk.
+## quiet: the enemy does not reinforce the site after it (a sabotage nobody saw coming).
 const WEAPONS := {
 	"lyutyi": {"name": "Дальний дрон «Лютый»", "short": "«ЛЮТЫЙ»", "price": 4500, "range": 1100.0, "hit": 0.6,
 		"effect": "damaged", "nights": 2, "naval": false, "swarm": true,
@@ -27,6 +28,9 @@ const WEAPONS := {
 	"palianytsia": {"name": "Ракета-дрон «Паляница»", "short": "«ПАЛЯНИЦА»", "price": 9000, "range": 650.0, "hit": 0.7,
 		"effect": "damaged", "nights": 3, "naval": false, "from": 3, "swarm": true,
 		"desc": "Реактивный дрон-ракета до 650 км: прорывается чаще «Лютого», а подожжённая точка горит дольше."},
+	"gur": {"name": "Диверсия ГУР", "short": "ДИВЕРСИЯ ГУР", "price": 8000, "range": 700.0, "hit": 0.5,
+		"effect": "damaged", "nights": 2, "naval": false, "pierce": 1.0, "quiet": true,
+		"desc": "Агенты на месте: ПВО точки им не помеха, и противник не усиливает её после диверсии. Повреждает, не уничтожает; по кораблям — нет."},
 	"neptune": {"name": "Ракета «Нептун»", "short": "«НЕПТУН»", "price": 12000, "range": 400.0, "hit": 0.72,
 		"effect": "destroyed", "nights": 2, "naval": true,
 		"desc": "Крылатая ракета: бьёт и по кораблям, и по наземным позициям до 400 км."},
@@ -40,7 +44,7 @@ const WEAPONS := {
 		"effect": "destroyed", "nights": 4, "naval": false, "from": 7,
 		"desc": "Тяжёлая крылатая ракета на 3000 км и тонна взрывчатки: уничтожает даже аэродромы стратегической авиации."},
 }
-const WEAPON_ORDER := ["lyutyi", "himars", "palianytsia", "neptune", "storm", "atacms", "flamingo"]
+const WEAPON_ORDER := ["gur", "lyutyi", "himars", "palianytsia", "neptune", "storm", "atacms", "flamingo"]
 
 ## Launch-site kinds: which threats start there, how far (km) from each city, and the site's
 ## own air defence (0..1, it grows after every strike). reserve: the share that still flies with
@@ -454,10 +458,60 @@ static func resolve(city, rng: RandomNumberGenerator) -> Array:
 					st.st = "damaged"
 				st.n = maxi(int(st.n), int(w.nights))
 			out.append({"site": String(s.id), "name": String(s.name), "w": String(wid), "hit": hit, "st": String(st.st), "n": int(st.n), "escort": cover})
-		# struck or not, the enemy brings in more air defence — once for the whole raid on it
-		st.def = minf(float(st.def) + 0.08, 0.35)
+		# struck or not, the enemy brings in more air defence — once for the whole raid on it, and
+		# not at all when only saboteurs came (nobody saw them come)
+		if ws.any(func(x) -> bool: return not bool(WEAPONS[x].get("quiet", false))):
+			st.def = minf(float(st.def) + 0.08, 0.35)
 		_put(String(s.id), st)
 	GS.strikes = []
+	return out
+
+
+# --- Intelligence ----------------------------------------------------------------------------
+## A pass of a partner's satellite over an area no launch has been tracked back to yet: the site
+## goes on the map at once.
+const SAT_PRICE := 6000
+## Launchers that drive about: known and in working order, each morning they may move to a new
+## position that has to be found again (by a launch tracked back or by a satellite).
+const MOVES := ["iskander", "s300", "s400", "s500", "bastion"]
+const MOVE_CHANCE := 0.3
+
+
+## Why the satellite cannot look at the site now, or "".
+static func sat_blocker(s: Dictionary, is_day: bool) -> String:
+	if bool(state(String(s.id)).known):
+		return GS.t("Позиция уже известна")
+	if GS.day < FIRST_DAY:
+		return GS.t("Удары — со второго дня")
+	if not is_day:
+		return GS.t("Снимки — днём")
+	if GS.money < SAT_PRICE:
+		return GS.t("Не хватает денег")
+	return ""
+
+
+static func satellite(s: Dictionary) -> void:
+	GS.add_money(-SAT_PRICE)
+	var st := state(String(s.id))
+	st.known = true
+	_put(String(s.id), st)
+	GS.stats["intel"] = int(GS.stats.get("intel", 0)) + 1
+	GS.state_changed.emit()
+
+
+## Morning: the mobile launchers that were found may have moved on. Returns the names of those
+## that are lost again.
+static func relocate(city, rng: RandomNumberGenerator) -> Array:
+	var out := []
+	for s in sites(city):
+		var id := String(s.id)
+		if not MOVES.has(id):
+			continue
+		var st := state(id)
+		if bool(st.known) and String(st.st) == "ok" and in_flight(id) == 0 and rng.randf() < MOVE_CHANCE:
+			st.known = false
+			_put(id, st)
+			out.append(String(s.short))
 	return out
 
 

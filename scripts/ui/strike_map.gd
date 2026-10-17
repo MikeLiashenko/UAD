@@ -405,6 +405,17 @@ func _refresh() -> void:
 	_note(GS.t("Направление: %s · ~%d км") % [Strikes.compass(float(s.bearing)), int(s.km)], Color(0.6, 0.9, 0.78), 14)
 	if not known:
 		_note(GS.t("Район пуска ещё не установлен: разведка засечёт его, когда оттуда прилетит первая цель."), UiKit.AMBER, 14)
+		var sat_why := Strikes.sat_blocker(s, _is_day())
+		var sb := UiKit.button(GS.t("🛰 Снимок со спутника партнёров · %s") % GS.fmt_money(Strikes.SAT_PRICE), func() -> void:
+			if Strikes.sat_blocker(s, _is_day()) == "":
+				Strikes.satellite(s)
+				SFX.play("radio", -6.0)
+				if game != null:
+					game.hud.log_event(GS.t("Снимок со спутника: найдено — %s, ~%d км") % [GS.t(String(s.name)), int(s.km)], UiKit.CYAN)
+				_refresh(), 360, 15)
+		sb.disabled = sat_why != ""
+		_side.add_child(sb)
+		_note(sat_why if sat_why != "" else GS.t("Район откроется сразу — по нему можно бить уже сегодня."), RED if sat_why != "" else Color(0.55, 0.8, 0.7), 12)
 	else:
 		var d := clampf(float(s.def) + float(st.def), 0.0, 0.9)
 		var lvl := GS.t("слабая") if d < 0.3 else (GS.t("средняя") if d < 0.5 else GS.t("сильная"))
@@ -442,6 +453,8 @@ func _refresh() -> void:
 				if game != null:
 					if hunt:
 						game.hud.log_event(GS.t("%s по пусковой «%s» — подлёт %d с") % [GS.t(String(wd.short)), GS.t(String(s.short)), int(wd.fast)], UiKit.CYAN)
+					elif bool(wd.get("quiet", false)):
+						game.hud.log_event(GS.t("Диверсанты ГУР выдвинулись к цели «%s» — итог к ночи") % GS.t(String(s.name)), UiKit.CYAN)
 					else:
 						game.hud.log_event(GS.t("Удар %s по цели «%s» — в полёте, долетит к ночи") % [GS.t(String(wd.short)), GS.t(String(s.name))], UiKit.CYAN)
 				_refresh(), 360, 16)
@@ -452,6 +465,7 @@ func _refresh() -> void:
 	_note(GS.t("Удары наносятся днём и долетают к ночи. Повреждённая точка запускает вдвое меньше, уничтоженная молчит, пока её не восстановят. После каждого удара противник усиливает ПВО точки."), Color(0.55, 0.8, 0.7), 12)
 	_note(GS.t("Комбинированный удар: дроны («Лютый», «Паляница»), посланные в ту же точку, прилетают первыми и отвлекают её ПВО — ракеты за ними прорываются чаще."), Color(0.55, 0.8, 0.7), 12)
 	_note(GS.t("Охота за пусковыми: после пуска «Искандеры», С-300/400/500, «Бастион», операторы дронов видны радару %d с. HIMARS или ATACMS по ним летят сразу; попадание срывает их пуски до конца ночи.") % int(Strikes.HOT_TIME), Color(0.55, 0.8, 0.7), 12)
+	_note(GS.t("Мобильные пусковые («Искандеры», С-300/400/500, «Бастион») по утрам могут сменить позицию — тогда их снова нужно найти."), Color(0.55, 0.8, 0.7), 12)
 	_close_btn()
 
 

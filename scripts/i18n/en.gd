@@ -1832,4 +1832,16 @@ const T := {
 	"Работает на войну": "Working for the war",
 	"СТРАТЕГИЧЕСКАЯ ЦЕЛЬ · ничего не запускает": "STRATEGIC TARGET · launches nothing",
 	"Тыл противника подорван (%s): налёт этой ночью слабее": "The enemy's rear is hit (%s): tonight's raid is weaker",
+	# --- intelligence and sabotage ------------------------------------------------------------
+	"Диверсия ГУР": "HUR sabotage",
+	"ДИВЕРСИЯ ГУР": "HUR SABOTAGE",
+	"Агенты на месте: ПВО точки им не помеха, и противник не усиливает её после диверсии. Повреждает, не уничтожает; по кораблям — нет.": "Agents on the spot: the site's air defence is no obstacle, and the enemy does not reinforce it after a sabotage. Damages, does not destroy; no ships.",
+	"Позиция уже известна": "The position is known already",
+	"Снимки — днём": "Pictures by day",
+	"Мобильная цель сменила позицию: %s — нужен новый снимок со спутника или новый пуск": "A mobile target has moved: %s — a new satellite picture or a new launch is needed",
+	"🛰 Снимок со спутника партнёров · %s": "🛰 A partner's satellite picture · %s",
+	"Снимок со спутника: найдено — %s, ~%d км": "Satellite picture: found — %s, ~%d km",
+	"Район откроется сразу — по нему можно бить уже сегодня.": "The area opens at once — it can be struck today.",
+	"Мобильные пусковые («Искандеры», С-300/400/500, «Бастион») по утрам могут сменить позицию — тогда их снова нужно найти.": "Mobile launchers (Iskanders, S-300/400/500, Bastion) may move in the morning — then they have to be found again.",
+	"Диверсанты ГУР выдвинулись к цели «%s» — итог к ночи": "HUR saboteurs are on their way to «%s» — the outcome by nightfall",
 }
