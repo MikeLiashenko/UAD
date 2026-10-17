@@ -959,7 +959,7 @@ func _open_screen(what: String) -> void:
 			game.hud.toggle_pause()
 		"morning":
 			game.hud.show_morning({"day": 1, "kills": 12, "roofs": 2, "impacts": 1, "homes": 1, "earned": 14000, "penalties": 11000, "funding": 11000, "bonus": 0,
-				"order": {"done": true, "reward": 14000, "text": "%s · +%s" % [GS.t("Сбейте за ночь не меньше %d целей") % 12, GS.fmt_money(14000)]}})
+				"aid": [["storm", 2], ["atacms", 1]], "order": {"done": true, "reward": 14000, "text": "%s · +%s" % [GS.t("Сбейте за ночь не меньше %d целей") % 12, GS.fmt_money(14000)]}})
 		"gameover":
 			game.hud.show_game_over(GS.t("Город получил критические разрушения"))
 		"feed":
@@ -2121,6 +2121,7 @@ func _strike_demo() -> void:
 	if Strikes.hot.size() == 2:
 		Strikes.hunts = [{"site": String(Strikes.hot.keys()[1]), "w": "himars", "t": 5.0, "flight": 12.0, "p": 0.8}]
 	GS.money = maxi(GS.money, 60000)
+	GS.arsenal = {"storm": 2, "atacms": 1}
 	GS.day = maxi(GS.day, 3)
 
 
@@ -2295,6 +2296,26 @@ func _strike_selftest() -> void:
 	GS.stats["hunts"] = int(GS.stats.get("hunts", 0)) + 1
 	check.call(bool(Orders.check({}).done), "a launcher caught in the act")
 	GS.sites.erase("iskander")
+	# partner aid: a package every third morning, spent before money, even with none left
+	GS.arsenal = {}
+	GS.day = 4
+	check.call(Strikes.aid(RandomNumberGenerator.new()).is_empty(), "no package on day 4")
+	GS.day = 6
+	var pk := Strikes.aid(RandomNumberGenerator.new())
+	var got := 0
+	for a in pk:
+		got += int(a[1])
+	check.call(pk.size() == 2 and got > 0 and Strikes.aid_text(pk) != "", "a package on day 6: %s" % Strikes.aid_text(pk))
+	GS.arsenal = {"storm": 1}
+	var mstock := GS.money
+	GS.money = 0
+	Strikes.seen(kyiv, "s400")
+	check.call(Strikes.blocker(s400, "storm", true) == "" and Strikes.blocker(s400, "neptune", true) != "", "no money: the stock still strikes")
+	Strikes.launch(s400, "storm")
+	check.call(GS.money == 0 and Strikes.stock("storm") == 0 and not GS.arsenal.has("storm"), "the stock is spent, not the money")
+	GS.money = mstock
+	GS.strikes = []
+	GS.arsenal = {"atacms": 2}
 	GS.order = {"kind": "kills", "site": "", "n": 12, "reward": 9000, "day": 5, "base": {"hunts": 0, "known": 2}}
 	GS.day = 3
 	var m0 := GS.money
@@ -2332,6 +2353,7 @@ func _strike_selftest() -> void:
 	GS.world_id = keep_id
 	check.call(loaded and String(Strikes.state("iskander").st) == "damaged" and GS.strikes.size() == 1, "saved with the world")
 	check.call(String(GS.order.get("kind", "")) == "kills" and int(GS.order.n) == 12 and int(GS.order.base.known) == 2, "the order is saved with the world")
+	check.call(Strikes.stock("atacms") == 2, "the stock is saved with the world")
 	print("UAD STRIKETEST: %s" % ("OK" if fails.is_empty() else "FAIL " + ", ".join(fails)))
 
 

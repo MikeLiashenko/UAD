@@ -1858,4 +1858,9 @@ const T := {
 	"📋 Задание командования: %s": "📋 Order of the command: %s",
 	"Задание командования": "Order of the command",
 	"не выполнено": "not done",
+	# --- partner aid --------------------------------------------------------------------------
+	"Помощь партнёров": "Partner aid",
+	"со склада: %d": "from stock: %d",
+	"Склад: %s": "Stock: %s",
+	"Помощь партнёров: каждое %d-е утро на склад приходят ракеты и дроны для ударов — удар со склада денег не стоит.": "Partner aid: every %dth morning missiles and drones for strikes reach the stock — a strike from the stock costs no money.",
 }

@@ -1596,6 +1596,9 @@ func show_morning(r: Dictionary) -> void:
 		lines.insert(4, [GS.t("Вылетов дронов · таранов"), "%d · %d" % [int(r.drones), int(r.get("rams", 0))], UiKit.CYAN])
 	if int(r.get("relief", 0)) > 0:
 		lines.append([GS.t("Экстренная помощь (списание долга)"), "+" + GS.fmt_money(int(r.relief)), UiKit.AMBER])
+	var aid: Array = r.get("aid", [])
+	if not aid.is_empty():
+		lines.append([GS.t("Помощь партнёров"), Strikes.aid_text(aid), UiKit.CYAN])
 	var od: Dictionary = r.get("order", {})
 	if not od.is_empty():
 		lines.append([GS.t("Задание командования"), "+" + GS.fmt_money(int(od.reward)) if bool(od.done) else GS.t("не выполнено"), UiKit.CYAN if bool(od.done) else UiKit.AMBER])

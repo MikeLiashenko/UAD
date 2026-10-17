@@ -26,6 +26,8 @@ var game
 var _map: MapView
 var _side: VBoxContainer
 var _money: Label
+## What the partners have delivered (Strikes.aid): it is spent before money.
+var _stock: Label
 var _sel := ""
 
 
@@ -210,7 +212,7 @@ class MapView extends Control:
 				draw_arc(p, 21.0, 0, TAU, 28, Color(1, 1, 1, 0.9), 2.0)
 				for q in [Vector2(0, -1), Vector2(0, 1), Vector2(-1, 0), Vector2(1, 0)]:
 					draw_line(p + q * 25.0, p + q * 33.0, Color(1, 1, 1, 0.9), 2.0)
-			captions.append([p, "%s · %d км" % [GS.t(String(s.short)), int(s.km)], col])
+			captions.append([p, "%s · %s" % [GS.t(String(s.short)), GS.t("%d км") % int(s.km)], col])
 		var taken: Array[Rect2] = [Rect2(c - Vector2(60, 12), Vector2(120, 40))]
 		taken.append_array(ring_caps)
 		for s in sites:
@@ -306,6 +308,8 @@ func _ready() -> void:
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(title)
+	_stock = UiKit.label("", 15, UiKit.CYAN)
+	top.add_child(_stock)
 	_money = UiKit.label("", 24, UiKit.NEON)
 	top.add_child(_money)
 	var h := UiKit.hbox(12)
@@ -376,6 +380,11 @@ func _refresh() -> void:
 	if not is_inside_tree():
 		return
 	_money.text = GS.fmt_money(GS.money)
+	var have := []
+	for w in Strikes.WEAPON_ORDER:
+		if Strikes.stock(w) > 0:
+			have.append([w, Strikes.stock(w)])
+	_stock.text = GS.t("Склад: %s") % Strikes.aid_text(have) + "   " if not have.is_empty() else ""
 	_map.sel = _sel
 	for ch in _side.get_children():
 		ch.queue_free()
@@ -438,7 +447,7 @@ func _refresh() -> void:
 		var wd: Dictionary = Strikes.WEAPONS[w]
 		var why := Strikes.blocker(s, w, _is_day())
 		var now := Strikes.is_hunt(s, w) and (why == "" or why == GS.t("Не хватает денег"))
-		var txt := "%s · %s" % [GS.t(String(wd.short)), GS.fmt_money(int(wd.price))]
+		var txt := "%s · %s" % [GS.t(String(wd.short)), GS.t("со склада: %d") % Strikes.stock(w) if Strikes.stock(w) > 0 else GS.fmt_money(int(wd.price))]
 		if why == "" or why == GS.t("Не хватает денег") or why == GS.t("Удары наносятся днём"):
 			if known:
 				var p := Strikes.hunt_chance(s, w) if now else Strikes.chance(s, w, Strikes.escort(_sel))
@@ -466,6 +475,7 @@ func _refresh() -> void:
 	_note(GS.t("Комбинированный удар: дроны («Лютый», «Паляница»), посланные в ту же точку, прилетают первыми и отвлекают её ПВО — ракеты за ними прорываются чаще."), Color(0.55, 0.8, 0.7), 12)
 	_note(GS.t("Охота за пусковыми: после пуска «Искандеры», С-300/400/500, «Бастион», операторы дронов видны радару %d с. HIMARS или ATACMS по ним летят сразу; попадание срывает их пуски до конца ночи.") % int(Strikes.HOT_TIME), Color(0.55, 0.8, 0.7), 12)
 	_note(GS.t("Мобильные пусковые («Искандеры», С-300/400/500, «Бастион») по утрам могут сменить позицию — тогда их снова нужно найти."), Color(0.55, 0.8, 0.7), 12)
+	_note(GS.t("Помощь партнёров: каждое %d-е утро на склад приходят ракеты и дроны для ударов — удар со склада денег не стоит.") % Strikes.AID_EVERY, Color(0.55, 0.8, 0.7), 12)
 	_close_btn()
 
 

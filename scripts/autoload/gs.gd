@@ -600,6 +600,8 @@ var sites := {}
 var strikes: Array = []
 ## The order of the command for this day (scripts/game/orders.gd), {} when there is none.
 var order := {}
+## Strike weapons the partners have delivered, {weapon: count} (Strikes.aid): spent before money.
+var arsenal := {}
 ## A match on a server (scripts/game/pvp.gd): {"def": ServerDef, "side": 0 | 1, "bot": bool}; {} in
 ## the usual game. Never saved: main sets it after new_world.
 var pvp := {}
@@ -688,6 +690,7 @@ func new_world(wname: String, diff: int, pos: Vector3, loc: int, cid := "kyiv", 
 	sites = {}
 	strikes = []
 	order = {}
+	arsenal = {}
 	pvp = {}
 	city_armor = 1.0
 	money_changed.emit(money)
@@ -838,7 +841,7 @@ func save_world() -> void:
 		"city": city, "base_hp": base_hp, "day": day, "base_found": base_found,
 		"detection": detection, "camo": camo, "crews": crews, "base_pos": [base_pos.x, base_pos.z],
 		"base_loc": base_loc, "stats": stats, "damaged": damaged, "crushed": crushed, "won": won,
-		"videos": videos, "sites": sites, "strikes": strikes, "order": order,
+		"videos": videos, "sites": sites, "strikes": strikes, "order": order, "arsenal": arsenal,
 	}
 	if Cities.is_custom(city_id):
 		# a city drawn in the map editor: the world keeps its own copy and plays on without the editor's
@@ -944,11 +947,17 @@ func load_world(id: String) -> bool:
 		if x is Dictionary and x.has("site") and x.has("w"):
 			strikes.append({"site": String(x.site), "w": String(x.w)})
 	order = {}
+	arsenal = {}
 	var o = d.get("order", {})
 	if o is Dictionary and o.has("kind") and o.has("reward"):
 		var ob = o.get("base", {})
 		order = {"kind": String(o.kind), "site": String(o.get("site", "")), "n": int(o.get("n", 0)), "reward": int(o.reward), "day": int(o.get("day", day)),
 			"base": {"hunts": int(ob.get("hunts", 0)), "known": int(ob.get("known", 0))} if ob is Dictionary else {}}
+	var ars = d.get("arsenal", {})
+	if ars is Dictionary:
+		for k in ars:
+			if int(ars[k]) > 0:
+				arsenal[String(k)] = int(ars[k])
 	money_changed.emit(money)
 	state_changed.emit()
 	return true

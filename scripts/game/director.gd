@@ -462,6 +462,7 @@ func _morning() -> void:
 	# the order of the command is checked before the enemy has mended anything overnight
 	if not follower and not pvp:
 		report["order"] = Orders.check(report)
+		report["aid"] = Strikes.aid(_rng)
 	for name in Strikes.night_passed(game.map.city):
 		game.hud.log_event(GS.t("Противник восстановил: %s") % GS.t(String(name)), Color(1.0, 0.7, 0.4))
 	if not follower and not pvp:

@@ -251,7 +251,7 @@ static func blocker(s: Dictionary, weapon: String, is_day: bool) -> String:
 		return GS.t("Не бьёт по кораблям")
 	if not is_day and not is_hunt(s, weapon):
 		return GS.t("Удары наносятся днём")
-	if GS.money < int(w.price):
+	if GS.money < int(w.price) and stock(weapon) <= 0:
 		return GS.t("Не хватает денег")
 	return ""
 
@@ -315,7 +315,7 @@ static func send(s: Dictionary, weapon: String) -> void:
 		return
 	var f := float(WEAPONS[weapon].fast)
 	hunts.append({"site": String(s.id), "w": weapon, "t": f, "flight": f, "p": hunt_chance(s, weapon)})
-	GS.add_money(-int(WEAPONS[weapon].price))
+	pay(weapon)
 	GS.state_changed.emit()
 
 
@@ -404,9 +404,58 @@ static func swarm_in_flight(id: String) -> int:
 	return n
 
 
+# --- Partner aid ---------------------------------------------------------------------------
+## Every AID_EVERY mornings the partners deliver a package of strike weapons to our own stock
+## (GS.arsenal, saved with the world): two kinds of what is in service, so many of each. A strike
+## takes from the stock before it costs money.
+const AID_EVERY := 3
+const AID := [["storm", 2], ["atacms", 1], ["neptune", 2], ["himars", 3], ["palianytsia", 2], ["flamingo", 1], ["lyutyi", 4]]
+
+
+static func stock(weapon: String) -> int:
+	return int(GS.arsenal.get(weapon, 0))
+
+
+## A strike is paid for: from the stock when there is one, else with money.
+static func pay(weapon: String) -> void:
+	if stock(weapon) > 0:
+		GS.arsenal[weapon] = stock(weapon) - 1
+		if stock(weapon) <= 0:
+			GS.arsenal.erase(weapon)
+	else:
+		GS.add_money(-int(WEAPONS[weapon].price))
+
+
+## Morning: the partners' package, when it is due. Returns [[weapon, count], …] delivered.
+static func aid(rng: RandomNumberGenerator) -> Array:
+	if GS.day < FIRST_DAY or GS.day % AID_EVERY != 0:
+		return []
+	var pool := []
+	for a in AID:
+		# what comes into service by the next day can come in the package
+		if GS.day + 1 >= int(WEAPONS[a[0]].get("from", FIRST_DAY)):
+			pool.append(a)
+	var out := []
+	for i in 2:
+		if pool.is_empty():
+			break
+		var a: Array = pool.pop_at(rng.randi() % pool.size())
+		GS.arsenal[String(a[0])] = stock(String(a[0])) + int(a[1])
+		out.append([String(a[0]), int(a[1])])
+	return out
+
+
+## "STORM SHADOW ×2, ATACMS ×1".
+static func aid_text(list: Array) -> String:
+	var parts := []
+	for a in list:
+		parts.append("%s ×%d" % [GS.t(String(WEAPONS[a[0]].short)), int(a[1])])
+	return ", ".join(parts)
+
+
 ## Pays and sends the strike; it lands at dusk.
 static func launch(s: Dictionary, weapon: String) -> void:
-	GS.add_money(-int(WEAPONS[weapon].price))
+	pay(weapon)
 	GS.strikes.append({"site": String(s.id), "w": weapon})
 	GS.state_changed.emit()
 
