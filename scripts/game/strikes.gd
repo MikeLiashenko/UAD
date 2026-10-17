@@ -481,6 +481,9 @@ static func record(r: Dictionary, hunt := false) -> void:
 	GS.stats["strikes"] = int(GS.stats.get("strikes", 0)) + 1
 	if bool(r.hit):
 		GS.stats["strike_hits"] = int(GS.stats.get("strike_hits", 0)) + 1
+		GS.stats["sh_" + String(r.w)] = int(GS.stats.get("sh_" + String(r.w), 0)) + 1
+		if float(r.get("escort", 0.0)) > 0.0 and not bool(WEAPONS.get(String(r.w), {}).get("swarm", false)):
+			GS.stats["covered_hits"] = int(GS.stats.get("covered_hits", 0)) + 1
 		if String(r.st) == "destroyed":
 			GS.stats["sites_out"] = int(GS.stats.get("sites_out", 0)) + 1
 
@@ -519,6 +522,7 @@ static func stock(weapon: String) -> int:
 static func pay(weapon: String) -> void:
 	if stock(weapon) > 0:
 		GS.arsenal[weapon] = stock(weapon) - 1
+		GS.stats["from_stock"] = int(GS.stats.get("from_stock", 0)) + 1
 		if stock(weapon) <= 0:
 			GS.arsenal.erase(weapon)
 	else:

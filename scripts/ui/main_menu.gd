@@ -68,7 +68,7 @@ func _ready() -> void:
 	spacer.custom_minimum_size = Vector2(0, 8)
 	v.add_child(spacer)
 	for spec in [[GS.t("Играть"), func() -> void: main.show_worlds()], [GS.t("Редактор карт"), func() -> void: main.show_cities()],
-			[GS.t("🏆 Достижения · %d/%d") % [Achievements.count(), Achievements.LIST.size()], func() -> void: main.show_achievements()],
+			[GS.t("🏆 Достижения · %d/%d") % [Achievements.count(), Achievements.total()], func() -> void: main.show_achievements()],
 			[GS.t("Настройки"), func() -> void: main.show_settings()], [GS.t("Выход"), func() -> void: main.quit_game()]]:
 		var b := UiKit.button(spec[0], spec[1], 340, 26)
 		b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER

@@ -306,6 +306,8 @@ func on_lost(_e) -> void:
 func _finish() -> void:
 	finished = true
 	rl.radio(GS.t("Инструктор: обучение пройдено. Удачи на дежурстве."))
+	if preload("res://scripts/core/achievements.gd").earn("training"):
+		game.hud.on_achievement("training")
 	get_tree().create_timer(2.5, false).timeout.connect(_show_done)
 
 

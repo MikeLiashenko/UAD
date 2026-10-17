@@ -497,8 +497,9 @@ func _morning() -> void:
 			var rb := int((8000 + 1000 * GS.day) * GS.income_mult()) if held else 0
 			GS.add_money(rb)
 			report["revenge"] = {"held": held, "bonus": rb}
-		for id in Achievements.night_done(report):
-			game.hud.on_achievement(id)
+			if held:
+				GS.stats["revenge_held"] = int(GS.stats.get("revenge_held", 0)) + 1
+		game.hud.on_achievements(Achievements.night_done(report))
 		report["aid"] = Strikes.aid(_rng)
 		report["strikes"] = _landed
 		_landed = [0, 0]

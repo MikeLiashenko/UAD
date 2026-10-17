@@ -2451,13 +2451,13 @@ func _ach_selftest() -> void:
 	var got := Achievements.scan(null)
 	check.call(got.has("first_blood") and got.has("kills_100") and got.has("first_strike") and not got.has("kills_500") and not got.has("hunter"), "earned from the state: %s" % str(got))
 	check.call(Achievements.scan(null).is_empty(), "each only once")
-	check.call(Achievements.night_done({"impacts": 0, "homes": 0, "kills": 12}) == ["clean_night"] and Achievements.night_done({"impacts": 0, "kills": 30}).is_empty(), "a clean night, once")
+	check.call(Achievements.night_done({"impacts": 0, "homes": 0, "kills": 12}) == ["clean_night"] and Achievements.night_done({"impacts": 0, "kills": 12}).is_empty(), "a clean night, once")
 	for c in ["kharkiv", "dnipro", "odesa"]:
 		GS.city_id = c
 		Achievements.scan(null)
 	check.call(Achievements.has("all_cities"), "five days in all four cities")
 	Achievements._loaded = false
-	check.call(Achievements.count() == 5 and Achievements.has("clean_night") and int(Achievements.best_day.get("odesa", 0)) == 5, "read back from the file (%d)" % Achievements.count())
+	check.call(Achievements.has("first_blood") and Achievements.has("kills_100") and Achievements.has("clean_night") and Achievements.has("all_cities") and int(Achievements.best_day.get("odesa", 0)) == 5, "read back from the file (%d of %d)" % [Achievements.count(), Achievements.total()])
 	DirAccess.remove_absolute(Achievements.path)
 	Achievements.path = Achievements.PATH
 	Achievements.dry = true

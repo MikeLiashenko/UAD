@@ -1091,6 +1091,10 @@ func enemy_destroyed(e) -> void:
 	if killer == "":
 		GS.add_money(reward)
 		GS.stats.kills = int(GS.stats.kills) + 1
+		# what was brought down and by what (the achievements count both)
+		GS.stats["k_" + String(e.type)] = int(GS.stats.get("k_" + String(e.type), 0)) + 1
+		if String(e.last_hit_by) != "":
+			GS.stats["w_" + String(e.last_hit_by)] = int(GS.stats.get("w_" + String(e.last_hit_by), 0)) + 1
 	else:
 		_bank(killer, "e", reward)
 		_bank(killer, "k", 1)

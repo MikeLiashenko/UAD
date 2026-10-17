@@ -837,19 +837,40 @@ func _hunt_input(event: InputEvent) -> bool:
 	return true
 
 
+## Several new achievements at once (a world from before they existed, a big night): one toast
+## that counts them, each of them in the log.
+func on_achievements(ids: Array) -> void:
+	if ids.size() <= 2:
+		for id in ids:
+			on_achievement(String(id))
+		return
+	SFX.play("cash", -4.0)
+	for id in ids:
+		if game.autotest:
+			print("UAD ACHIEVEMENT %s" % id)
+		if not GS.realism:
+			log_event("%s %s — %s" % [String(Achievements.entry(id).icon), Achievements.title(id), Achievements.how(id)], Color(1.0, 0.85, 0.35))
+	var txt := GS.t("🏆 Новых достижений: %d — все в главном меню") % ids.size()
+	if GS.realism:
+		if game.rl != null:
+			game.rl.radio(txt, Color(1.0, 0.85, 0.35))
+	else:
+		alert(txt, Color(1.0, 0.85, 0.35))
+
+
 ## A new achievement (scripts/core/achievements.gd): a toast, or the radio in MaxRealism.
 func on_achievement(id: String) -> void:
-	var a: Array = Achievements.info(id)
-	var txt := GS.t("🏆 ДОСТИЖЕНИЕ: %s") % GS.t(String(a[2]))
+	var txt := GS.t("🏆 ДОСТИЖЕНИЕ: %s") % Achievements.title(id)
 	if game.autotest:
 		print("UAD ACHIEVEMENT %s" % id)
 	SFX.play("cash", -4.0)
 	if GS.realism:
 		if game.rl != null:
-			game.rl.radio(txt + " — " + GS.t(String(a[3])), Color(1.0, 0.85, 0.35))
+			game.rl.radio(txt + " — " + Achievements.how(id), Color(1.0, 0.85, 0.35))
 		return
+	# several at once (a loaded world, a big night) queue up as alerts, every one in the log
 	alert(txt, Color(1.0, 0.85, 0.35))
-	log_event("%s %s — %s" % [String(a[1]), GS.t(String(a[2])), GS.t(String(a[3]))], Color(1.0, 0.85, 0.35))
+	log_event("%s %s — %s" % [String(Achievements.entry(id).icon), Achievements.title(id), Achievements.how(id)], Color(1.0, 0.85, 0.35))
 
 
 ## The radar caught a launcher in the act (game_controller.launch).
@@ -1012,8 +1033,7 @@ func _process(delta: float) -> void:
 	nv_rect.visible =(game.view == "base" and game.base_view.nv) or (game.view == "fpv" and game.fpv_view.nv)
 	_update_target_info()
 	if int(_t) != int(_t - delta) and game.pvp == null and not GS.training:
-		for id in Achievements.scan(game.map.city):
-			on_achievement(id)
+		on_achievements(Achievements.scan(game.map.city))
 	if int(_t * 4.0) != int((_t - delta) * 4.0):
 		refresh()
 
@@ -1694,6 +1714,10 @@ func show_pvp_end(won: bool) -> void:
 	_close_overlay()
 	_set_paused(true)
 	var pv = game.pvp
+	if won:
+		var aid := "server_bot" if pv.bot else "server_win"
+		if Achievements.earn(aid):
+			on_achievement(aid)
 	var m := UiKit.modal(root, Vector2(600, 0))
 	_overlay = m[0]
 	var v: VBoxContainer = m[1]
