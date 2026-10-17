@@ -69,6 +69,8 @@ var raid_extra: Array = []
 var raid_events := {}
 ## One line about the enemy's arsenal for the city card and the night briefing.
 var raid_note := ""
+## The city whose distances to the launch sites this one shares (Strikes.KINDS); "" = its own.
+var sites_as := ""
 
 # --- Geography -----------------------------------------------------------------------------------
 ## Rivers and canals: {"name", "pts": PackedVector2Array, "w": PackedFloat32Array (half widths)}.

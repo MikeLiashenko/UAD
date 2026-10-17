@@ -1,19 +1,34 @@
 extends Control
-## The city editor of a server: one of its two cities drawn from nothing on a flat plan
-## (CityPlan) — rivers and lakes, woods, districts with their kind of housing, avenues with
-## bridges, railways and the objects the other side will aim at. The generator of the game
-## (CityMap) builds the 3D city from the drawing (CustomCity).
+## The city editor: a city drawn from nothing — rivers and lakes, woods, districts with their
+## kind of housing, avenues with bridges, railways and the objects an enemy will aim at. It draws
+## a city of the player's own (the map editor, CityStore) or one of the two cities of a server
+## (ServerDef): whoever opens it gives the drawing to start from and is told of every change
+## (`changed`) and of the end (`done`).
 ##
-## A tool is picked on the right and the plan is tapped: a district, a lake, a wood or an object
-## appears under the finger; a river, a road or a railway grows point by point until "Finish".
-## The "Select" tool picks what is tapped (its name, size and turn are then on the right) and
-## drags it; dragging empty ground moves the plan. Two fingers or the right mouse button move
-## the plan with any tool, a pinch or the wheel scales it.
+## The city is drawn in 3D, on the city itself: the generator of the game (CityMap) builds it
+## from the drawing (CustomCity) and the camera flies over it as over any map of the game
+## (CameraRig). The drawing lies on top as marks (CityGizmos); after a change the city is built
+## again — by itself a moment later on a computer, by the "Build" button on a touch screen,
+## where a build is a noticeable pause. The flat plan (CityPlan) is the other view of the same
+## drawing, a button away.
+##
+## A tool is picked on the right and the ground is tapped: a district, a lake, a wood or an
+## object appears under the finger; a river, a road or a railway grows point by point until
+## "Finish". The "Select" tool picks what is tapped (its name, size and turn are then on the
+## right) and drags it; dragging empty ground moves the view. The wheel or a pinch scales it, the
+## right mouse button or two fingers turning about each other turn the 3D view.
 
 const UiKit = preload("res://scripts/ui/ui_kit.gd")
 const CityPlan = preload("res://scripts/ui/city_plan.gd")
 const CustomCity = preload("res://scripts/world/custom_city.gd")
-const ServerDef = preload("res://scripts/core/server_def.gd")
+const Cities = preload("res://scripts/world/cities.gd")
+const CityGizmos = preload("res://scripts/ui/city_gizmos.gd")
+const CameraRig = preload("res://scripts/game/camera_rig.gd")
+
+## The drawing changed: the city as it is now (to be written wherever it lives).
+signal changed(city: Dictionary)
+## "Done": the final, cleaned city.
+signal done(city: Dictionary)
 
 ## Tools: id, label. "select" picks and drags; the rest add what they name.
 const TOOLS := [
@@ -26,18 +41,42 @@ const LIST_OF := {"district": "districts", "object": "objects", "lake": "lakes",
 const LIMITS := {"districts": CustomCity.MAX_DISTRICTS, "objects": CustomCity.MAX_OBJECTS, "lakes": CustomCity.MAX_LAKES, "forests": CustomCity.MAX_FORESTS,
 	"rivers": CustomCity.MAX_RIVERS, "roads": CustomCity.MAX_ROADS, "rails": CustomCity.MAX_RAILS}
 const UNDO_MAX := 40
+## A computer builds the 3D city again this long after the last change, seconds.
+const AUTO_BUILD := 0.9
 
+## The city to start from, the caption in the corner and its colour; `flip` mirrors the
+## ready-made sample (the second city of a server).
+var source := {}
+var caption := ""
+var caption_color := UiKit.NEON
+var flip := false
+## The root (main.gd): its map and camera are the 3D view. The id the city is built under.
 var main
-var def := {}
-var side := 0
-## The city being drawn (a working copy; written back to the server on every change).
+var city_id := "edit_city"
+## The view the editor opens in: "3d" or "plan".
+var view := "3d"
+## The city being drawn (a working copy; every change is told through `changed`).
 var data := {}
 
 var _plan: CityPlan
+var _bg: ColorRect
+var _rig: CameraRig
+var _giz: CityGizmos
+var _view_btn: Button
+var _build_btn: Button
+var _turn_btns: Array = []
+var _veil: Control
+## The 3D city is behind the drawing (and for how long nothing has changed).
+var _stale := true
+var _stale_t := 0.0
+var _building := false
+## Built again by itself (a computer) or by the button only (a touch screen).
+var _auto := true
+## Grows with every change of the drawing: the marks over the 3D city follow it.
+var _version := 0
 var _name: LineEdit
 var _tool := "select"
 var _tool_btns := {}
-var _size_btns: Array = []
 var _box: VBoxContainer
 var _hint: Label
 var _counts: Label
@@ -57,10 +96,23 @@ var _t := 0.0
 func _ready() -> void:
 	UiKit.full_rect(self)
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	data = CustomCity.clean(def.cities[side])
-	var bg := UiKit.full_rect(ColorRect.new()) as ColorRect
-	bg.color = Color(0.0, 0.03, 0.03, 0.97)
-	add_child(bg)
+	data = CustomCity.clean(source)
+	_auto = not GS.touch()
+	_bg = UiKit.full_rect(ColorRect.new()) as ColorRect
+	_bg.color = Color(0.0, 0.03, 0.03, 0.97)
+	_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_bg)
+	# --- the 3D view: the game's map camera over the built city, the drawing on top as marks
+	_rig = CameraRig.new()
+	_rig.cam = main.cam
+	_rig.yaw = 0.0
+	_rig.pitch = 0.95
+	_rig.drag_hook = _rig_grab
+	_rig.clicked.connect(_rig_click)
+	_rig.dragged.connect(_rig_drag)
+	add_child(_rig)
+	_giz = CityGizmos.new()
+	add_child(_giz)
 	# --- the plan
 	_plan = CityPlan.new()
 	_plan.anchor_right = 1.0
@@ -82,7 +134,7 @@ func _ready() -> void:
 	top.offset_right = -372
 	top.offset_bottom = 56
 	add_child(top)
-	var title := UiKit.glow_label(GS.t("ГОРОД %d") % (side + 1), 24, UiKit.NEON if side == 0 else UiKit.CYAN)
+	var title := UiKit.glow_label(caption, 24, caption_color)
 	title.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	top.add_child(title)
 	_name = LineEdit.new()
@@ -95,25 +147,46 @@ func _ready() -> void:
 	_name.text_submitted.connect(func(_s: String) -> void: _name.release_focus())
 	_name.focus_exited.connect(_save_name)
 	top.add_child(_name)
-	for s in CustomCity.SIZES:
-		var b := Button.new()
-		b.toggle_mode = true
-		b.focus_mode = Control.FOCUS_NONE
-		b.text = GS.t(String(s[1]))
-		b.custom_minimum_size = Vector2(0, 42)
-		b.add_theme_font_size_override("font_size", 13)
-		b.pressed.connect(_resize_city.bind(float(s[0])))
-		top.add_child(b)
-		_size_btns.append([b, float(s[0])])
-	for spec in [["+", 1.3], ["−", 1.0 / 1.3]]:
+	_view_btn = UiKit.button("", func() -> void: set_view("plan" if view == "3d" else "3d"), 120, 17)
+	_view_btn.focus_mode = Control.FOCUS_NONE
+	_view_btn.custom_minimum_size = Vector2(120, 42)
+	top.add_child(_view_btn)
+	_build_btn = UiKit.button(GS.t("🏗 Построить"), _build3d, 170, 17)
+	_build_btn.focus_mode = Control.FOCUS_NONE
+	_build_btn.custom_minimum_size = Vector2(170, 42)
+	_build_btn.tooltip_text = GS.t("Построить 3D-город заново по рисунку")
+	top.add_child(_build_btn)
+	# --- over the view, at its right edge: scale, the whole city, and for 3D turn and tilt (held)
+	var side := UiKit.vbox(6)
+	side.anchor_left = 1.0
+	side.anchor_right = 1.0
+	side.offset_left = -426
+	side.offset_right = -378
+	side.offset_top = 70
+	add_child(side)
+	for spec in [["+", 1.0 / 1.3], ["−", 1.3]]:
 		var f: float = spec[1]
-		var zb := UiKit.button(String(spec[0]), func() -> void: _plan.zoom_by(f), 46, 22)
+		var zb := UiKit.button(String(spec[0]), func() -> void: _zoom(f), 46, 22)
 		zb.focus_mode = Control.FOCUS_NONE
-		top.add_child(zb)
-	var fit := UiKit.button("⛶", func() -> void: _plan.fit(), 46, 20)
+		zb.custom_minimum_size = Vector2(46, 46)
+		side.add_child(zb)
+	var fit := UiKit.button("⛶", _fit, 46, 20)
 	fit.focus_mode = Control.FOCUS_NONE
+	fit.custom_minimum_size = Vector2(46, 46)
 	fit.tooltip_text = GS.t("Весь город")
-	top.add_child(fit)
+	side.add_child(fit)
+	for spec in [["⟲", "turn", -1.0], ["⟳", "turn", 1.0], ["▲", "tilt", 1.0], ["▼", "tilt", -1.0]]:
+		var b := Button.new()
+		b.text = spec[0]
+		b.focus_mode = Control.FOCUS_NONE
+		b.custom_minimum_size = Vector2(46, 46)
+		b.add_theme_font_size_override("font_size", 22)
+		var prop: String = spec[1]
+		var dir: float = spec[2]
+		b.button_down.connect(func() -> void: _rig.set(prop, dir))
+		b.button_up.connect(func() -> void: _rig.set(prop, 0.0))
+		side.add_child(b)
+		_turn_btns.append(b)
 	# --- the right panel: tools, what is selected, the buttons
 	var p := UiKit.panel()
 	p.anchor_left = 1.0
@@ -165,7 +238,156 @@ func _ready() -> void:
 	row.add_child(UiKit.button(GS.t("Очистить"), _ask_clear, 160, 16))
 	v.add_child(UiKit.button(GS.t("Готово ✔"), _done, 326, 20))
 	_set_tool("select")
+	_fit()
+	set_view(view)
+
+
+func _exit_tree() -> void:
+	# the map goes back to the menus as they expect it
+	if main != null and main.map != null and is_instance_valid(main.map):
+		main.map.visible = true
+		main.map.set_fog_scale(1.0)
+
+
+# --- The two views --------------------------------------------------------------------------------
+## "3d": the built city under the camera, the drawing as marks on it. "plan": the flat drawing.
+func set_view(v: String) -> void:
+	view = "plan" if v == "plan" else "3d"
+	var three := view == "3d"
+	_bg.visible = not three
+	_plan.visible = not three
+	_giz.visible = three
+	_rig.set_process(three)
+	_rig.set_process_unhandled_input(three)
+	# in 3D whatever no control takes goes on to the camera and the ground under the pointer
+	mouse_filter = Control.MOUSE_FILTER_IGNORE if three else Control.MOUSE_FILTER_STOP
+	for b in _turn_btns:
+		(b as Button).visible = three
+	_build_btn.visible = three
+	_view_btn.text = GS.t("🗺 План") if three else GS.t("🏙 3D")
+	_view_btn.tooltip_text = GS.t("Плоский план города") if three else GS.t("Город в 3D")
+	main.map.visible = three
+	if three:
+		_look()
+		if main.map.city_id != city_id or main.map.city != Cities.get_def(city_id):
+			_stale = true
+			_build3d()
 	_refresh()
+
+
+## The look of the map in the editor: daylight and a clear air, none of its own captions.
+func _look() -> void:
+	main.map.visible = view == "3d"
+	main.map.set_fog_scale(0.0)
+	main.map.set_night(0.2)
+	main.map.set_labels_visible(false)
+
+
+## Builds the 3D city again from the drawing as it is now. A build is a pause of a second or a
+## few: a veil says so first (two frames, so it is on screen before the pause).
+func _build3d() -> void:
+	if _building or view != "3d":
+		return
+	_building = true
+	_veil = UiKit.full_rect(ColorRect.new())
+	(_veil as ColorRect).color = Color(0.0, 0.03, 0.04, 0.6)
+	var lbl := UiKit.glow_label(GS.t("Строим город…"), 30, UiKit.NEON)
+	lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_veil.add_child(lbl)
+	add_child(_veil)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if not is_inside_tree():
+		return
+	Cities.register(city_id, data)
+	main.build_city(city_id)
+	_rig.bounds = float(data.size) * 1.05
+	_look()
+	_veil.queue_free()
+	_veil = null
+	_stale = false
+	_building = false
+
+
+## The whole city in view.
+func _fit() -> void:
+	_plan.fit()
+	var h := float(data.size)
+	_rig.bounds = h * 1.05
+	# (the panel on the right covers a part of the screen, and the camera aims a little above its
+	# target: the city is put in the middle of what is left)
+	_rig._t_target = Vector3(h * 0.2, 0.0, -h * 0.04)
+	_rig._t_dist = h * 1.95
+	_rig._t_yaw = 0.0
+	_rig._t_pitch = 1.0
+	if not _rig.is_processing():
+		# not on screen yet: nothing to glide from
+		_rig.target = _rig._t_target
+		_rig.dist = _rig._t_dist
+		_rig.yaw = 0.0
+		_rig.pitch = 1.0
+
+
+## Closer (f < 1) or further.
+func _zoom(f: float) -> void:
+	if view == "3d":
+		_rig._t_dist = clampf(_rig._t_dist * f, 150.0, float(data.size) * 4.0)
+	else:
+		_plan.zoom_by(1.0 / f)
+
+
+## The marks follow the drawing in both views.
+func _redraw() -> void:
+	_version += 1
+	_plan.queue_redraw()
+
+
+## The point of the ground under a point of the screen (3D view); null over the sky.
+func _ground(screen: Vector2) -> Variant:
+	var cam: Camera3D = main.cam
+	var from := cam.project_ray_origin(screen)
+	var dir := cam.project_ray_normal(screen)
+	if dir.y >= -0.001:
+		return null
+	var p := from + dir * (-from.y / dir.y)
+	return Vector2(p.x, p.z)
+
+
+## Metres of the city in one unit of the interface at a point (how far a finger may miss).
+func _m_per_unit(w: Vector2) -> float:
+	if view != "3d":
+		return 1.0 / maxf(_plan.zoom, 0.00001)
+	var cam: Camera3D = main.cam
+	var d := cam.global_position.distance_to(Vector3(w.x, 0.0, w.y))
+	return 2.0 * d * tan(deg_to_rad(cam.fov) * 0.5) / maxf(get_viewport().get_visible_rect().size.y, 1.0)
+
+
+func _rig_click(pos: Vector2) -> void:
+	var w = _ground(pos)
+	if w != null and not _building:
+		_on_tap(w)
+
+
+## A left drag begins in the 3D view: on something the "Select" tool can move it is ours, on empty
+## ground the camera's.
+func _rig_grab(pos: Vector2) -> bool:
+	var w = _ground(pos)
+	if w == null or _building:
+		return false
+	_on_drag(w, 0)
+	if bool(_drag.get("pan", true)):
+		_drag = {}
+		return false
+	return true
+
+
+func _rig_drag(pos: Vector2, phase: int) -> void:
+	var w = _ground(pos)
+	if w == null:
+		w = _drag.get("last", Vector2.ZERO) # the finger went up into the sky: where it last was
+	_on_drag(w, phase)
 
 
 # --- State -----------------------------------------------------------------------------------------
@@ -179,13 +401,13 @@ func _remember() -> void:
 		_undo.pop_front()
 
 
-## The drawing changed: it is written into the server's draft at once.
+## The drawing changed: its owner writes it down at once.
 func _commit() -> void:
-	def.cities[side] = data.duplicate(true)
-	def["dirty"] = bool(def.get("published", false))
-	ServerDef.save(def)
+	changed.emit(data.duplicate(true))
+	_stale = true
+	_stale_t = 0.0
 	_plan.data = data
-	_plan.queue_redraw()
+	_redraw()
 	_refresh()
 
 
@@ -222,7 +444,7 @@ func _resize_city(half: float) -> void:
 	data = CustomCity.clean(data) # what lay beyond the new edge is moved onto it
 	_sel = {}
 	_commit()
-	_plan.fit()
+	_fit()
 
 
 func _set_tool(t: String) -> void:
@@ -301,7 +523,7 @@ func _finish_line() -> void:
 
 ## What is under a point of the plan: objects first, then the points of lines, districts, water, woods.
 func _hit(w: Vector2) -> Dictionary:
-	var px := 1.0 / maxf(_plan.zoom, 0.00001) # metres in a pixel
+	var px := _m_per_unit(w) # metres in a unit of the screen: how far a finger may miss
 	var best := {}
 	var bd := 18.0 * px
 	for i in data.objects.size():
@@ -416,12 +638,12 @@ func _on_drag(w: Vector2, phase: int) -> void:
 				# the grabbed point of the city stays under the finger
 				_plan.center += (_drag.from as Vector2) - w
 				_plan._clamp_center()
-				_plan.queue_redraw()
+				_redraw()
 			elif _sel_valid():
 				_move_sel(w - (_drag.last as Vector2))
 				_drag.last = w
 				_drag.moved = true
-				_plan.queue_redraw()
+				_redraw()
 		2:
 			if not _drag.is_empty() and not bool(_drag.pan):
 				if bool(_drag.moved):
@@ -435,8 +657,6 @@ func _on_drag(w: Vector2, phase: int) -> void:
 func _refresh() -> void:
 	for id in _tool_btns:
 		(_tool_btns[id] as Button).button_pressed = id == _tool
-	for sb in _size_btns:
-		(sb[0] as Button).button_pressed = is_equal_approx(float(sb[1]), float(data.size))
 	_undo_btn.disabled = _undo.is_empty() and _draft.is_empty()
 	_counts.text = GS.t("Районы %d/%d · объекты %d/%d · реки %d/%d · дороги %d/%d · озёра %d · леса %d") % [data.districts.size(), CustomCity.MAX_DISTRICTS,
 		data.objects.size(), CustomCity.MAX_OBJECTS, data.rivers.size(), CustomCity.MAX_RIVERS, data.roads.size(), CustomCity.MAX_ROADS, data.lakes.size(), data.forests.size()]
@@ -445,12 +665,27 @@ func _refresh() -> void:
 		c.queue_free()
 	match _tool:
 		"select":
-			_hint.text = GS.t("Коснитесь района, объекта, воды или точки дороги, чтобы выбрать. Выбранное можно тащить. Пустое место — сдвиг плана, два пальца или колесо — масштаб.")
+			_hint.text = GS.t("Коснитесь района, объекта, воды или точки дороги, чтобы выбрать; выбранное можно тащить. Пустое место — сдвиг, колесо или щипок — масштаб, правая кнопка мыши или поворот двумя пальцами — вращение 3D-вида.")
 			if _sel_valid():
 				_build_selected()
 			else:
 				_sel = {}
 				_box.add_child(_note(GS.t("Ничего не выбрано."), Color(0.55, 0.8, 0.7)))
+				# the size of the whole city is set while nothing in it is picked
+				_box.add_child(_note(GS.t("РАЗМЕР ГОРОДА"), UiKit.AMBER, 15))
+				var sizes := UiKit.hbox(6)
+				_box.add_child(sizes)
+				for sz in CustomCity.SIZES:
+					var sb := Button.new()
+					sb.toggle_mode = true
+					sb.focus_mode = Control.FOCUS_NONE
+					sb.text = GS.t(String(sz[1]))
+					sb.custom_minimum_size = Vector2(0, 40)
+					sb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+					sb.add_theme_font_size_override("font_size", 13)
+					sb.button_pressed = is_equal_approx(float(sz[0]), float(data.size))
+					sb.pressed.connect(_resize_city.bind(float(sz[0])))
+					sizes.add_child(sb)
 		"district":
 			_hint.text = GS.t("Выберите тип застройки и коснитесь плана: появится район. Районы рядом срастаются в один город.")
 			_build_kinds()
@@ -473,7 +708,7 @@ func _refresh() -> void:
 			var back := UiKit.button(GS.t("↶ Убрать точку"), undo, 326, 16)
 			back.disabled = _draft.is_empty()
 			_box.add_child(back)
-	_plan.queue_redraw()
+	_redraw()
 
 
 func _note(text: String, col: Color, size := 13) -> Label:
@@ -535,7 +770,7 @@ func _slider(title: String, lo: float, hi: float, step: float, value: float, uni
 	s.value_changed.connect(func(v: float) -> void:
 		put.call(v)
 		apply.call(v)
-		_plan.queue_redraw())
+		_redraw())
 	s.drag_ended.connect(func(changed: bool) -> void:
 		if changed:
 			_soft_commit()
@@ -543,11 +778,12 @@ func _slider(title: String, lo: float, hi: float, step: float, value: float, uni
 			_undo.pop_back())
 
 
-## Written to the draft without rebuilding the panel (a slider is still under the finger).
+## Written down without rebuilding the panel (a slider is still under the finger).
 func _soft_commit() -> void:
-	def.cities[side] = data.duplicate(true)
-	def["dirty"] = bool(def.get("published", false))
-	ServerDef.save(def)
+	changed.emit(data.duplicate(true))
+	_stale = true
+	_stale_t = 0.0
+	_version += 1
 	_undo_btn.disabled = _undo.is_empty()
 
 
@@ -567,7 +803,7 @@ func _name_field(current: String, placeholder: String, apply: Callable) -> void:
 			apply.call(n)
 			was.name = n
 			_soft_commit()
-			_plan.queue_redraw()
+			_redraw()
 	e.text_submitted.connect(func(_s: String) -> void: e.release_focus())
 	e.focus_exited.connect(save)
 	_box.add_child(e)
@@ -647,25 +883,36 @@ func _ask_clear() -> void:
 		_draft = []
 		box.queue_free()
 		_commit()
-		_plan.fit()
+		_fit()
 	v.add_child(UiKit.button(GS.t("Пустое поле"), func() -> void: replace.call(CustomCity.blank(String(data.name), float(data.size)))))
-	v.add_child(UiKit.button(GS.t("Готовый образец"), func() -> void: replace.call(CustomCity.sample(String(data.name), side == 1))))
+	v.add_child(UiKit.button(GS.t("Готовый образец"), func() -> void: replace.call(CustomCity.sample(String(data.name), flip))))
 	v.add_child(UiKit.button(GS.t("Отмена"), func() -> void: box.queue_free()))
 
 
 func _done() -> void:
 	_finish_line()
 	_save_name()
-	def.cities[side] = CustomCity.clean(data)
-	ServerDef.save(def)
-	main.show_server(def)
+	done.emit(CustomCity.clean(data))
 
 
 # --- Drawn over the plan ---------------------------------------------------------------------------
 func _process(delta: float) -> void:
 	_t += delta
-	if not _draft.is_empty() or not _sel.is_empty():
-		_plan.queue_redraw()
+	if view != "3d":
+		if not _draft.is_empty() or not _sel.is_empty():
+			_plan.queue_redraw()
+		return
+	# typing a name must not fly the camera away on W, A, S, D
+	_rig.keys = not (get_viewport().gui_get_focus_owner() is LineEdit)
+	_giz.update(data, _sel, _draft, _rig.dist, _version)
+	_build_btn.disabled = not _stale or _building
+	_build_btn.add_theme_color_override("font_color", UiKit.AMBER if _stale else Color(0.7, 1.0, 0.85))
+	if _stale and not _building:
+		_stale_t += delta
+		# a computer builds by itself once the hand has rested; nothing half-drawn or half-dragged
+		var busy: bool = not _drag.is_empty() or not _draft.is_empty() or Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) or (_confirm != null and is_instance_valid(_confirm))
+		if _auto and not busy and _stale_t >= AUTO_BUILD:
+			_build3d()
 
 
 func _draw_overlay(plan: CityPlan) -> void:

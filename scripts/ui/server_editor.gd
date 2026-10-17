@@ -7,6 +7,7 @@ extends Control
 const UiKit = preload("res://scripts/ui/ui_kit.gd")
 const ServerDef = preload("res://scripts/core/server_def.gd")
 const CityPlan = preload("res://scripts/ui/city_plan.gd")
+const CitiesMenu = preload("res://scripts/ui/cities_menu.gd")
 
 var main
 var def := {}
@@ -120,6 +121,7 @@ func _city_card(side: int) -> Control:
 	var info := UiKit.label(GS.t("%d × %d км · районов %d · объектов %d") % [int(float(city.size) / 500.0), int(float(city.size) / 500.0), (city.districts as Array).size(), (city.objects as Array).size()], 13, Color(0.6, 0.85, 0.75), HORIZONTAL_ALIGNMENT_CENTER)
 	v.add_child(info)
 	v.add_child(UiKit.button(GS.t("Редактор города"), func() -> void: _leave_to(func() -> void: main.show_city_editor(def, side)), 290, 18))
+	v.add_child(UiKit.button(GS.t("Взять из моих городов"), _take_city.bind(side), 290, 16))
 	v.add_child(UiKit.button(GS.t("▶ Тест с ботом"), func() -> void: _leave_to(func() -> void: main.start_server(def, side, true)), 290, 18))
 	return v
 
@@ -151,6 +153,15 @@ func _choice(parent: Control, title: String, key: String, options: Array) -> voi
 			for k in btns.size():
 				(btns[k] as Button).button_pressed = k == i
 			_changed())
+
+
+## One of the cities drawn in the map editor becomes the city of this side (a copy of it).
+func _take_city(side: int) -> void:
+	_save_name()
+	_confirm = CitiesMenu.pick(self, func(e: Dictionary) -> void:
+		def.cities[side] = (e.city as Dictionary).duplicate(true)
+		_changed()
+		main.show_server(def))
 
 
 func _toggle_weapon(w: String) -> void:

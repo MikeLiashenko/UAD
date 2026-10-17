@@ -79,10 +79,11 @@ static func city_weapons(city) -> Array:
 static func sites(city) -> Array:
 	var used := city_weapons(city)
 	var out := []
+	var where := String(city.sites_as) if String(city.sites_as) != "" else String(city.id)
 	for id in KINDS:
 		var k: Dictionary = KINDS[id]
 		var km: Dictionary = k.km
-		if not km.has(city.id):
+		if not km.has(where):
 			continue
 		var ws := []
 		for w in k.weapons:
@@ -91,7 +92,7 @@ static func sites(city) -> Array:
 		if ws.is_empty():
 			continue
 		out.append({"id": id, "name": String(k.name), "short": String(k.get("short", k.name)), "icon": String(k.icon), "weapons": ws,
-			"bearing": _bearing(city, ws), "km": float(km[city.id]), "def": float(k.def),
+			"bearing": _bearing(city, ws), "km": float(km[where]), "def": float(k.def),
 			"naval": bool(k.get("naval", false))})
 	return out
 

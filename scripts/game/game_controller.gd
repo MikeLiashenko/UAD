@@ -874,7 +874,7 @@ func launch(type: String, count: int, at_base: bool, alt := -1.0, aim := "") -> 
 		type = "shahed"
 	launched[type] = int(launched.get(type, 0)) + count
 	# the radar tracks the launch back: the site it came from goes on the strike map
-	var found: Dictionary = Strikes.seen(map.city, type)
+	var found: Dictionary = Strikes.seen(map.city, type) if pvp == null else {}
 	if not found.is_empty():
 		hud.log_event(GS.t("Разведка засекла район пуска: %s — %s, ~%d км") % [GS.t(String(found.name)), Strikes.compass(float(found.bearing)), int(found.km)], Color(1.0, 0.8, 0.4))
 	var def: Dictionary = GS.ENEMIES[type]

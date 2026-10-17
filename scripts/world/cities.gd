@@ -38,6 +38,10 @@ static func get_def(id: String):
 ## under the same id is replaced, not freed: a map built from it may still be on screen (cities
 ## are plain Objects that live as long as the game, see CityDef).
 static func register(id: String, data: Dictionary):
+	var old = _custom.get(id)
+	# the same drawing again: the description stays, and with it the map already built from it
+	if old != null and JSON.stringify(old.data) == JSON.stringify(CustomCity.clean(data)):
+		return old
 	var def := CustomCity.new(data, id)
 	_custom[id] = def
 	return def

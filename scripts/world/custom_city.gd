@@ -68,13 +68,23 @@ func _init(d := {}, cid := "custom") -> void:
 	seed = int(data.seed)
 	noise_seed = seed % 97 + 3
 	noise2_seed = seed % 89 + 5
-	version = 1
+	# a redrawn city is another layout: what a save remembers of its buildings is dropped (GS.load_world)
+	version = 1000 + (JSON.stringify(data).hash() & 0x3FFFFFFF)
 	accent = Color(0.4, 0.95, 0.8)
 	lat0 = 49.0
 	lon0 = 32.0
 	video_channel = "@city_cuts"
 	video_authors = ["@balcony_cam", "@night_roof", "@taxi_2am", "@nightwatch", "@rooftop_live", "@yard_view"]
-	threat_sectors = [0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0]
+	# a world in a drawn city is raided like a city in the middle of the country (a server's match
+	# brings its own raids, from the other city)
+	threat_sectors = [0.0, 30.0, 60.0, 90.0, 110.0, 130.0, 150.0, 180.0]
+	raid = {
+		"drone": [["shahed", 0.7, 1], ["gerbera", 0.3, 2], ["geran3", 0.12, 8]],
+		"cruise": [["cruise", 0.55, 3], ["kalibr", 0.45, 4]],
+		"ballistic": [["ballistic", 0.7, 5], ["kh22", 0.3, 7]],
+	}
+	raid_sectors = {"ballistic": [80.0, 100.0, 120.0, 140.0], "kalibr": [150.0, 170.0, 190.0, 210.0], "kh22": [100.0, 130.0, 160.0]}
+	sites_as = "dnipro"
 	for r in data.rivers:
 		add_river(String(r.n), r.p)
 	for l in data.lakes:

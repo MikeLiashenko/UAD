@@ -837,6 +837,9 @@ func save_world() -> void:
 		"base_loc": base_loc, "stats": stats, "damaged": damaged, "crushed": crushed, "won": won,
 		"videos": videos, "sites": sites, "strikes": strikes,
 	}
+	if Cities.is_custom(city_id):
+		# a city drawn in the map editor: the world keeps its own copy and plays on without the editor's
+		d["city_data"] = city_def().data
 	var f := FileAccess.open(_world_path(world_id), FileAccess.WRITE)
 	if f:
 		f.store_string(JSON.stringify(d))
@@ -849,7 +852,13 @@ func read_world(id: String) -> Dictionary:
 		return {}
 	var parsed = JSON.parse_string(f.get_as_text())
 	f.close()
-	return parsed if parsed is Dictionary else {}
+	if not (parsed is Dictionary):
+		return {}
+	# a world of a drawn city the map editor no longer has: the copy in the save is the city
+	var cid = parsed.get("city_id")
+	if cid is String and String(cid).begins_with("my_") and not Cities.has(String(cid)) and parsed.get("city_data") is Dictionary:
+		Cities.register(String(cid), parsed.city_data)
+	return parsed
 
 
 func list_worlds() -> Array:

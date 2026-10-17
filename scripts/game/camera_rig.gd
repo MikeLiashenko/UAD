@@ -6,6 +6,8 @@ extends Node
 ## A short LMB press/release without dragging is reported as `clicked` (target selection).
 
 signal clicked(pos: Vector2)
+## A left drag that drag_hook claimed: phase 1 = moved to `pos`, 2 = let go there.
+signal dragged(pos: Vector2, phase: int)
 
 const DRAG_THRESHOLD := 10.0
 
@@ -30,6 +32,12 @@ var _shake := 0.0
 ## Held on-screen buttons of a touch screen: rotate (-1 left, 1 right) and tilt (-1 down, 1 up).
 var turn := 0.0
 var tilt := 0.0
+## Asked where a left drag begins (the press position): true = the drag belongs to the asker (the
+## city editor moving a district) — the camera stays put and the drag is told through `dragged`.
+var drag_hook := Callable()
+var _grab := false
+## The pan / turn / zoom keys work (off while a text field is being typed into).
+var keys := true
 ## The two-finger gesture in progress: the angle of the line between the fingers at the last
 ## event, and the last vertical step of each finger with its time (index -> [dy, msec]).
 var _twist := 0.0
@@ -66,24 +74,25 @@ func _right_vec() -> Vector3:
 
 func _process(delta: float) -> void:
 	var mv := Vector2.ZERO
-	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
-		mv.x -= 1
-	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
-		mv.x += 1
-	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
-		mv.y += 1
-	if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
-		mv.y -= 1
+	if keys:
+		if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
+			mv.x -= 1
+		if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
+			mv.x += 1
+		if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
+			mv.y += 1
+		if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
+			mv.y -= 1
+		if Input.is_key_pressed(KEY_Q):
+			_t_yaw += 1.4 * delta
+		if Input.is_key_pressed(KEY_E):
+			_t_yaw -= 1.4 * delta
+		if Input.is_key_pressed(KEY_EQUAL) or Input.is_key_pressed(KEY_KP_ADD):
+			zoom(1.0 - delta * 1.5)
+		if Input.is_key_pressed(KEY_MINUS) or Input.is_key_pressed(KEY_KP_SUBTRACT):
+			zoom(1.0 + delta * 1.5)
 	if mv != Vector2.ZERO:
 		_t_target += (_right_vec() * mv.x + _forward() * mv.y) * _t_dist * 1.1 * delta
-	if Input.is_key_pressed(KEY_Q):
-		_t_yaw += 1.4 * delta
-	if Input.is_key_pressed(KEY_E):
-		_t_yaw -= 1.4 * delta
-	if Input.is_key_pressed(KEY_EQUAL) or Input.is_key_pressed(KEY_KP_ADD):
-		zoom(1.0 - delta * 1.5)
-	if Input.is_key_pressed(KEY_MINUS) or Input.is_key_pressed(KEY_KP_SUBTRACT):
-		zoom(1.0 + delta * 1.5)
 	_t_yaw += turn * 1.4 * delta
 	_t_pitch += tilt * 0.8 * delta
 	_t_target.x = clampf(_t_target.x, -bounds, bounds)
@@ -120,17 +129,24 @@ func _unhandled_input(event: InputEvent) -> void:
 					_moved = false
 					_press = mb.position
 				else:
-					if _left and not _moved and _touches.size() < 2:
+					if _left and _grab:
+						dragged.emit(mb.position, 2)
+					elif _left and not _moved and _touches.size() < 2:
 						clicked.emit(mb.position)
 					_left = false
+					_grab = false
 			MOUSE_BUTTON_RIGHT, MOUSE_BUTTON_MIDDLE:
 				_right = mb.pressed
 	elif event is InputEventMouseMotion:
 		var mm := event as InputEventMouseMotion
 		if _left:
-			if mm.position.distance_to(_press) > DRAG_THRESHOLD:
+			if not _moved and mm.position.distance_to(_press) > DRAG_THRESHOLD:
 				_moved = true
-			if _moved and _touches.size() < 2:
+				_grab = drag_hook.is_valid() and bool(drag_hook.call(_press))
+			if _moved and _grab:
+				if _touches.size() < 2:
+					dragged.emit(mm.position, 1)
+			elif _moved and _touches.size() < 2:
 				var s := _t_dist * 0.0022
 				_t_target -= _right_vec() * mm.relative.x * s
 				_t_target += _forward() * mm.relative.y * s

@@ -47,6 +47,7 @@ const FbConn = preload("res://scripts/core/fb_conn.gd")
 const BuildInfo = preload("res://scripts/build_info.gd")
 const Account = preload("res://scripts/core/account.gd")
 const ServerDef = preload("res://scripts/core/server_def.gd")
+const Cities = preload("res://scripts/world/cities.gd")
 ## The Firebase Web API key (accounts) lives in this file, kept out of the public repository:
 ##   const FIREBASE_WEB_KEY := "AIza..."
 ## Without it the game runs on friend codes only.
@@ -104,6 +105,8 @@ const STALE_MS := 12000
 ## A friend whose heartbeat is older than this is shown offline.
 const ONLINE_MS := 40000
 const REQUEST_TIMEOUT := 30.0
+## The first build that can be a guest in a world of a drawn city (it gets the city from the host).
+const DRAWN_CITY_BUILD := 22
 ## A guest whose session stream stays down this long gives up.
 const LOST_AFTER := 20.0
 ## Raid snapshots: 4 a second while threats are in the air (one kept-alive connection answers
@@ -585,9 +588,12 @@ func _world_info() -> Dictionary:
 	var night := false
 	if main != null and main.game != null and is_instance_valid(main.game) and main.game.director != null:
 		night = main.game.director.is_night()
-	return {"n": nick(), "world": GS.world_name, "city": GS.city_id, "day": GS.day, "night": night,
+	var w := {"n": nick(), "world": GS.world_name, "city": GS.city_id, "day": GS.day, "night": night,
 		"difficulty": GS.difficulty, "players": players.size(), "max": MAX_PLAYERS, "p": PROTO,
 		"base": [snappedf(GS.base_pos.x, 0.1), snappedf(GS.base_pos.z, 0.1)]}
+	if Cities.is_custom(GS.city_id):
+		w["cn"] = String(GS.city_def().name) # a city the friends' games do not have: its name for the list
+	return w
 
 
 func _player(n: String, slot: int) -> Dictionary:
@@ -617,7 +623,7 @@ func _on_requests() -> void:
 			continue
 		if _answered.has(c) or pending.has(c) or parse_code(String(c)) == "":
 			continue
-		if int(r.get("p", 0)) != PROTO:
+		if int(r.get("p", 0)) != PROTO or (Cities.is_custom(GS.city_id) and int(float(r.get("v", 0))) < DRAWN_CITY_BUILD):
 			_reply(c, "version")
 		elif players.size() >= MAX_PLAYERS:
 			_reply(c, "full")
@@ -652,7 +658,10 @@ func accept(c: String) -> void:
 	_accepted_at[c] = _clock
 	_map_sig = "" # the newcomer gets the buildings as they are now
 	db.put("sessions/%s/%s" % [host, c], {"n": n, "s": slot, "t": FbDb.now_placeholder()})
-	_reply(c, "ok", {"w": _world_info(), "s": slot})
+	var info := _world_info()
+	if Cities.is_custom(GS.city_id):
+		info["cd"] = GS.city_def().data # the drawing itself: the guest's game builds the same city
+	_reply(c, "ok", {"w": info, "s": slot})
 	_remember_friend(c, n)
 	_user_t = 999.0
 	player_joined.emit(n)
@@ -674,7 +683,7 @@ func request_join(host_code: String) -> void:
 	_req_seen = false
 	_host_seen = false
 	var path := "requests/%s/%s" % [host, code()]
-	db.put(path, {"n": nick(), "t": FbDb.now_placeholder(), "p": PROTO, "st": "wait"}, func(ok: bool, _d) -> void:
+	db.put(path, {"n": nick(), "t": FbDb.now_placeholder(), "p": PROTO, "v": BuildInfo.BUILD, "st": "wait"}, func(ok: bool, _d) -> void:
 		if role != "joining" or host != host_code:
 			return
 		if ok:

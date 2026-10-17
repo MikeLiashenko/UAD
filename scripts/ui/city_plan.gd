@@ -24,6 +24,8 @@ var zoom := 0.03
 var movable := true
 ## Names of districts and objects are drawn.
 var names := true
+## A thumbnail: objects are dots, not signs as big as the plan itself.
+var compact := false
 ## Drawn over the plan by its owner: called with this control (use at() and the draw_* calls).
 var overlay := Callable()
 
@@ -248,6 +250,9 @@ func _draw() -> void:
 	draw_rect(sq, Color(0.4, 1.0, 0.7, 0.5), false, 1.5)
 	for o in data.get("objects", []):
 		var p := at(Vector2(float(o.x), float(o.z)))
+		if compact:
+			draw_circle(p, 2.5, Color(1.0, 0.55, 0.4))
+			continue
 		draw_object(p, String(o.k), Color(1.0, 0.55, 0.4))
 		if names:
 			var oname := String(o.n) if String(o.n) != "" else GS.t(CustomCity.object_name(String(o.k)))

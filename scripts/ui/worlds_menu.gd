@@ -526,7 +526,9 @@ func _mp_row(e: Dictionary) -> Control:
 		var phase := GS.t("ночь, идёт налёт") if bool(w.get("night", false)) else GS.t("день")
 		if not Cities.has(cid):
 			cid = Cities.DEFAULT
-		col.add_child(UiKit.label(GS.t("Хост: %s · %s · День %d · %s") % [fnick, GS.t(String(GS.city_def(cid).name)), int(w.get("day", 1)), phase], 14, Color(0.7, 1.0, 0.85)))
+		# a city the host drew is known here only by the name the host gives
+		var cname := GS.t(String(GS.city_def(cid).name)) if not w.has("cn") else ServerDef.CustomCity.clean_name(w.get("cn"))
+		col.add_child(UiKit.label(GS.t("Хост: %s · %s · День %d · %s") % [fnick, cname, int(w.get("day", 1)), phase], 14, Color(0.7, 1.0, 0.85)))
 		col.add_child(UiKit.label(code_line, 12, Color(0.5, 0.75, 0.65)))
 	elif online:
 		col.add_child(UiKit.label(fnick, 21, Color(0.85, 1.0, 0.92)))

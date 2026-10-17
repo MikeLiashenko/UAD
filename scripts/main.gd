@@ -48,8 +48,18 @@ extends Node
 ##   --srv-blank                (with --srvtest) the city is an empty field: nothing drawn at all
 ##   --srvflow                  the way of a player through a draft's test: the server's screen, "test
 ##                              against the bot" for the second city, the position on the map, the match
-##   --edittest                 the city editor worked through its own handlers: every tool, a drag,
-##                              the sliders' data, undo, the limits, "Done"
+##   --edittest                 the city editor worked through its own handlers: the 3D view (the
+##                              city built from the drawing, taps and drags on the ground, the city
+##                              built again after a change), then on the plan every tool, a drag,
+##                              undo, the limits, "Done"
+##   --editview=plan|3d         the view the city editor opens in (pictures of --screen=cityedit)
+##   --touch --edittouch        (with --screen=cityedit) fingers on the 3D editor through the input
+##                              system: a tap puts a district, a drag on it moves it, a drag on empty
+##                              ground moves the camera, two fingers pinch it closer
+##   --citytest                 the map editor's own cities: the store, a world created in a drawn
+##                              city (saved, loaded, the editor's copy deleted), launch sites, the
+##                              drawing handed to a guest of a friend's world
+##   --screen=cities            the map editor's list (with --offline: two cities to look at)
 ##   --srvunit                  servers self-test, offline (in-memory database): hostile city and
 ##                              server data, publishing, the list, joining a side, the captain and
 ##                              the handover, strikes and outcomes, leaving
@@ -78,6 +88,8 @@ const VideoExport = preload("res://scripts/game/video_export.gd")
 const ServerDef = preload("res://scripts/core/server_def.gd")
 const ServerEditor = preload("res://scripts/ui/server_editor.gd")
 const CityEditor = preload("res://scripts/ui/city_editor.gd")
+const CityStore = preload("res://scripts/core/city_store.gd")
+const CitiesMenu = preload("res://scripts/ui/cities_menu.gd")
 
 var map
 var cam: Camera3D
@@ -87,6 +99,8 @@ var game: Node
 var pending_world := {"name": GS.t("Оборона Киева"), "difficulty": 1, "city": "kyiv"}
 ## The match on a server being set up or played: {"def": ServerDef, "side": 0 | 1, "bot": bool}.
 var server := {}
+## The city the "create world" screen opens on (the map editor's "create a world in this city").
+var create_city := ""
 var _mode := "menu"
 var _orbit := 0.6
 
@@ -110,6 +124,7 @@ func _ready() -> void:
 	_parse_args()
 	if not _args.has("offscreen"):
 		get_window().min_size = Vector2i(960, 540)
+	CityStore.register_all() # the cities drawn in the map editor are cities like the others
 	# the menu shows the city of the most recently played world
 	var start_city := Cities.DEFAULT
 	var recent := GS.list_worlds()
@@ -156,6 +171,8 @@ func _ready() -> void:
 		_srv_unit_selftest()
 	if _args.has("edittest"):
 		_editor_selftest.call_deferred()
+	if _args.has("citytest"):
+		_city_selftest.call_deferred()
 	if _args.has("mphost") or _args.has("mpjoin"):
 		_mp_live_setup()
 	if not _args.has("quit-at"):
@@ -194,7 +211,16 @@ func _ready() -> void:
 		"settings":
 			show_settings()
 		"create":
-			show_create_world()
+			if _args.has("owncity"):
+				# test hook: the screen opened on a city of the player's own
+				show_create_world(false, CityStore.city_id(CityStore.create(Cities.CustomCity.sample("Новоград"))))
+			else:
+				show_create_world()
+		"cities":
+			if CityStore.dry:
+				CityStore.create(Cities.CustomCity.sample("Новоград"))
+				CityStore.create(Cities.CustomCity.sample("Приречье", true))
+			show_cities()
 		"game":
 			if _args.has("srvtest"):
 				_start_server_test()
@@ -204,6 +230,11 @@ func _ready() -> void:
 			show_server(_test_server())
 		"cityedit":
 			show_city_editor(_test_server(), 0)
+			if _args.has("editsel"):
+				# a picture with something selected: the road, and a river half drawn
+				screen._sel = {"type": "road", "i": 0, "pt": 2}
+				screen._draft = [[-5200.0, 4600.0], [-3000.0, 5200.0], [-600.0, 4700.0]]
+				screen._refresh.call_deferred()
 		"servers":
 			WorldsMenu.last_tab = "servers"
 			show_worlds()
@@ -276,8 +307,9 @@ func _parse_args() -> void:
 		Engine.time_scale = float(_args.speed)
 	if _args.has("nomarkers"):
 		GS.settings.markers = false
-	if _args.has("offline") or _args.has("srvtest") or _args.has("srvunit") or _args.has("srvflow") or _args.has("edittest"):
+	if _args.has("offline") or _args.has("srvtest") or _args.has("srvunit") or _args.has("srvflow") or _args.has("edittest") or _args.has("citytest"):
 		ServerDef.dry = true # a test's server never lands among the player's drafts
+		CityStore.dry = true # …nor a test's city among the player's cities
 	if _args.has("offline"):
 		Net.set_offline()
 		Net.dry = true
@@ -331,9 +363,13 @@ func switch_city(id: String, then: Callable) -> void:
 	ui.add_child(_loading)
 	await get_tree().process_frame
 	await get_tree().process_frame
+	var veil := _loading
 	_build_map(id)
-	_loading.queue_free()
-	_loading = null
+	# (another change of city may have started while this one waited for its two frames)
+	if veil != null and is_instance_valid(veil):
+		veil.queue_free()
+	if _loading == veil:
+		_loading = null
 	then.call()
 
 
@@ -389,9 +425,10 @@ func show_worlds() -> void:
 	_show(w, "menu")
 
 
-func show_create_world(real := false) -> void:
+func show_create_world(real := false, city := "") -> void:
 	if real:
 		pending_world["realism"] = true # straight from the training range
+	create_city = city
 	_end_game()
 	map.set_labels_visible(false)
 	map.set_night(1.0)
@@ -455,14 +492,63 @@ func show_servers() -> void:
 	show_worlds()
 
 
-## The city editor on one of the two cities of a server.
+## The city editor on one of the two cities of a server: every change goes into its draft.
 func show_city_editor(def: Dictionary, side: int) -> void:
 	_end_game()
 	var e := CityEditor.new()
 	e.main = self
-	e.def = def
-	e.side = side
-	_show(e, "menu")
+	e.city_id = ServerDef.city_id(def, side)
+	e.view = String(_args.get("editview", "3d"))
+	e.source = def.cities[side]
+	e.caption = GS.t("ГОРОД %d") % (side + 1)
+	e.caption_color = UiKit.NEON if side == 0 else UiKit.CYAN
+	e.flip = side == 1
+	e.changed.connect(func(city: Dictionary) -> void:
+		def.cities[side] = city
+		def["dirty"] = bool(def.get("published", false))
+		ServerDef.save(def))
+	e.done.connect(func(city: Dictionary) -> void:
+		def.cities[side] = city
+		ServerDef.save(def)
+		show_server(def))
+	_show(e, "editor")
+
+
+## Builds the map of a registered city at once (the city editor's 3D view; its own veil is up).
+func build_city(id: String) -> void:
+	_build_map(id)
+
+
+## The map editor's list: the cities the player has drawn (main menu → "Map editor").
+func show_cities() -> void:
+	Net.close()
+	_end_game()
+	map.set_labels_visible(false)
+	map.set_night(1.0)
+	var c := CitiesMenu.new()
+	c.main = self
+	_show(c, "menu")
+
+
+## The city editor on one of the player's own cities (CityStore): every change is written at once.
+func show_map_editor(id: String) -> void:
+	var entry := CityStore.read(id)
+	if entry.is_empty():
+		show_cities()
+		return
+	_end_game()
+	CitiesMenu.last = id
+	var e := CityEditor.new()
+	e.main = self
+	e.city_id = CityStore.city_id(id)
+	e.view = String(_args.get("editview", "3d"))
+	e.source = entry.city
+	e.caption = GS.t("МОЙ ГОРОД")
+	e.changed.connect(func(city: Dictionary) -> void: CityStore.save(id, city))
+	e.done.connect(func(city: Dictionary) -> void:
+		CityStore.save(id, city)
+		show_cities())
+	_show(e, "editor")
 
 
 ## Enters a match as a defender of the city of `side`: the city is built and the player picks
@@ -548,6 +634,10 @@ func join_world(info: Dictionary) -> void:
 	if Net.role != "guest":
 		return
 	var cid := String(info.get("city", Cities.DEFAULT))
+	if info.get("cd") is Dictionary:
+		# the host's world is in a city the host drew: here it is built from the same drawing
+		cid = "net_" + Net.host
+		Cities.register(cid, info.cd)
 	pending_world = {"name": String(info.get("world", GS.t("Мир"))), "difficulty": clampi(int(info.get("difficulty", 1)), 0, 2),
 		"city": cid if Cities.has(cid) else Cities.DEFAULT, "guest": true, "host": String(info.get("n", "?"))}
 	show_map_select()
@@ -773,6 +863,8 @@ func _process(delta: float) -> void:
 		game.pvp.set_enemy_hp(0.0)
 	if _args.has("srvflow"):
 		_srv_flow_step()
+	if _args.has("edittouch") and screen != null and is_instance_valid(screen) and screen.get_script() == CityEditor and _clock >= 2.0 and (int(_et.n) > 0 or (not screen._building and not screen._stale)):
+		_edit_touch_step()
 	if _args.has("mptest") and game and is_instance_valid(game):
 		_mp_session_selftest()
 	if _args.has("mphost") or _args.has("mpjoin"):
@@ -1567,6 +1659,61 @@ func _srv_flow_step() -> void:
 var _flow_t := 0.0
 
 
+## --edittouch: real touch events on the 3D editor (one step every few frames; the 3D city is
+## built when it starts). The first finger is also the emulated mouse, as on a device.
+var _et := {"n": 0, "at": Vector2(430, 400), "d0": Vector2.ZERO, "cam0": Vector3.ZERO, "dist0": 0.0}
+
+
+func _edit_touch_step() -> void:
+	var ed = screen
+	var at: Vector2 = _et.at
+	_et.n = int(_et.n) + 1
+	match int(_et.n):
+		1:
+			ed.data.districts.clear()
+			ed._set_tool("district")
+			_finger(0, at, true)
+		4:
+			_finger(0, at, false)
+		8:
+			var d: Array = ed.data.districts[0] if ed.data.districts.size() == 1 else ["", 0.0, 0.0]
+			_et.d0 = Vector2(float(d[1]), float(d[2]))
+			var g = ed._ground(at)
+			print("UAD EDITTOUCH tap: districts=%d at the finger=%s" % [ed.data.districts.size(), g != null and (_et.d0 as Vector2).distance_to(g) < 5.0])
+			ed._stale = false # (the test goes on without waiting for the city to be built again)
+			ed._set_tool("select")
+			_finger(0, at, true)
+		10, 12, 14:
+			_slide(0, at + Vector2(25, 0) * ((int(_et.n) - 10) / 2), Vector2(25, 0))
+		16:
+			_finger(0, at + Vector2(75, 0), false)
+		20:
+			var d: Array = ed.data.districts[0]
+			print("UAD EDITTOUCH drag on the district: moved %d m east, undo steps=%d" % [int(float(d[1]) - (_et.d0 as Vector2).x), ed._undo.size()])
+			ed._stale = false
+			_et.cam0 = ed._rig._t_target
+			_finger(0, Vector2(120, 620), true)
+		22, 24, 26:
+			_slide(0, Vector2(120, 620) + Vector2(30, 0) * ((int(_et.n) - 22) / 2), Vector2(30, 0))
+		28:
+			_finger(0, Vector2(210, 620), false)
+		32:
+			var d: Array = ed.data.districts[0]
+			print("UAD EDITTOUCH drag on empty ground: camera moved %d m, districts=%d, the district stayed=%s" % [int((ed._rig._t_target as Vector3).distance_to(_et.cam0)), ed.data.districts.size(), absf(float(d[1]) - (_et.d0 as Vector2).x) > 50.0])
+			_et.dist0 = ed._rig._t_dist
+			_finger(0, Vector2(380, 400), true)
+			_finger(1, Vector2(480, 400), true)
+		34, 36, 38:
+			_slide(0, Vector2(380, 400) - Vector2(20, 0) * ((int(_et.n) - 34) / 2), Vector2(-20, 0))
+			_slide(1, Vector2(480, 400) + Vector2(20, 0) * ((int(_et.n) - 34) / 2), Vector2(20, 0))
+		40:
+			_finger(1, Vector2(540, 400), false)
+			_finger(0, Vector2(320, 400), false)
+		44:
+			print("UAD EDITTOUCH pinch: distance x%.2f, districts=%d (two fingers place nothing)" % [ed._rig._t_dist / maxf(float(_et.dist0), 1.0), ed.data.districts.size()])
+			_args.erase("edittouch")
+
+
 ## --edittest: the city editor through its own handlers, the way taps and drags reach it.
 func _editor_selftest() -> void:
 	const CC = preload("res://scripts/world/custom_city.gd")
@@ -1580,6 +1727,46 @@ func _editor_selftest() -> void:
 	var check := func(ok: bool, what: String) -> void:
 		if not ok:
 			fails.append(what)
+	# --- the 3D view: the city is built from the drawing and drawn on where it stands
+	var wait_built := func() -> void:
+		var n := 0
+		while (ed._building or ed._stale) and n < 1200:
+			n += 1
+			await get_tree().process_frame
+	await wait_built.call()
+	check.call(ed.view == "3d" and map.city_id == ed.city_id and map.visible and ed._giz.visible and not ed._plan.visible, "the editor opens in 3D on the built city (%s)" % map.city_id)
+	await get_tree().process_frame
+	var at := Vector2(430, 400) # a point of the screen over the view, clear of the panels
+	var g0 = ed._ground(at)
+	check.call(g0 != null and ed._inside(g0), "the ground under a point of the screen: %s" % str(g0))
+	ed._set_tool("district")
+	ed._rig_click(at)
+	check.call(ed.data.districts.size() == 1 and Vector2(float(ed.data.districts[0][1]), float(ed.data.districts[0][2])).distance_to(g0) < 1.0 and ed._stale, "a tap on the ground puts a district there")
+	await get_tree().process_frame
+	check.call(ed._giz.vertex_count() > 100 and ed._giz.label_count() == 1, "the district is marked over the city at once (%d vertices)" % ed._giz.vertex_count())
+	await wait_built.call()
+	check.call(not ed._stale and map.city == Cities.get_def(ed.city_id) and map.city.districts.size() == 1 and String(map.city.districts[0][5]) == "panel", "the city is built again from the changed drawing")
+	await get_tree().process_frame
+	# the select tool: a drag that starts on the district moves it, one on empty ground is the camera's
+	ed._set_tool("select")
+	var before := Vector2(float(ed.data.districts[0][1]), float(ed.data.districts[0][2]))
+	var steps: int = ed._undo.size()
+	check.call(ed._rig_grab(at), "a drag on a district is the editor's")
+	ed._rig_drag(at + Vector2(60, 0), 1)
+	ed._rig_drag(at + Vector2(60, 0), 2)
+	var after := Vector2(float(ed.data.districts[0][1]), float(ed.data.districts[0][2]))
+	check.call(after.x - before.x > 100.0 and absf(after.y - before.y) < 60.0 and ed._undo.size() == steps + 1 and ed._stale, "the district follows the finger across the ground (%d m)" % int(after.x - before.x))
+	check.call(not ed._rig_grab(Vector2(60, 660)) and ed._drag.is_empty(), "a drag on empty ground is left to the camera")
+	check.call(ed._m_per_unit(g0) > 1.0 and ed._m_per_unit(g0) < 100.0, "a finger's miss is measured in metres of the ground (%.1f m a unit)" % ed._m_per_unit(g0))
+	var far: float = ed._rig._t_dist
+	ed._zoom(1.0 / 1.3)
+	check.call(ed._rig._t_dist < far, "the + button brings the camera closer")
+	ed._fit()
+	# --- the plan: the other view of the same drawing
+	ed.set_view("plan")
+	check.call(ed.view == "plan" and ed._plan.visible and not map.visible and not ed._giz.visible and not ed._rig.is_processing(), "the flat plan is a button away")
+	while not ed._undo.is_empty():
+		ed.undo()
 	check.call(ed.data.districts.is_empty() and ed._plan.size.x > 300.0, "an empty city on the plan")
 	# a district under the finger, selected at once
 	ed._set_tool("district")
@@ -1649,6 +1836,10 @@ func _editor_selftest() -> void:
 	for d in ed.data.districts:
 		inside = inside and absf(float(d[1])) <= 4000.0 and absf(float(d[2])) <= 4000.0
 	check.call(float(ed.data.size) == 4000.0 and inside, "a smaller square keeps everything inside")
+	# back in 3D the city is built from everything drawn on the plan
+	ed.set_view("3d")
+	await wait_built.call()
+	check.call(map.visible and map.city == Cities.get_def(ed.city_id) and map.city.districts.size() == CC.MAX_DISTRICTS and int(map.half) == 4000 and map.fp_box.size() > 1000, "back in 3D: the city of the plan is built (%d buildings)" % map.fp_box.size())
 	ed._name.text = "Новоград%\n"
 	ed._done()
 	await get_tree().process_frame
@@ -1660,6 +1851,85 @@ func _editor_selftest() -> void:
 	_build_map(cid)
 	check.call(map.city_id == cid and map.targets.size() >= 1 and map.fp_box.size() > 1000, "the drawn city is built: %d buildings, %d targets" % [map.fp_box.size(), map.targets.size()])
 	print("UAD EDITTEST: %s" % ("OK" if fails.is_empty() else "FAIL " + " | ".join(fails)))
+
+
+## --citytest: the cities of the map editor, offline and in memory. The store keeps and lists them;
+## a world is created in one, saved and loaded; the editor's copy is deleted and the world still
+## has its city; a redrawn city drops what the save knew of its buildings; the city has launch
+## sites to strike; a guest of a friend's world gets the drawing from the host.
+func _city_selftest() -> void:
+	const CC = preload("res://scripts/world/custom_city.gd")
+	const Strikes = preload("res://scripts/game/strikes.gd")
+	Net.dry = true
+	Net.set_offline()
+	var fails := []
+	var check := func(ok: bool, what: String) -> void:
+		if not ok:
+			fails.append(what)
+	check.call(CityStore.list().is_empty(), "the test starts with no cities (and reads none of the player's)")
+	var id := CityStore.create(CC.sample("Новоград"))
+	var cid := CityStore.city_id(id)
+	check.call(CityStore.list().size() == 1 and String(CityStore.read(id).city.name) == "Новоград" and Cities.has(cid) and Cities.is_custom(cid), "a city is kept and known to the game")
+	check.call(not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(CityStore.DIR)) or not FileAccess.file_exists(CityStore.DIR + id + ".json"), "a test writes no city to disk")
+	# the "create world" screen takes it, and not a server's city
+	show_create_world(false, cid)
+	await get_tree().process_frame
+	check.call(screen.get_script() == CreateWorld and String(screen._city) == cid and screen._own_btn.button_pressed and String(screen._own_btn.text) == "Новоград", "the create-world screen opens on the drawn city")
+	screen._set_city("kyiv")
+	check.call(String(screen._city) == "kyiv" and not screen._own_btn.button_pressed, "back to one of the game's cities")
+	Cities.register("srv_TESTSRV2_0", CC.sample("Чужой"))
+	screen._set_city("srv_TESTSRV2_0")
+	check.call(String(screen._city) == Cities.DEFAULT, "a server's city is not offered for a world")
+	screen._set_city(cid)
+	screen._name.text = "Мир в Новограде"
+	screen._next()
+	var frames := 0
+	while (screen == null or not is_instance_valid(screen) or screen.get_script() != MapSelect or _loading != null) and frames < 900:
+		frames += 1
+		await get_tree().process_frame
+	check.call(map.city_id == cid and int(map.half) == 7000 and map.targets.size() == 6, "the map of the drawn city is built (%s, %d targets)" % [map.city_id, map.targets.size()])
+	var spot := _find_spot(GS.Loc.FIELD)
+	create_world(spot, GS.Loc.FIELD)
+	var wid := GS.world_id
+	check.call(game != null and GS.city_id == cid and wid != "" and game.pvp == null, "a world in the drawn city is running")
+	check.call(game.director.schedule.size() >= 1 and not Strikes.sites(map.city).is_empty(), "it has its raids and launch sites to strike (%d sites)" % Strikes.sites(map.city).size())
+	GS.damaged = [3, 17]
+	GS.save_world()
+	var saved := GS.read_world(wid)
+	check.call(String(saved.get("city_id", "")) == cid and saved.get("city_data") is Dictionary and int(saved.get("map_ver", 0)) == int(Cities.get_def(cid).version), "the save carries the drawing")
+	show_menu()
+	check.call(GS.load_world(wid) and GS.city_id == cid and GS.damaged == [3, 17], "the world loads in its city")
+	# the city redrawn: another layout, the save's building numbers are dropped
+	var redrawn: Dictionary = CityStore.read(id).city
+	redrawn.districts.append(["Новый район", 3000.0, -3000.0, 0.0, "panel", 800.0])
+	CityStore.save(id, redrawn)
+	check.call(GS.load_world(wid) and GS.city_id == cid and GS.damaged.is_empty() and Cities.get_def(cid).districts.size() == 9, "a redrawn city: the world follows it, damage marks dropped")
+	# the city deleted from the editor: the world's own copy takes over
+	CityStore.remove(id)
+	Cities._custom.erase(cid) # as after a restart of the game
+	check.call(not Cities.has(cid) and CityStore.list().is_empty(), "the city is gone from the editor")
+	var again := GS.list_worlds().filter(func(w) -> bool: return String(w.id) == wid)
+	check.call(again.size() == 1 and Cities.has(cid) and GS.load_world(wid) and GS.city_id == cid and String(GS.city_def().name) == "Новоград" and GS.city_def().districts.size() == 8, "the world still has its city: the copy in the save")
+	GS.delete_world(wid)
+	check.call(not GS.list_worlds().any(func(w) -> bool: return String(w.id) == wid), "the test's world is deleted")
+	# a friend's world in a drawn city: the host hands the drawing over, an older game is turned away
+	GS.city_id = cid
+	var info: Dictionary = Net._world_info()
+	check.call(String(info.get("cn", "")) == "Новоград" and not info.has("cd"), "the friends' list gets the city's name, not the drawing")
+	Net.role = "guest"
+	Net.host = "HASTAAAA"
+	join_world({"world": "Мир друга", "city": cid, "n": "Друг", "difficulty": 1, "cd": Cities.get_def(cid).data})
+	check.call(String(pending_world.city) == "net_HASTAAAA" and Cities.has("net_HASTAAAA") and Cities.get_def("net_HASTAAAA").districts.size() == 8, "a guest builds the host's city from the drawing")
+	frames = 0
+	while (map.city_id != "net_HASTAAAA" or _loading != null) and frames < 900:
+		frames += 1
+		await get_tree().process_frame
+	check.call(map.city_id == "net_HASTAAAA" and screen.get_script() == MapSelect, "…and picks a position in it")
+	join_world({"world": "x", "city": "kyiv", "n": "Друг", "difficulty": 1})
+	check.call(String(pending_world.city) == "kyiv", "a world in one of the game's cities joins as before")
+	Net._drop()
+	show_menu()
+	print("UAD CITYTEST: %s" % ("OK" if fails.is_empty() else "FAIL " + " | ".join(fails)))
 
 
 ## Waits until the deferred answers of the in-memory database have been delivered.
