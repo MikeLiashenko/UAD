@@ -1844,4 +1844,9 @@ const T := {
 	"Район откроется сразу — по нему можно бить уже сегодня.": "The area opens at once — it can be struck today.",
 	"Мобильные пусковые («Искандеры», С-300/400/500, «Бастион») по утрам могут сменить позицию — тогда их снова нужно найти.": "Mobile launchers (Iskanders, S-300/400/500, Bastion) may move in the morning — then they have to be found again.",
 	"Диверсанты ГУР выдвинулись к цели «%s» — итог к ночи": "HUR saboteurs are on their way to «%s» — the outcome by nightfall",
+	# --- strike footage -----------------------------------------------------------------------
+	"ОБЪЕКТИВНЫЙ КОНТРОЛЬ": "STRIKE FOOTAGE",
+	"ПОРАЖЕНИЕ": "TARGET HIT",
+	"СБИТ ПВО ПРОТИВНИКА": "SHOT DOWN BY ENEMY AIR DEFENCE",
+	"и ещё ударов: %d": "and %d more strikes",
 }

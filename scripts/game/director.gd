@@ -171,6 +171,7 @@ func _strike_results() -> void:
 	var res := Strikes.resolve(game.map.city, _rng)
 	if res.is_empty():
 		return
+	game.hud.show_bda(res)
 	var hits := 0
 	for r in res:
 		var wname := GS.t(String(Strikes.WEAPONS[r.w].short))
@@ -197,6 +198,7 @@ func _hunts(delta: float) -> void:
 	for r in Strikes.hunt_step(city, delta, _rng):
 		if game.autotest:
 			print("UAD HUNT %s at %s: %s" % [r.w, r.site, "HIT" if bool(r.hit) else "miss"])
+		game.hud.show_bda([r])
 		var wname := GS.t(String(Strikes.WEAPONS[r.w].short))
 		var sname := GS.t(String(Strikes.KINDS[r.site].short))
 		if bool(r.hit):

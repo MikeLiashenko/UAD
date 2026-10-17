@@ -8,6 +8,7 @@ const Shop = preload("res://scripts/ui/shop.gd")
 const Supply = preload("res://scripts/ui/supply.gd")
 const StrikeMap = preload("res://scripts/ui/strike_map.gd")
 const Strikes = preload("res://scripts/game/strikes.gd")
+const BdaView = preload("res://scripts/ui/bda_view.gd")
 const AttackMap = preload("res://scripts/ui/attack_map.gd")
 const SettingsMenu = preload("res://scripts/ui/settings_menu.gd")
 const Reticle = preload("res://scripts/ui/reticle.gd")
@@ -93,6 +94,8 @@ var alarm_btn: Button
 var alarm_lbl: Label
 ## A launcher in the open (scripts/game/strikes.gd, hunts): the button opens the strike map on it.
 var hunt_btn: Button
+## The footage of our strikes as they land (scripts/ui/bda_view.gd).
+var bda: Control
 var _alarm_styles: Array = []
 ## A match on a server: both cities' integrity and the strikes on their way: [bar, percent] × 2, the line under them.
 var _pvp_bars: Array = []
@@ -140,6 +143,8 @@ func _ready() -> void:
 	_build_touch_buttons()
 	_build_alarm()
 	_build_hunt()
+	bda = BdaView.new()
+	root.add_child(bda)
 	flash_rect = UiKit.full_rect(ColorRect.new()) as ColorRect
 	flash_rect.color = Color(1.0, 0.92, 0.8, 0.0)
 	flash_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -793,6 +798,22 @@ func _update_hunt() -> void:
 	hunt_btn.modulate = Color(1, 1, 1, 0.75 + 0.25 * absf(sin(_t * 5.0)))
 
 
+## The footage stands in the left column, under the alarm and launcher buttons.
+func _place_bda() -> void:
+	if bda == null or not bda.visible:
+		return
+	bda.size = Vector2(336, 189)
+	bda.position = Vector2(12, left_column_top() + 10.0)
+
+
+## The footage of strikes that have just landed — not in MaxRealism, which has no such screen.
+func show_bda(results: Array) -> void:
+	if bda == null or GS.realism or results.is_empty():
+		return
+	bda.play(results)
+	_place_bda()
+
+
 ## The hunt button under a finger, like the alarm button.
 func _hunt_input(event: InputEvent) -> bool:
 	if hunt_btn == null or not (event is InputEventScreenTouch):
@@ -959,6 +980,7 @@ func _process(delta: float) -> void:
 	_update_fires()
 	_update_alarm()
 	_update_hunt()
+	_place_bda()
 	_update_pvp()
 	nv_rect.visible =(game.view == "base" and game.base_view.nv) or (game.view == "fpv" and game.fpv_view.nv)
 	_update_target_info()

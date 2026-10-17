@@ -20,7 +20,7 @@ extends Node
 ##                              the same every run: the sky effects for the shot list
 ##   --crush=X,Z                collapse and set fire to the building at X,Z (fire-service test)
 ##   --camat=X,Z[,DIST]         park the overhead camera on a spot
-##   --screen=menu|settings|map|worlds|create|game   --open=shop|pause|morning|gameover|feed|video|record
+##   --screen=menu|settings|map|worlds|create|game   --open=shop|pause|morning|gameover|feed|video|record|bda
 ##   --daystrike=ballistic|cruise   (with --autotest) a strike in the daytime, without the dice
 ##   --touch --alarmtouch       fingers on the air-raid alarm button of the usual game
 ##   --touch --hunttouch        a finger on the launcher button (a hunt) opens the strike map on it
@@ -950,6 +950,9 @@ func _open_screen(what: String) -> void:
 			if _args.has("strikedemo"):
 				_strike_demo()
 			game.hud.open_strikes(String(_args.get("strikesel", "")))
+		"bda":
+			# the footage of four strikes: an airfield and a plant hit, ships missed, launchers hit
+			game.hud.show_bda([{"site": "strategic", "w": "flamingo", "hit": true}, {"site": "fleet", "w": "neptune", "hit": false}, {"site": "iskander", "w": "atacms", "hit": true}, {"site": "factory", "w": "flamingo", "hit": true}])
 		"attack":
 			game.hud.open_strikes()
 		"pause":
