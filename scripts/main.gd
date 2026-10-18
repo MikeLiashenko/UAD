@@ -292,6 +292,8 @@ func _setup_post() -> void:
 	layer.add_child(_post)
 	GS.state_changed.connect(_update_post)
 	_update_post()
+	GS.state_changed.connect(_mark_unsaved)
+	GS.money_changed.connect(func(_v: int) -> void: _mark_unsaved())
 
 
 func _post_rect() -> ColorRect:
@@ -730,7 +732,7 @@ func _start_session() -> void:
 	game.autotest = _args.has("autotest")
 	add_child(game)
 	if GS.world_id != "":
-		GS.save_world()
+		game.save_progress() # with the hour of the day the world goes on at
 
 
 ## Saves (only during the day — nights restart from their morning) and returns to the menu.
@@ -743,6 +745,32 @@ func _save_if_safe() -> void:
 	if game and is_instance_valid(game) and not game.game_over and GS.world_id != "":
 		if not game.director.is_night():
 			game.save_progress()
+
+
+## Daytime autosave: a strike sent, a system bought, a reward paid go to disk a few seconds later
+## (no sooner than AUTOSAVE_GAP after the last one), so a crash in the day loses next to nothing.
+## Nights are never saved: they restart from their morning.
+const AUTOSAVE_DELAY := 3.0
+const AUTOSAVE_GAP := 10.0
+var _autosave_due := -1.0
+var _autosave_last := -100.0
+
+
+func _mark_unsaved() -> void:
+	if _autosave_due < 0.0 and _mode == "game":
+		_autosave_due = _clock + AUTOSAVE_DELAY
+
+
+func _autosave_step() -> void:
+	if _autosave_due < 0.0 or _clock < maxf(_autosave_due, _autosave_last + AUTOSAVE_GAP):
+		return
+	_autosave_due = -1.0
+	if game == null or not is_instance_valid(game) or game.director == null or game.director.is_night():
+		return
+	if game.rl != null and not game.rl.orders.is_empty():
+		return # MaxRealism: a save delivers the supply columns still on the road; they are saved on arrival
+	_autosave_last = _clock
+	_save_if_safe()
 
 
 func quit_game() -> void:
@@ -760,6 +788,7 @@ func _notification(what: int) -> void:
 
 func _process(delta: float) -> void:
 	_fit_near()
+	_autosave_step()
 	if _args.has("fxstage") and game and is_instance_valid(game):
 		_fx_stage(delta)
 	if _args.has("fpsprobe"):
@@ -817,6 +846,9 @@ func _process(delta: float) -> void:
 		_tt.stage = int(_tt.stage) + 1
 	if _args.has("basetest") and game and is_instance_valid(game) and _clock >= 3.0:
 		_base_selftest_step()
+	if _args.has("crashtest") and game and is_instance_valid(game) and _clock >= 2.0:
+		_args.erase("crashtest")
+		_crash_selftest()
 	if _args.has("hunttouch") and game and is_instance_valid(game) and (_ht > 0 or game.hud.hunt_btn.is_visible_in_tree()):
 		# --touch --hunttouch: the launcher button under the second finger opens the strike map on
 		# that launcher
@@ -1269,6 +1301,20 @@ func _start_autotest() -> void:
 	game.auto_fire = 1
 	GS.day = int(_args.get("day", "3"))
 	GS.money_changed.emit(GS.money)
+	if _args.has("strikespam"):
+		# test hook: every site known and --strikespam=N of every weapon that reaches it sent at it
+		const Strikes = preload("res://scripts/game/strikes.gd")
+		GS.money = 50000000
+		for s in Strikes.sites(map.city):
+			GS.sites[String(s.id)] = {"known": true, "st": "ok", "n": 0, "def": 0.0}
+		var sent := 0
+		for n in int(_args.strikespam):
+			for s in Strikes.sites(map.city):
+				for w in Strikes.WEAPON_ORDER:
+					if Strikes.blocker(s, w, true) == "":
+						Strikes.send(s, w)
+						sent += 1
+		print("UAD STRIKESPAM sent=%d money=%d" % [sent, GS.money])
 	if _args.has("daystrike"):
 		# a strike in the daytime without the dice: --daystrike=ballistic|cruise
 		game.director.day_strike(GS.day, String(_args.daystrike))
@@ -1537,6 +1583,71 @@ func _switch_selftest() -> void:
 	print("UAD SWITCHTEST: from=%s to=%s city_id=%s channel=%s base=%s ok=%s" % [before, map.city_id, GS.city_id, GS.video_channel(), str(GS.base_pos), spot_ok])
 	GS.delete_world(id)
 	GS.world_id = ""
+
+
+## --autotest --crashtest: what a crash costs. A strike sent by day is on disk seconds later (with
+## the hour of the day, and as a purchase, not a fine), the morning is written as the next day the
+## moment it comes, a save cut off mid-write falls back to the one before it, and a world loaded
+## mid-day goes on at its hour. The world is a temporary one and is deleted.
+func _crash_selftest() -> void:
+	const Strikes = preload("res://scripts/game/strikes.gd")
+	var fails := []
+	var check := func(ok: bool, what: String) -> void:
+		if not ok:
+			fails.append(what)
+	var keep := GS.world_id
+	var path := GS.SAVE_DIR + "crashtest_tmp.json"
+	GS.world_id = "crashtest_tmp"
+	var d0 := GS.day
+	GS.money = 200000
+	var s := {}
+	for x in Strikes.sites(map.city):
+		GS.sites[String(x.id)] = {"known": true, "st": "ok", "n": 0, "def": 0.0}
+		if s.is_empty() and Strikes.blocker(x, "lyutyi", true) == "":
+			s = x
+	game.director.phase_time = 20.0
+	var pen0 := int(GS.stats.get("penalties", 0))
+	Strikes.send(s, "lyutyi")
+	var paid := GS.money
+	check.call(paid == 200000 - int(Strikes.WEAPONS.lyutyi.price) and int(GS.stats.get("penalties", 0)) == pen0, "a strike is paid as a purchase, not a fine")
+	var t0 := _clock
+	while _clock - t0 < AUTOSAVE_DELAY + 1.5:
+		await get_tree().process_frame
+	var saved := GS.read_world("crashtest_tmp")
+	check.call(int(saved.get("money", -1)) == paid and (saved.get("strikes", []) as Array).size() == 1 and float(saved.get("day_t", 0.0)) >= 20.0,
+		"a strike sent by day is on disk seconds later (money=%s strikes=%s day_t=%s)" % [saved.get("money"), str(saved.get("strikes")), saved.get("day_t")])
+	# the night is over: its money is written at once, as the next day
+	game.director.phase = game.director.Phase.NIGHT
+	game.director.night_start_stats = GS.stats.duplicate()
+	game.director._morning()
+	saved = GS.read_world("crashtest_tmp")
+	check.call(int(saved.get("day", 0)) == d0 + 1 and int(saved.get("money", -1)) == GS.money and GS.money > paid, "the morning is on disk at once as day %d (saved day %s, money %s of %d)" % [d0 + 1, saved.get("day"), saved.get("money"), GS.money])
+	# the report is closed (the autotest does it after half a second): still that day, not the one after
+	t0 = _clock
+	while _clock - t0 < 1.5:
+		await get_tree().process_frame
+	saved = GS.read_world("crashtest_tmp")
+	check.call(GS.day == d0 + 1 and int(saved.get("day", 0)) == d0 + 1, "the next day is day %d (game %d, saved %s)" % [d0 + 1, GS.day, saved.get("day")])
+	# a save cut off in the middle: the one before it is read
+	GS.money = 12345
+	game.save_progress()
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	f.store_string("{\"id\": \"crashtest_tm")
+	f.close()
+	var rec := GS.read_world("crashtest_tmp")
+	check.call(not rec.is_empty() and int(rec.get("money", 0)) != 12345 and GS.list_worlds().any(func(w) -> bool: return String(w.id) == "crashtest_tmp"), "a cut-off save falls back to the one before it")
+	# loaded mid-day, the day goes on at its hour
+	game.director.phase_time = 33.0
+	game.save_progress()
+	GS.day_clock = 0.0
+	var loaded := GS.load_world("crashtest_tmp")
+	check.call(loaded and absf(GS.day_clock - 33.0) < 0.01, "the hour of the day is saved (%.1f)" % GS.day_clock)
+	game.director.start_day()
+	check.call(absf(game.director.phase_time - 33.0) < 0.01 and GS.day_clock == 0.0 and game.director.schedule.all(func(e) -> bool: return float(e.t) >= 33.0), "a world loaded mid-day goes on at that hour (%.1f)" % game.director.phase_time)
+	GS.delete_world("crashtest_tmp")
+	GS.world_id = keep
+	check.call(not FileAccess.file_exists(path) and not FileAccess.file_exists(path + ".bak") and not FileAccess.file_exists(path + ".tmp"), "deleting a world leaves none of its files")
+	print("UAD CRASHTEST: %s" % ("OK" if fails.is_empty() else "FAIL " + "; ".join(fails)))
 
 
 ## Round trip: create → save → list → load → verify → delete.

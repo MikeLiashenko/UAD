@@ -207,8 +207,13 @@ func _ready() -> void:
 	GS.state_changed.connect(_on_settings)
 
 
+## GS.state_changed fires on every missile fired, every purchase and every strike sent: only a new
+## graphics level is applied, since applying one throws away and remakes every streamed tile of the
+## street detail (a salvo of missiles used to rebuild the city that many times and could run a
+## tablet out of memory).
 func _on_settings() -> void:
-	apply_quality(int(GS.settings.quality))
+	if int(GS.settings.quality) != quality:
+		apply_quality(int(GS.settings.quality))
 
 
 func build() -> void:
@@ -1690,10 +1695,12 @@ func undamage_building(i: int) -> void:
 
 
 func damaged_list() -> Array:
+	# find() runs natively: the autosave asks for this list every few seconds of the day
 	var out := []
-	for i in fp_damaged.size():
-		if fp_damaged[i] == 1:
-			out.append(i)
+	var i := fp_damaged.find(1)
+	while i >= 0:
+		out.append(i)
+		i = fp_damaged.find(1, i + 1)
 	return out
 
 

@@ -313,9 +313,10 @@ static func send(s: Dictionary, weapon: String) -> void:
 	if not is_hunt(s, weapon):
 		launch(s, weapon)
 		return
+	if not pay(weapon):
+		return
 	var f := float(WEAPONS[weapon].fast)
 	hunts.append({"site": String(s.id), "w": weapon, "t": f, "flight": f, "p": hunt_chance(s, weapon)})
-	pay(weapon)
 	GS.state_changed.emit()
 
 
@@ -518,15 +519,16 @@ static func stock(weapon: String) -> int:
 	return int(GS.arsenal.get(weapon, 0))
 
 
-## A strike is paid for: from the stock when there is one, else with money.
-static func pay(weapon: String) -> void:
+## A strike is paid for: from the stock when there is one, else with money (a purchase, not a
+## fine: it does not go into the penalties of the night). False when there is not enough.
+static func pay(weapon: String) -> bool:
 	if stock(weapon) > 0:
 		GS.arsenal[weapon] = stock(weapon) - 1
 		GS.stats["from_stock"] = int(GS.stats.get("from_stock", 0)) + 1
 		if stock(weapon) <= 0:
 			GS.arsenal.erase(weapon)
-	else:
-		GS.add_money(-int(WEAPONS[weapon].price))
+		return true
+	return GS.spend(int(WEAPONS[weapon].price))
 
 
 ## Morning: the partners' package, when it is due. Returns [[weapon, count], …] delivered.
@@ -558,7 +560,8 @@ static func aid_text(list: Array) -> String:
 
 ## Pays and sends the strike; it lands at dusk.
 static func launch(s: Dictionary, weapon: String) -> void:
-	pay(weapon)
+	if not pay(weapon):
+		return
 	GS.strikes.append({"site": String(s.id), "w": weapon})
 	GS.state_changed.emit()
 
@@ -643,7 +646,8 @@ static func sat_blocker(s: Dictionary, is_day: bool) -> String:
 
 
 static func satellite(s: Dictionary) -> void:
-	GS.add_money(-SAT_PRICE)
+	if not GS.spend(SAT_PRICE):
+		return
 	var st := state(String(s.id))
 	st.known = true
 	_put(String(s.id), st)

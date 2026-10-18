@@ -261,7 +261,17 @@ func save_progress() -> void:
 		rl.flush_orders() # what a supply column is still bringing is saved as delivered
 	GS.damaged = map.damaged_list()
 	GS.crushed = map.crushed_list()
+	var day: bool = director != null and director.phase == director.Phase.DAY
+	GS.day_clock = director.phase_time if day else 0.0
+	GS.day_len = director.phase_len if day else 0.0
+	# The morning report is up: the night is over and paid for, so the world is written as the next
+	# day already — closed or crashed now, it must not fly that night (or pay for it) a second time.
+	var morning: bool = director != null and director.phase == director.Phase.MORNING
+	if morning:
+		GS.day += 1
 	GS.save_world()
+	if morning:
+		GS.day -= 1
 
 
 # --- Views ---------------------------------------------------------------------------------

@@ -81,12 +81,17 @@ func _ready() -> void:
 		_weapon = "shahed" if pvp.allowed("shahed") else String((pvp.rules().get("arsenal", ["shahed"]) as Array)[0])
 		_count = 1
 	pvp.changed.connect(_refresh)
-	GS.money_changed.connect(func(_v: int) -> void: _refresh())
+	# a method, not a lambda: a method of a freed screen is disconnected by itself
+	GS.money_changed.connect(_on_money)
 	_refresh()
 
 
 func _exit_tree() -> void:
 	last = {"server": String(pvp.def.id), "side": int(pvp.side), "aim": _aim, "weapon": _weapon, "count": _count}
+
+
+func _on_money(_v: int) -> void:
+	_refresh()
 
 
 func _bar(title: String, col: Color) -> ProgressBar:

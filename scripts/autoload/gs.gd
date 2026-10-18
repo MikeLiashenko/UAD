@@ -619,6 +619,10 @@ var revenge_night := 0
 ## each bought system stands (0 when not listed).
 var outposts: Array = []
 var unit_base := {}
+## The clock of the day the world was saved in (seconds into it, and the day's length): a world
+## loaded mid-day goes on from there instead of starting the day over. 0 = from the start.
+var day_clock := 0.0
+var day_len := 0.0
 ## A match on a server (scripts/game/pvp.gd): {"def": ServerDef, "side": 0 | 1, "bot": bool}; {} in
 ## the usual game. Never saved: main sets it after new_world.
 var pvp := {}
@@ -713,6 +717,8 @@ func new_world(wname: String, diff: int, pos: Vector3, loc: int, cid := "kyiv", 
 	revenge_night = 0
 	outposts = []
 	unit_base = {}
+	day_clock = 0.0
+	day_len = 0.0
 	pvp = {}
 	city_armor = 1.0
 	money_changed.emit(money)
@@ -897,24 +903,51 @@ func save_world() -> void:
 		"detection": detection, "camo": camo, "crews": crews, "base_pos": [base_pos.x, base_pos.z],
 		"base_loc": base_loc, "stats": stats, "damaged": damaged, "crushed": crushed, "won": won,
 		"videos": videos, "sites": sites, "strikes": strikes, "order": order, "arsenal": arsenal, "strike_log": strike_log, "anger": anger, "revenge_night": revenge_night,
-		"outposts": outposts, "unit_base": unit_base,
+		"outposts": outposts, "unit_base": unit_base, "day_t": day_clock, "day_len": day_len,
 	}
 	if Cities.is_custom(city_id):
 		# a city drawn in the map editor: the world keeps its own copy and plays on without the editor's
 		d["city_data"] = city_def().data
-	var f := FileAccess.open(_world_path(world_id), FileAccess.WRITE)
-	if f:
-		f.store_string(JSON.stringify(d))
-		f.close()
+	# Written beside the save and only then put in its place, the last good save kept as .bak: a
+	# game killed in the middle of writing (a crash, a phone that ran out of memory) used to leave a
+	# cut-off file, and the whole world was gone from the list.
+	var path := _world_path(world_id)
+	var f := FileAccess.open(path + ".tmp", FileAccess.WRITE)
+	if f == null:
+		return
+	f.store_string(JSON.stringify(d))
+	f.close()
+	if not (_parse_world(path + ".tmp") is Dictionary):
+		return # the disk is full or failing: the save there now stays
+	if FileAccess.file_exists(path):
+		DirAccess.remove_absolute(path + ".bak")
+		DirAccess.rename_absolute(path, path + ".bak")
+	DirAccess.rename_absolute(path + ".tmp", path)
+
+
+## A save file as a Dictionary, or null when it is missing, cut off or not a world.
+func _parse_world(path: String):
+	if not FileAccess.file_exists(path):
+		return null
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return null
+	var j := JSON.new()
+	var ok := j.parse(f.get_as_text()) == OK
+	f.close()
+	return j.data if ok and j.data is Dictionary and (j.data as Dictionary).has("id") else null
 
 
 func read_world(id: String) -> Dictionary:
-	var f := FileAccess.open(_world_path(id), FileAccess.READ)
-	if f == null:
-		return {}
-	var parsed = JSON.parse_string(f.get_as_text())
-	f.close()
-	if not (parsed is Dictionary):
+	var path := _world_path(id)
+	var parsed = _parse_world(path)
+	if parsed == null:
+		# the game went down while it was saving: the new file or the one before it is whole
+		for p in [path + ".tmp", path + ".bak"]:
+			parsed = _parse_world(p)
+			if parsed != null:
+				break
+	if parsed == null:
 		return {}
 	# a world of a drawn city the map editor no longer has: the copy in the save is the city
 	var cid = parsed.get("city_id")
@@ -928,11 +961,16 @@ func list_worlds() -> Array:
 	var dir := DirAccess.open(SAVE_DIR)
 	if dir == null:
 		return out
+	var ids := {}
 	for fname in dir.get_files():
-		if fname.ends_with(".json"):
-			var d := read_world(fname.trim_suffix(".json"))
-			if not d.is_empty() and d.has("id"):
-				out.append(d)
+		# a world whose save was being replaced when the game went down lives on in its .tmp / .bak
+		for ext in [".json", ".json.tmp", ".json.bak"]:
+			if String(fname).ends_with(ext):
+				ids[String(fname).trim_suffix(ext)] = true
+	for id in ids:
+		var d := read_world(String(id))
+		if not d.is_empty() and d.has("id"):
+			out.append(d)
 	out.sort_custom(func(a, b) -> bool: return int(a.get("last_played", 0)) > int(b.get("last_played", 0)))
 	return out
 
@@ -1021,6 +1059,8 @@ func load_world(id: String) -> bool:
 				arsenal[String(k)] = int(ars[k])
 	anger = float(d.get("anger", 0.0))
 	revenge_night = int(d.get("revenge_night", 0))
+	day_clock = maxf(float(d.get("day_t", 0.0)), 0.0)
+	day_len = maxf(float(d.get("day_len", 0.0)), 0.0)
 	for op in d.get("outposts", []):
 		if op is Dictionary and op.has("x") and op.has("z") and outposts.size() < OUTPOSTS_MAX:
 			outposts.append({"x": float(op.x), "z": float(op.z), "loc": int(op.get("loc", Loc.FIELD))})
@@ -1038,7 +1078,8 @@ func load_world(id: String) -> bool:
 
 
 func delete_world(id: String) -> void:
-	DirAccess.remove_absolute(_world_path(id))
+	for ext in ["", ".tmp", ".bak"]:
+		DirAccess.remove_absolute(_world_path(id) + ext)
 
 
 # --- Graphics levels ------------------------------------------------------------

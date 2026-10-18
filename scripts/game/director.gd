@@ -97,6 +97,15 @@ func start_day() -> void:
 	var o := Orders.issue(game.map.city, _rng)
 	if not o.is_empty():
 		_say(GS.t("📋 Задание командования: %s") % Orders.text(o), Color(0.6, 0.9, 1.0))
+	if GS.day_clock > 0.0:
+		# a world saved mid-day (or after a crash) goes on at the hour it was saved, with its dusk
+		# still ahead; what was due before that hour has flown already
+		if GS.day_len > 0.0:
+			phase_len = GS.day_len
+		phase_time = clampf(GS.day_clock, 0.0, maxf(phase_len - 20.0, 0.0))
+		schedule = schedule.filter(func(e) -> bool: return float(e.t) >= phase_time)
+	GS.day_clock = 0.0
+	GS.day_len = 0.0
 	schedule.sort_custom(func(a, b) -> bool: return float(a.t) < float(b.t))
 	_print_plan("day %d (%d s)" % [GS.day, int(phase_len)])
 	game.hud.alert(GS.t("ДЕНЬ %d — разведка противника в воздухе") % GS.day, Color(0.5, 0.9, 1.0))
@@ -529,6 +538,10 @@ func _morning() -> void:
 		game.save_progress()
 	GS.add_money(funding + bonus + relief)
 	game.on_morning(report)
+	if not follower:
+		# the night's money is on disk at once, not only when the report is closed (save_progress
+		# writes it as the next day)
+		game.save_progress()
 
 
 ## Multiplayer guest: the host's phase and clock from a raid snapshot. A change of phase plays
@@ -576,7 +589,9 @@ func net_follow(r: Dictionary) -> void:
 func next_day() -> void:
 	if follower:
 		return # the host starts the next day for everybody
+	if phase != Phase.MORNING:
+		return # a second tap on the report's button (or the shop closing after it): the day has begun
 	GS.day += 1
+	start_day() # first: in the morning phase save_progress would write the day after this one
 	game.save_progress()
-	start_day()
 	game.hud.log_event(GS.t("Мир «%s» сохранён") % GS.world_name, Color(0.5, 0.8, 0.7))
