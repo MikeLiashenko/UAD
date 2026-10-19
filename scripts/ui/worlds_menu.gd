@@ -28,6 +28,7 @@ var _selected := ""
 var _rows := {}
 var _play_btn: Button
 var _del_btn: Button
+var _exp_btn: Button
 var _confirm: Control
 var _last_click := {}
 
@@ -135,11 +136,15 @@ func _ready() -> void:
 	Net.connect_failed.connect(_on_req_failed)
 	_rebuild()
 	_show_tab(last_tab)
+	# a world file dragged onto the game's window is imported (Windows)
+	get_window().files_dropped.connect(_on_files_dropped)
 
 
 func _exit_tree() -> void:
 	Net.watch_friends(false)
 	_save_nick()
+	if get_window().files_dropped.is_connected(_on_files_dropped):
+		get_window().files_dropped.disconnect(_on_files_dropped)
 
 
 func _show_tab(t: String) -> void:
@@ -166,7 +171,7 @@ func _build_home() -> Control:
 	var sub := UiKit.label(GS.t("Каждая оборона — отдельный мир. Прогресс сохраняется каждое утро."), 14, Color(0.6, 0.85, 0.75), HORIZONTAL_ALIGNMENT_CENTER)
 	v.add_child(sub)
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(0, 360)
+	scroll.custom_minimum_size = Vector2(0, 300)
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	v.add_child(scroll)
@@ -178,6 +183,9 @@ func _build_home() -> Control:
 	_play_btn = UiKit.button(GS.t("Играть в выбранном мире"), _play, 370, 20)
 	grid.add_child(_play_btn)
 	grid.add_child(UiKit.button(GS.t("Создать новый мир"), func() -> void: main.show_create_world(), 370, 20))
+	_exp_btn = UiKit.button(GS.t("Экспорт мира"), _export, 370, 18)
+	grid.add_child(_exp_btn)
+	grid.add_child(UiKit.button(GS.t("Импорт мира"), _ask_import, 370, 18))
 	_del_btn = UiKit.button(GS.t("Удалить"), _ask_delete, 370, 18)
 	grid.add_child(_del_btn)
 	grid.add_child(UiKit.button(GS.t("Отмена"), func() -> void: main.show_menu(), 370, 18))
@@ -289,6 +297,7 @@ func _update_buttons() -> void:
 		(_rows[id] as Button).button_pressed = id == _selected
 	_play_btn.disabled = _selected == ""
 	_del_btn.disabled = _selected == ""
+	_exp_btn.disabled = _selected == ""
 
 
 func _play() -> void:
@@ -317,6 +326,114 @@ func _do_delete() -> void:
 	_selected = ""
 	_confirm.queue_free()
 	_rebuild()
+
+
+# --- Export / import: a world as a file (GS.export_world / GS.import_world) -------------------
+func _close_confirm() -> void:
+	if _confirm != null and is_instance_valid(_confirm):
+		_confirm.queue_free()
+	_confirm = null
+
+
+## A modal with a title and a wrapped text; returns its column for the buttons.
+func _note_modal(title: String, color: Color, text: String) -> VBoxContainer:
+	_close_confirm()
+	var m := UiKit.modal(self, Vector2(540, 0))
+	_confirm = m[0]
+	var v: VBoxContainer = m[1]
+	v.add_child(UiKit.glow_label(title, 30, color))
+	if text != "":
+		var l := UiKit.label(text, 16, Color(0.9, 1, 0.95), HORIZONTAL_ALIGNMENT_CENTER)
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.custom_minimum_size = Vector2(500, 0)
+		v.add_child(l)
+	return v
+
+
+func _export() -> void:
+	if _selected == "":
+		return
+	SFX.play("click", -8.0)
+	var path := GS.export_world(_selected)
+	if path == "":
+		var e := _note_modal(GS.t("Не удалось экспортировать мир"), UiKit.RED, GS.t("Папка для файлов мира недоступна для записи."))
+		e.add_child(UiKit.button(GS.t("Готово"), _close_confirm))
+		return
+	var shown := ProjectSettings.globalize_path(path)
+	var v := _note_modal(GS.t("Мир экспортирован"), UiKit.NEON, shown)
+	var hint := UiKit.label(GS.t("Перенесите этот файл на другое устройство или отправьте другу — там откройте «Играть» и нажмите «Импорт мира»."), 14, Color(0.6, 0.85, 0.75), HORIZONTAL_ALIGNMENT_CENTER)
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.custom_minimum_size = Vector2(500, 0)
+	v.add_child(hint)
+	if OS.has_feature("pc"):
+		v.add_child(UiKit.button(GS.t("Открыть папку"), func() -> void: OS.shell_show_in_file_manager(shown)))
+	v.add_child(UiKit.button(GS.t("Готово"), _close_confirm))
+
+
+func _ask_import() -> void:
+	SFX.play("click", -8.0)
+	var dir := ProjectSettings.globalize_path(GS.worlds_dir())
+	var v := _note_modal(GS.t("Импорт мира"), UiKit.NEON, GS.t("Файлы миров (.uadworld) в папке %s и в «Загрузках»:") % dir)
+	var files := GS.world_files()
+	if files.is_empty():
+		var e := UiKit.label(GS.t("Здесь пока нет файлов мира. Положите файл .uadworld в эту папку или выберите его вручную."), 15, Color(0.6, 0.85, 0.75), HORIZONTAL_ALIGNMENT_CENTER)
+		e.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		e.custom_minimum_size = Vector2(500, 0)
+		v.add_child(e)
+	else:
+		var scroll := ScrollContainer.new()
+		scroll.custom_minimum_size = Vector2(500, mini(files.size(), 4) * 60)
+		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		v.add_child(scroll)
+		var list := UiKit.vbox(6)
+		list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		scroll.add_child(list)
+		for f in files:
+			var city := GS.t(String(GS.city_def(String(f.city)).name)) if GS.Cities.has(String(f.city)) else "?"
+			var b := UiKit.button(GS.t("%s · %s · День %d") % [String(f.name), city, int(f.day)], _do_import.bind(String(f.path)), 480, 17)
+			b.custom_minimum_size = Vector2(480, 52)
+			list.add_child(b)
+	if DisplayServer.has_feature(DisplayServer.FEATURE_NATIVE_DIALOG_FILE):
+		v.add_child(UiKit.button(GS.t("Выбрать файл…"), _pick_world_file))
+	if OS.has_feature("pc"):
+		var dnd := UiKit.label(GS.t("Можно и просто перетащить файл мира в окно игры."), 13, Color(0.55, 0.8, 0.7), HORIZONTAL_ALIGNMENT_CENTER)
+		v.add_child(dnd)
+	v.add_child(UiKit.button(GS.t("Отмена"), _close_confirm))
+
+
+## The system's own file picker (Windows; Android where the engine has one).
+func _pick_world_file() -> void:
+	var filters := PackedStringArray() if OS.get_name() == "Android" else PackedStringArray(["*.%s ; %s" % [GS.WORLD_EXT, GS.t("Мир UAD")], "*.json ; JSON"])
+	DisplayServer.file_dialog_show(GS.t("Выберите файл мира"), ProjectSettings.globalize_path(GS.worlds_dir()), "", false,
+		DisplayServer.FILE_DIALOG_MODE_OPEN_FILE, filters,
+		func(ok: bool, paths: PackedStringArray, _filter: int) -> void:
+			if ok and paths.size() > 0:
+				_do_import.call_deferred(String(paths[0])))
+
+
+func _on_files_dropped(files: PackedStringArray) -> void:
+	for f in files:
+		var ext := String(f).get_extension().to_lower()
+		if ext == GS.WORLD_EXT or ext == "json":
+			_show_tab("home")
+			_do_import(String(f))
+			return
+
+
+func _do_import(path: String) -> void:
+	var r := GS.import_world(path)
+	if r.has("error"):
+		var e := _note_modal(GS.t("Не удалось импортировать мир"), UiKit.RED, GS.t(String(r.error)))
+		e.add_child(UiKit.button(GS.t("Готово"), _close_confirm))
+		return
+	SFX.play("click", -6.0, 1.3)
+	_selected = String(r.id)
+	_rebuild()
+	var v := _note_modal(GS.t("Мир добавлен"), UiKit.NEON, GS.t("«%s» теперь в списке ваших миров.") % String(r.name))
+	v.add_child(UiKit.button(GS.t("Играть"), func() -> void:
+		_close_confirm()
+		main.play_world(String(r.id))))
+	v.add_child(UiKit.button(GS.t("Готово"), _close_confirm))
 
 
 # --- Мультиплеер: friends' worlds ------------------------------------------------------------

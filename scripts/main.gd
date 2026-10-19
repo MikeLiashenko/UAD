@@ -27,6 +27,8 @@ extends Node
 ##   --basetest                 (with --autotest) an outpost set up by a tap, a system driven there, the
 ##                              nearest base firing at a target, outposts saved, an outpost taken down
 ##   --keytest                  verify the rebindable control map
+##   --worldtest                worlds as files: export, import under a new id and name, a world of
+##                              a drawn city on a device that has never seen the city, bad files
 ##   --mptest                   multiplayer self-test, offline: codes, the Firebase event mirror and
 ##                              (with --autotest) friends in the city, watching, player list, requests
 ##   --mpid=CODE                play as another friend code (a second copy on the same computer)
@@ -207,6 +209,8 @@ func _ready() -> void:
 		print("fakerelease: update available=%s url=%s" % [Net.update_available(), Net.update_url()])
 	if _args.has("keytest"):
 		_key_selftest()
+	if _args.has("worldtest"):
+		_world_selftest()
 	if _args.has("savetest"):
 		_save_selftest()
 	if _args.has("switchtest"):
@@ -228,6 +232,8 @@ func _ready() -> void:
 			show_map_select()
 		"worlds":
 			show_worlds()
+			if _args.has("importdemo"):
+				screen._ask_import.call_deferred() # a picture of the import window
 		"achievements":
 			if _args.has("achdemo"):
 				Achievements.dry = true
@@ -1555,6 +1561,84 @@ func _fx_stage(delta: float) -> void:
 		e.waypoints.append(e.target_pos)
 		e.cruise_alt = e.position.y
 		e.vel = Vector3(e.target_pos.x - e.position.x, 0.0, e.target_pos.z - e.position.z).normalized() * e.speed
+
+
+## Worlds as files (GS.export_world / import_world): what goes out comes back whole under a new id
+## and name, a drawn city travels with its world, files that cannot be played are refused. Uses
+## its own test worlds and folder and removes them; the player's worlds are only listed.
+func _world_selftest() -> void:
+	var fails := []
+	var check := func(ok: bool, what: String) -> void:
+		if not ok:
+			fails.append(what)
+	var dir := "user://worldtest_tmp"
+	DirAccess.make_dir_recursive_absolute(dir)
+	var made := []
+	# a plain world: out and back in
+	GS.new_world("worldtest", 2, Vector3(1200, 0, -800), GS.Loc.RIVER, "odesa")
+	GS.day = 9
+	GS.money = 123456
+	GS.unlocked["patriot"] = true
+	GS.save_world()
+	var id1 := GS.world_id
+	made.append(id1)
+	var path := GS.export_world(id1, dir)
+	check.call(path.ends_with(".uadworld") and FileAccess.file_exists(path), "export wrote no file")
+	check.call(GS.export_world(id1, dir) != path, "a second export overwrote the first")
+	var r := GS.import_world(path)
+	check.call(r.has("id") and String(r.id) != id1, "import kept the old id")
+	if r.has("id"):
+		made.append(String(r.id))
+		var w := GS.read_world(String(r.id))
+		check.call(String(w.get("name", "")) == "worldtest (2)", "taken name not numbered: " + String(w.get("name", "")))
+		check.call(int(w.get("day", 0)) == 9 and int(w.get("money", 0)) == 123456 and String(w.get("city_id", "")) == "odesa", "world changed on the way")
+		check.call(GS.load_world(String(r.id)) and GS.unlocked.has("patriot") and GS.difficulty == 2, "imported world does not load")
+	# a world of a drawn city, imported where that city was never seen (another id, the copy inside)
+	Cities.register("my_worldtest", Cities.CustomCity.sample("Тестоград"))
+	GS.new_world("worldtest city", 1, Vector3(0, 0, 0), GS.Loc.FIELD, "my_worldtest")
+	GS.save_world()
+	made.append(GS.world_id)
+	var cpath := GS.export_world(GS.world_id, dir)
+	var cj = JSON.parse_string(FileAccess.get_file_as_string(cpath))
+	check.call(cj is Dictionary and cj.world.get("city_data") is Dictionary, "drawn city not in the file")
+	if cj is Dictionary:
+		cj.world.city_id = "my_worldtest_elsewhere"
+		var f := FileAccess.open(dir.path_join("elsewhere.uadworld"), FileAccess.WRITE)
+		f.store_string(JSON.stringify(cj))
+		f.close()
+		var rc := GS.import_world(dir.path_join("elsewhere.uadworld"))
+		check.call(rc.has("id"), "drawn-city world refused: " + String(rc.get("error", "")))
+		if rc.has("id"):
+			made.append(String(rc.id))
+			check.call(GS.load_world(String(rc.id)) and GS.city_id == "my_worldtest_elsewhere" and Cities.has("my_worldtest_elsewhere"), "drawn city not rebuilt from the file")
+	# files that must be refused, each with a sentence for the player
+	var bad := {"garbage": "hello", "newer": JSON.stringify({"uad_world": 99, "world": {"id": "x", "city_id": "kyiv", "day": 1}}),
+		"newsave": JSON.stringify({"uad_world": 1, "world": {"id": "x", "city_id": "kyiv", "day": 1, "version": GS.SAVE_VERSION + 1}}),
+		"nocity": JSON.stringify({"uad_world": 1, "world": {"id": "x", "city_id": "my_gone", "day": 1}}),
+		"notworld": JSON.stringify({"uad_world": 1, "world": {"hello": 1}})}
+	var count_before := GS.list_worlds().size()
+	for k in bad:
+		var bp := dir.path_join(k + ".uadworld")
+		var f := FileAccess.open(bp, FileAccess.WRITE)
+		f.store_string(bad[k])
+		f.close()
+		var rb := GS.import_world(bp)
+		check.call(rb.has("error") and GS.t(String(rb.error)) != "", "bad file accepted: " + k)
+	check.call(GS.list_worlds().size() == count_before, "a refused file left a world behind")
+	check.call(GS.import_world(dir.path_join("missing.uadworld")).has("error"), "a missing file imported")
+	# the list of files to import from shows the good ones only
+	var listed := 0
+	for x in DirAccess.get_files_at(dir):
+		if GS.read_world_file(dir.path_join(x)).has("world"):
+			listed += 1
+	check.call(listed == 4, "readable files: %d (want 4)" % listed)
+	print("UAD WORLDTEST export=%s files_in_docs=%d %s" % [ProjectSettings.globalize_path(GS.worlds_dir()), GS.world_files().size(), "OK" if fails.is_empty() else "FAIL " + ", ".join(fails)])
+	for id in made:
+		GS.delete_world(String(id))
+	for x in DirAccess.get_files_at(dir):
+		DirAccess.remove_absolute(dir.path_join(x))
+	DirAccess.remove_absolute(dir)
+	GS.world_id = ""
 
 
 ## Controls round trip: defaults resolve, a rebind sticks and takes the key from its old owner.

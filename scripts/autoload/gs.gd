@@ -472,6 +472,7 @@ const VIDEO_CLIP_LEN := 5.0
 const VIDEO_KEEP := 20
 
 const Cities = preload("res://scripts/world/cities.gd")
+const BuildInfo = preload("res://scripts/build_info.gd")
 
 
 ## The channel that publishes the compilation (every city has its own).
@@ -1091,6 +1092,139 @@ func load_world(id: String) -> bool:
 func delete_world(id: String) -> void:
 	for ext in ["", ".tmp", ".bak"]:
 		DirAccess.remove_absolute(_world_path(id) + ext)
+
+
+# --- A world as a file to carry elsewhere (export / import) ------------------------------------
+## One world in one file, «<name>.uadworld»: the save itself (a world of a drawn city carries its
+## city) wrapped in {"uad_world": WORLD_FILE_VERSION, "game", "build", "exported", "world"}.
+const WORLD_EXT := "uadworld"
+const WORLD_FILE_VERSION := 1
+
+
+## Where exported worlds go and where the import looks first: Documents/UAD/Worlds (on Windows
+## «Документы\UAD\Worlds», on Android the shared Documents folder), the game's own folder failing that.
+func worlds_dir() -> String:
+	var base := String(OS.get_system_dir(OS.SYSTEM_DIR_DOCUMENTS))
+	if base == "" or not DirAccess.dir_exists_absolute(base):
+		base = "user://"
+	return base.path_join("UAD").path_join("Worlds")
+
+
+## Writes the world into dir (worlds_dir() when empty). Returns the file's path, "" on failure.
+func export_world(id: String, dir := "") -> String:
+	var d := read_world(id)
+	if d.is_empty():
+		return ""
+	var cid := String(d.get("city_id", ""))
+	if Cities.is_custom(cid) and not (d.get("city_data") is Dictionary) and Cities.has(cid):
+		d["city_data"] = city_def(cid).data # an old save of a drawn city: the city goes with it
+	if dir == "":
+		dir = worlds_dir()
+	DirAccess.make_dir_recursive_absolute(dir)
+	var stem := String(d.get("name", "")).strip_edges()
+	for c in ["\\", "/", ":", "*", "?", "\"", "<", ">", "|"]:
+		stem = stem.replace(c, "_")
+	stem = stem.left(60).strip_edges()
+	if stem == "":
+		stem = "world"
+	var path := dir.path_join("%s.%s" % [stem, WORLD_EXT])
+	var n := 2
+	while FileAccess.file_exists(path):
+		path = dir.path_join("%s (%d).%s" % [stem, n, WORLD_EXT])
+		n += 1
+	var file := {"uad_world": WORLD_FILE_VERSION, "game": BuildInfo.label(), "build": BuildInfo.BUILD,
+		"exported": int(Time.get_unix_time_from_system()), "world": d}
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f == null:
+		return ""
+	f.store_string(JSON.stringify(file, "\t"))
+	f.close()
+	return path
+
+
+## World files found in the usual places (the export folder, Downloads), newest first:
+## [{path, name, day, city, time}]. Files that are not worlds are left out.
+func world_files() -> Array:
+	var out := []
+	var seen := {}
+	for dir in [worlds_dir(), String(OS.get_system_dir(OS.SYSTEM_DIR_DOWNLOADS))]:
+		if dir == "" or not DirAccess.dir_exists_absolute(dir):
+			continue
+		for fname in DirAccess.get_files_at(dir):
+			if String(fname).get_extension().to_lower() != WORLD_EXT:
+				continue
+			var path: String = dir.path_join(fname)
+			if seen.has(path):
+				continue
+			seen[path] = true
+			var r := read_world_file(path)
+			if not r.has("world"):
+				continue
+			var w: Dictionary = r.world
+			out.append({"path": path, "name": String(w.get("name", fname.get_basename())), "day": int(w.get("day", 1)),
+				"city": String(w.get("city_id", "")), "time": FileAccess.get_modified_time(path)})
+	out.sort_custom(func(a, b) -> bool: return int(a.time) > int(b.time))
+	return out
+
+
+## A world file read and checked: {"world": Dictionary} when it can be played here, otherwise
+## {"error": a sentence for the player (Russian source, through GS.t)}. A bare save (saves/*.json)
+## is taken too.
+func read_world_file(path: String) -> Dictionary:
+	if not FileAccess.file_exists(path) and not path.begins_with("content://"):
+		return {"error": "Файл не найден."}
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return {"error": "Файл не открывается."}
+	var text := f.get_as_text()
+	f.close()
+	var j := JSON.new()
+	if text.length() > 8 * 1024 * 1024 or j.parse(text) != OK or not (j.data is Dictionary):
+		return {"error": "Это не файл мира UAD или он повреждён."}
+	var data: Dictionary = j.data
+	var w = data.get("world") if data.has("uad_world") else data
+	if not (w is Dictionary) or not (w as Dictionary).has("city_id") or not (w as Dictionary).has("day"):
+		return {"error": "Это не файл мира UAD или он повреждён."}
+	if int(data.get("uad_world", 1)) > WORLD_FILE_VERSION or int(w.get("version", 1)) > SAVE_VERSION:
+		return {"error": "Мир сохранён более новой версией игры — обновите игру и попробуйте снова."}
+	var cid := String(w.city_id)
+	if not Cities.has(cid) and not (cid.begins_with("my_") and w.get("city_data") is Dictionary):
+		return {"error": "Город этого мира неизвестен этой версии игры."}
+	return {"world": w}
+
+
+## Adds the world of a file to the player's worlds under a new id (an import never replaces a
+## world); a name already taken gets a number. Returns {"id", "name"} or {"error"}.
+func import_world(path: String) -> Dictionary:
+	var r := read_world_file(path)
+	if not r.has("world"):
+		return r
+	var w: Dictionary = (r.world as Dictionary).duplicate(true)
+	var names := {}
+	for x in list_worlds():
+		names[String(x.get("name", ""))] = true
+	var wname := String(w.get("name", t("Мир"))).strip_edges().left(40)
+	if wname == "":
+		wname = t("Мир")
+	var base_name := wname
+	var n := 2
+	while names.has(wname):
+		wname = "%s (%d)" % [base_name, n]
+		n += 1
+	var id := "w%d_%d" % [Time.get_unix_time_from_system(), randi() % 100000]
+	w["id"] = id
+	w["name"] = wname
+	w["last_played"] = int(Time.get_unix_time_from_system())
+	DirAccess.make_dir_recursive_absolute(SAVE_DIR)
+	var f := FileAccess.open(_world_path(id), FileAccess.WRITE)
+	if f == null:
+		return {"error": "Не удалось записать мир в папку игры."}
+	f.store_string(JSON.stringify(w))
+	f.close()
+	if read_world(id).is_empty():
+		delete_world(id)
+		return {"error": "Это не файл мира UAD или он повреждён."}
+	return {"id": id, "name": wname}
 
 
 # --- Graphics levels ------------------------------------------------------------
