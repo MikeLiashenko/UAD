@@ -1,12 +1,12 @@
-# Builds all game icons from art/icon_source.jpg:
-#   icon.png (512)            project / window icon
-#   icon.ico (16..256)        Windows .exe icon (PNG-compressed ICO)
-#   icon_192.png              Android launcher icon
-#   icon_fg_432.png / icon_bg_432.png   Android adaptive icon layers
+# Builds all game icons from art/ (drawn by tools_scripts/icon/final.py):
+#   icon.png (512)            project / window icon                  <- art/icon_source.png
+#   icon.ico (16..256)        Windows .exe icon (PNG-compressed ICO)  <- art/icon_source.png
+#   icon_192.png              Android launcher icon, the site's icon  <- art/icon_source.png
+#   icon_fg_432.png / icon_bg_432.png   Android adaptive icon layers  <- art/icon_fg.png, art/icon_bg.png
 param([string]$Root = (Split-Path $PSScriptRoot -Parent))
 Add-Type -AssemblyName System.Drawing
 
-$src = [System.Drawing.Image]::FromFile((Join-Path $Root 'art\icon_source.jpg'))
+$src = [System.Drawing.Image]::FromFile((Join-Path $Root 'art\icon_source.png'))
 
 function Save-Scaled([int]$size, [string]$path, [double]$inset = 0.0, $bg = $null) {
     $bmp = New-Object System.Drawing.Bitmap $size, $size, ([System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
@@ -24,14 +24,17 @@ function Save-Scaled([int]$size, [string]$path, [double]$inset = 0.0, $bg = $nul
 
 Save-Scaled 512 (Join-Path $Root 'icon.png')
 Save-Scaled 192 (Join-Path $Root 'icon_192.png')
-Save-Scaled 432 (Join-Path $Root 'icon_fg_432.png') 0.17
-# background layer: the icon's dark navy
-$bg = New-Object System.Drawing.Bitmap 432, 432
-$gb = [System.Drawing.Graphics]::FromImage($bg)
-$gb.Clear([System.Drawing.Color]::FromArgb(255, 8, 26, 34))
-$gb.Dispose()
-$bg.Save((Join-Path $Root 'icon_bg_432.png'), [System.Drawing.Imaging.ImageFormat]::Png)
-$bg.Dispose()
+# Android adaptive layers: the sky and the city fill the background; the letters and the intercept
+# sit inside the round mask's safe zone (inset 19%)
+$full = $src
+$src = [System.Drawing.Image]::FromFile((Join-Path $Root 'art\icon_fg.png'))
+Save-Scaled 432 (Join-Path $Root 'icon_fg_432.png') 0.19
+$src.Dispose()
+$src = [System.Drawing.Image]::FromFile((Join-Path $Root 'art\icon_bg.png'))
+Save-Scaled 432 (Join-Path $Root 'icon_bg_432.png')
+$src.Dispose()
+$src = $full
+Copy-Item (Join-Path $Root 'icon_192.png') (Join-Path $Root 'docs\img\icon.png') -Force
 
 # ICO with PNG-compressed images
 $sizes = @(16, 24, 32, 48, 64, 128, 256)

@@ -45,24 +45,33 @@ func _ready() -> void:
 	v.alignment = BoxContainer.ALIGNMENT_CENTER
 	center.add_child(v)
 
-	if ResourceLoader.exists("res://icon.png"):
-		var logo := TextureRect.new()
-		logo.texture = load("res://icon.png")
-		logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		logo.custom_minimum_size = Vector2(170, 170)
-		logo.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		v.add_child(logo)
+	# the wordmark (art drawn by tools_scripts/icon/draw_uad.py, logo(): the letters and the intercept over
+	# them on a clear background) straight over the live city, the full name spaced out beneath it
+	var logo := TextureRect.new()
+	logo.texture = load("res://logo.png")
+	logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	logo.custom_minimum_size = Vector2(360, 232)
+	logo.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	v.add_child(logo)
 
-	var title := UiKit.glow_label("UKRAINE AIR DEFENSE", 64, UiKit.NEON)
+	var title := UiKit.label("UKRAINE AIR DEFENSE", 26, Color(0.93, 0.95, 1.0), HORIZONTAL_ALIGNMENT_CENTER)
+	title.add_theme_color_override("font_shadow_color", Color(0.0, 0.03, 0.1, 0.85))
+	title.add_theme_constant_override("shadow_outline_size", 10)
+	title.add_theme_constant_override("shadow_offset_x", 0)
+	title.add_theme_constant_override("shadow_offset_y", 2)
 	v.add_child(title)
-	# Minecraft-style splash text
+	var spaced := FontVariation.new()
+	spaced.base_font = title.get_theme_font("font")
+	spaced.spacing_glyph = 9
+	title.add_theme_font_override("font", spaced)
+	# Minecraft-style splash text, on the corner of the wordmark
 	_splash = UiKit.label(GS.t(SPLASHES[randi() % SPLASHES.size()]), 24, Color(1.0, 0.92, 0.2))
 	_splash.add_theme_color_override("font_outline_color", Color(0.25, 0.2, 0.0))
 	_splash.add_theme_constant_override("outline_size", 6)
 	_splash.rotation_degrees = -14.0
-	_splash.position = Vector2(640, 62)
-	title.add_child(_splash)
+	_splash.position = Vector2(318, 168)
+	logo.add_child(_splash)
 	v.add_child(UiKit.label(GS.ctext("over"), 20, Color(0.7, 0.9, 0.85), HORIZONTAL_ALIGNMENT_CENTER))
 	var spacer := Control.new()
 	spacer.custom_minimum_size = Vector2(0, 8)
