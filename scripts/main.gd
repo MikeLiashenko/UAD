@@ -43,6 +43,9 @@ extends Node
 ##                              saved session, deletion, a session revoked elsewhere
 ##   --mphost / --mpjoin=CODE   a live two-copy session through the database (see _mp_live_setup)
 ##   --offscreen --shotlist=f.json [--shot-ui]   pictures without a window (tools_scripts/shots.sh)
+##   --campath=f.json           a moving camera for footage (Godot's --write-movie): glides through keys,
+##                              rides behind a threat (see _campath_step)
+##   --fxplan=f.json            (with --fxstage) the stage's own timetable instead of FX_STAGE
 ##   --fakerelease=N            pretend build N was published (the update offer in the menu)
 ##   --avitest[=path]           write a synthetic clip and read the container back
 ##   --exporttest               run the video recorder on generated frames and verify the file
@@ -977,6 +980,7 @@ func _process(delta: float) -> void:
 		cam.look_at(mf + Vector3(0, 120, 0), Vector3.UP)
 	_clock += delta / maxf(Engine.time_scale, 0.001)
 	_shot_list_step()
+	_campath_step(delta)
 	if _shot_cam != null:
 		_shot_cam.global_transform = cam.global_transform
 		_shot_cam.fov = cam.fov
@@ -1499,6 +1503,8 @@ const FX_STAGE := [
 ]
 var _fx_t := -1.0
 var _fx_i := 0
+## --fxplan: the timetable read from a file (the same rows as FX_STAGE).
+var _fx_plan: Array = []
 
 
 func _fx_stage(delta: float) -> void:
@@ -1512,6 +1518,10 @@ func _fx_stage(delta: float) -> void:
 			game.director.night_blend = 1.0
 		game.director.schedule.clear()
 		game.director.phase_len = 1.0e6
+		if _args.has("fxplan"):
+			var parsed = JSON.parse_string(FileAccess.get_file_as_string(String(_args.fxplan)))
+			if parsed is Array:
+				_fx_plan = parsed
 	_fx_t += delta
 	# the phase never ends, and its clock reads like a watch in progress (the pictures show it)
 	game.director.phase_len = game.director.phase_time + 137.0
@@ -1519,12 +1529,13 @@ func _fx_stage(delta: float) -> void:
 	GS.city = 100.0
 	if String(_args.fxstage) == "calm": # --fxstage=calm: the night without a raid
 		return
-	if _fx_i >= FX_STAGE.size():
+	var stage: Array = _fx_plan if not _fx_plan.is_empty() else FX_STAGE
+	if _fx_i >= stage.size():
 		if game.enemies.is_empty() or _fx_t > 30.0:
 			_fx_t = 0.0 # the raid starts over
 			_fx_i = 0
 		return
-	var s: Array = FX_STAGE[_fx_i]
+	var s: Array = stage[_fx_i]
 	if _fx_t < float(s[0]):
 		return
 	_fx_i += 1
@@ -3018,6 +3029,83 @@ func _shot_list_step() -> void:
 	_shot_t = -1.0
 	if _shot_i >= _shots.size() and not _args.has("quit-at"):
 		get_tree().quit()
+
+
+## --campath=file.json: a moving camera for trailer footage, recorded with Godot's own movie
+## writer (--write-movie, a fixed frame rate). {"base": true, "hud": false, "keys": [{t, pos,
+## look, fov}, …]}: the camera glides through the keys on a smooth curve ("base": the points are
+## offsets from the battery, "focus": from the heart of the city, "ll": [latitude, longitude,
+## height] on the city's own map; "time_scale": slow motion for
+## the whole run; "music": false mutes the game's music under the footage; no keys at all leave
+## the camera to the game). A key with "chase":
+## "<threat id>" rides behind the nearest threat of that kind until the next key — "back", "up",
+## "side" metres from it, looking "ahead" of it ("stiff" > 0 lets the camera trail behind).
+var _campath := {}
+
+
+func _campath_step(delta: float) -> void:
+	if not _args.has("campath") or game == null or not is_instance_valid(game):
+		return
+	if _campath.is_empty():
+		var parsed = JSON.parse_string(FileAccess.get_file_as_string(String(_args.campath)))
+		if not (parsed is Dictionary):
+			print("UAD CAMPATH unreadable: ", _args.campath)
+			_args.erase("campath")
+			return
+		_campath = parsed
+		if _campath.has("time_scale"):
+			Engine.time_scale = float(_campath.time_scale)
+		if not bool(_campath.get("music", true)) and AudioServer.get_bus_index("Music") >= 0:
+			AudioServer.set_bus_mute(AudioServer.get_bus_index("Music"), true)
+		print("UAD CAMPATH %d keys" % (_campath.get("keys", []) as Array).size())
+	var keys: Array = _campath.get("keys", [])
+	if keys.is_empty():
+		return # no keys: the game's own camera (a gunner's or a pilot's view), only the settings above
+	game.rig.set_process(false) # the camera belongs to the path now
+	if not bool(_campath.get("hud", true)):
+		game.hud.visible = false
+		game.range_ring.visible = false
+	var origin := GS.base_pos if bool(_campath.get("base", false)) else Vector3.ZERO
+	if bool(_campath.get("focus", false)):
+		origin = map.city.map_focus
+	var t := _clock - float(_campath.get("start", 0.0))
+	var i := 0
+	while i < keys.size() - 1 and t >= float(keys[i + 1].t):
+		i += 1
+	var a: Dictionary = keys[i]
+	if a.has("chase"):
+		var e = null
+		for x in game.enemies:
+			if String(x.variant) == String(a.chase) and (e == null or x.position.distance_to(cam.global_position) < e.position.distance_to(cam.global_position)):
+				e = x
+		if e != null:
+			var dir: Vector3 = e.vel.normalized() if e.vel.length() > 1.0 else Vector3.FORWARD
+			var side := dir.cross(Vector3.UP).normalized()
+			var want: Vector3 = e.position - dir * float(a.get("back", 40.0)) + Vector3.UP * float(a.get("up", 8.0)) + side * float(a.get("side", 0.0))
+			var stiff := float(a.get("stiff", 0.0))
+			cam.global_position = want if stiff <= 0.0 or t - float(a.t) < 0.05 else cam.global_position.lerp(want, 1.0 - exp(-stiff * delta))
+			cam.look_at(e.position + dir * float(a.get("ahead", 30.0)), Vector3.UP)
+			if int(_clock * 30.0) % 30 == 0:
+				print("UAD CAMPATH t=%.1f chasing %s: %.0f m off, speed %.0f m/s, alt %.0f m" % [t, e.variant, cam.global_position.distance_to(e.position), e.vel.length(), e.position.y])
+		cam.fov = float(a.get("fov", 55.0))
+		return
+	var b: Dictionary = keys[mini(i + 1, keys.size() - 1)]
+	var pre: Dictionary = keys[maxi(i - 1, 0)]
+	var post: Dictionary = keys[mini(i + 2, keys.size() - 1)]
+	var span := float(b.t) - float(a.t)
+	var u := clampf((t - float(a.t)) / span, 0.0, 1.0) if span > 0.0 else 0.0
+	var ll := bool(_campath.get("ll", false))
+	var v3 := func(k: Dictionary, f: String) -> Vector3:
+		var p: Array = k.get(f, a.get(f, [0, 0, 0])) # a chase key has no points: hold the last ones
+		if ll:
+			return map.city.ll3(float(p[0]), float(p[1]), float(p[2]))
+		return origin + Vector3(float(p[0]), float(p[1]), float(p[2]))
+	var pos: Vector3 = v3.call(a, "pos").cubic_interpolate(v3.call(b, "pos"), v3.call(pre, "pos"), v3.call(post, "pos"), u)
+	var look: Vector3 = v3.call(a, "look").cubic_interpolate(v3.call(b, "look"), v3.call(pre, "look"), v3.call(post, "look"), u)
+	cam.global_position = pos
+	if not pos.is_equal_approx(look):
+		cam.look_at(look, Vector3.UP)
+	cam.fov = lerpf(float(a.get("fov", 60.0)), float(b.get("fov", 60.0)), u)
 
 
 ## --mphost (with --autotest) / --mpjoin=CODE: a real session between two copies of the game

@@ -81,6 +81,8 @@ var _event_seq := 0
 var _event_notes := {}
 var _base_time_scale := 1.0
 var _slowmo := false
+## When the last returned Banderol was told in the log (ticks, ms).
+var _parcel_ms := -100000
 ## Drone handed to the FPV console by enter_fpv(), picked up in set_view("fpv").
 var _fpv_drone = null
 var _drone_seq := 0
@@ -1347,6 +1349,10 @@ func enemy_destroyed(e) -> void:
 		var v: Vector3 = e.vel
 		_net_event("k", e.net_id, [killer if killer != "" else Net.code(), _r(p.x), _r(p.y), _r(p.z), _r(v.x), _r(v.y), _r(v.z), 1 if airburst else 0, 1 if warhead else 0, reward])
 	_kill_fx(e, airburst, warhead, reward, killer, false)
+	if e.variant == "banderol" and rl == null and Time.get_ticks_msec() - _parcel_ms > 8000:
+		# the parcel is returned: a line in the log, once per salvo
+		_parcel_ms = Time.get_ticks_msec()
+		hud.log_event(GS.t("📦 «Бандероль» не доставлена — возврат отправителю"), Color(0.6, 1.0, 0.7))
 	if pvp != null:
 		pvp.unit_done(e, false, true)
 	if rl != null:

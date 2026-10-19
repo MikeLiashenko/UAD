@@ -546,6 +546,29 @@ static func oniks() -> Node3D:
 	return root
 
 
+## Banderol S8000: a small grey cruise missile — a slim body, straight wings unfolded from the
+## back, a V tail and the little turbojet's intake on top of the tail.
+static func banderol() -> Node3D:
+	var root := Node3D.new()
+	var mat := Fx.solid(Color(0.55, 0.57, 0.55), 0.5, 0.2)
+	var metal := Fx.solid(Color(0.3, 0.3, 0.32), 0.4, 0.6)
+	cyl(root, 0.24, 0.24, 4.0, Vector3.ZERO, mat, Vector3(90, 0, 0), 10)
+	cyl(root, 0.0, 0.24, 0.8, Vector3(0, 0, -2.4), mat, Vector3(-90, 0, 0), 10)
+	cyl(root, 0.24, 0.14, 0.5, Vector3(0, 0, 2.25), mat, Vector3(90, 0, 0), 10)
+	box(root, Vector3(2.2, 0.05, 0.42), Vector3(0, 0.2, -0.2), mat)
+	for sx in [-1.0, 1.0]:
+		box(root, Vector3(0.05, 0.6, 0.45), Vector3(0.22 * sx, 0.3, 2.05), mat, Vector3(0, 0, -35.0 * sx))
+	box(root, Vector3(0.22, 0.14, 0.9), Vector3(0, 0.3, 1.35), metal)
+	# a model-aircraft turbojet: a small glow up close, still a point of light from afar
+	var g := Fx.glare(Color(1.0, 0.72, 0.4), 1.6, 0.7, 0.003, 0.1, 0.3)
+	g.position = Vector3(0, 0, 2.6)
+	root.add_child(g)
+	var ex := Fx.exhaust(Color(1.0, 0.55, 0.2), 18, 0.2, 0.6)
+	ex.position = Vector3(0, 0, 2.6)
+	root.add_child(ex)
+	return root
+
+
 ## Kh-31P: an anti-radiation missile — slim, cruciform wings, ramjet glow.
 static func kh31p() -> Node3D:
 	var root := Node3D.new()
@@ -684,6 +707,8 @@ static func enemy_model(type: String) -> Node3D:
 			return oniks()
 		"kh31p":
 			return kh31p()
+		"banderol":
+			return banderol()
 		"kab":
 			return kab()
 		"kinzhal":

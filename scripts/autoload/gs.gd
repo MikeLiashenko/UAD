@@ -316,6 +316,17 @@ const ENEMIES := {
 		"radius": 4.0, "color": Color(0.9, 0.4, 1.0),
 		"eff_mult": {"drone": 0.0, "mg": 0.3},
 	},
+	"banderol": {
+		# S8000 "Banderol": a small cruise missile dropped by Orion drones near the border — five
+		# metres, a 114 kg warhead, a Chinese model-jet engine, 550–650 km/h just over the roofs;
+		# the Orions drop them two or three at a time
+		"kind": "cruise", "swarm": 1.5, "crush": 0.8,
+		"name": "Ракета «Бандероль» S8000", "plural": "КРЫЛАТЫЕ РАКЕТЫ «БАНДЕРОЛЬ»", "abbr": "БН", "hp": 42.0, "speed": 165.0,
+		"alt_min": 30.0, "alt_max": 160.0,
+		"reward": 4200, "debris": 5, "debris_penalty": 800, "hit_damage": 3.0, "hit_cost": 4500,
+		"radius": 3.8, "color": Color(0.9, 0.68, 0.4),
+		"eff_mult": {"drone": 0.5},
+	},
 	"kab": {
 		"kind": "cruise", "glide": true, "launch_dist": 45000.0, "crush": 1.4,
 		"name": "Управляемая авиабомба КАБ", "plural": "КАБ С УМПК", "abbr": "КАБ", "hp": 110.0, "speed": 240.0,

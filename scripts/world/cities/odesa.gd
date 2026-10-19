@@ -54,7 +54,7 @@ func _init() -> void:
 	threat_sectors = [45.0, 70.0, 90.0, 105.0, 120.0, 135.0, 150.0, 170.0, 200.0]
 	raid = {
 		"drone": [["shahed", 0.7, 1], ["gerbera", 0.3, 2], ["geran3", 0.12, 8], ["geran4", 0.1, 10], ["geran5", 0.1, 12]],
-		"cruise": [["kalibr", 0.55, 3], ["oniks", 0.45, 4]],
+		"cruise": [["kalibr", 0.55, 3], ["oniks", 0.45, 4], ["banderol", 0.25, 7]],
 		"ballistic": [["ballistic", 0.5, 5], ["kh22", 0.35, 6], ["s400", 0.2, 7], ["zircon", 0.25, 8], ["s500", 0.1, 13]],
 	}
 	raid_sectors = {
@@ -66,6 +66,7 @@ func _init() -> void:
 		"kh31p": [120.0, 135.0, 150.0],
 		"ballistic": [110.0, 130.0, 150.0],
 		"kh22": [100.0, 130.0, 160.0, 190.0],
+		"banderol": [100.0, 120.0, 140.0],
 	}
 	# from night 4 the Su-24s from Crimea hunt the battery's radar with Kh-31P
 	raid_extra = [{"weapon": "kh31p", "from": 4, "count": [1, 2], "base": true, "at": 0.6}]

@@ -2138,4 +2138,11 @@ const T := {
 	"Выстоял: %s": "Held: %s",
 	"Пройдите кампанию в городе %s.": "Complete the campaign in %s.",
 	"🏆 Новых достижений: %d — все в главном меню": "🏆 New achievements: %d — all of them in the main menu",
+	# --- the Banderol (S8000) and its Orion carriers ---------------------------------------
+	"Ракета «Бандероль» S8000": "S8000 Banderol missile",
+	"КРЫЛАТЫЕ РАКЕТЫ «БАНДЕРОЛЬ»": "BANDEROL CRUISE MISSILES",
+	"БН": "BN",
+	"Аэродром «Орионов»": "Orion airfield",
+	"Аэродром ударных БПЛА «Орион» (носители «Бандеролей»)": "Orion strike drone airfield (Banderol carriers)",
+	"📦 «Бандероль» не доставлена — возврат отправителю": "📦 Banderol not delivered — returned to sender",
 }

@@ -320,7 +320,8 @@ func start_night() -> void:
 			if w == "":
 				continue
 			var glide: bool = GS.ENEMIES[w].get("glide", false)
-			var cc := _left(w, maxi(1, total / salvos) + (1 if glide else 0))
+			# the Orions drop their Banderols two or three at a time
+			var cc := _left(w, maxi(1, int(round(total / salvos * float(GS.ENEMIES[w].get("swarm", 1.0))))) + (1 if glide else 0))
 			if cc > 0:
 				schedule.append({"t": span * _rng.randf_range(0.12, 0.9), "type": w, "count": cc, "alt": -1.0 if glide or GS.ENEMIES[w].alt_max < 100.0 else _layer("cruise")})
 	if d >= ball_from or (d >= ball_from - 1 and GS.difficulty == 2):

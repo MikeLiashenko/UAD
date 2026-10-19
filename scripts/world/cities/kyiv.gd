@@ -59,7 +59,7 @@ func _init() -> void:
 	# S-400 rounds from beyond the northern border, Kinzhals and Zircons from Crimea
 	raid = {
 		"drone": [["shahed", 0.6, 1], ["gerbera", 0.3, 2], ["geran3", 0.15, 7], ["geran4", 0.12, 9], ["geran5", 0.12, 11]],
-		"cruise": [["cruise", 0.65, 3], ["kalibr", 0.35, 4]],
+		"cruise": [["cruise", 0.65, 3], ["kalibr", 0.35, 4], ["banderol", 0.3, 6]],
 		"ballistic": [["ballistic", 0.6, 5], ["s400", 0.25, 6], ["kinzhal", 0.3, 8], ["zircon", 0.2, 10], ["s500", 0.1, 13]],
 	}
 	raid_sectors = {
@@ -70,6 +70,7 @@ func _init() -> void:
 		"s400": [0.0, 20.0, 40.0],
 		"s500": [20.0, 40.0, 60.0],
 		"zircon": [150.0, 165.0, 180.0],
+		"banderol": [0.0, 20.0, 40.0, 60.0],
 	}
 	raid_events = {12: {"weapon": "oreshnik", "count": 6,
 		"alert": "⚠ УГРОЗА: БАЛЛИСТИКА СРЕДНЕЙ ДАЛЬНОСТИ «ОРЕШНИК» ПО КИЕВУ! Всем в укрытия"}}

@@ -70,6 +70,8 @@ const KINDS := {
 		"km": {"kyiv": 820.0}, "def": 0.45},
 	"kh22": {"short": "Аэродром Ту-22М3", "name": "Аэродром дальней авиации (Ту-22М3)", "icon": "plane", "weapons": ["kh22"],
 		"km": {"dnipro": 760.0, "odesa": 700.0}, "def": 0.45},
+	"orion": {"short": "Аэродром «Орионов»", "name": "Аэродром ударных БПЛА «Орион» (носители «Бандеролей»)", "icon": "plane", "weapons": ["banderol"],
+		"km": {"kyiv": 420.0, "kharkiv": 150.0, "dnipro": 360.0, "odesa": 300.0}, "def": 0.4},
 	"s300": {"hunt": true, "short": "Позиции С-300", "name": "Позиции С-300 у границы", "icon": "missile", "weapons": ["s300"],
 		"km": {"kharkiv": 55.0}, "def": 0.3},
 	"s400": {"hunt": true, "short": "Дивизион С-400", "name": "Дивизион С-400 (бьёт по земле)", "icon": "missile", "weapons": ["s400"],

@@ -134,7 +134,7 @@ const HAND := [
 ## Families: the first kill of every kind of target, a hundred of the common ones, the first kill
 ## of every air defence system and the masters of a few, every strike weapon on target, every
 ## target in the enemy's rear.
-const TARGET_TIERS := {"scout": 25, "shahed": 100, "gerbera": 100, "cruise": 50, "kalibr": 50, "ballistic": 25, "kab": 50, "molniya": 100, "geran3": 50}
+const TARGET_TIERS := {"scout": 25, "shahed": 100, "gerbera": 100, "cruise": 50, "kalibr": 50, "ballistic": 25, "kab": 50, "molniya": 100, "geran3": 50, "banderol": 50}
 const SYSTEM_TIERS := {"mg": 100, "gepard": 250, "shilka": 100, "igla": 50, "drone": 100, "iris": 100, "patriot": 50}
 const TARGET_ICON := {"shahed": "🛩", "cruise": "🚀", "ballistic": "☄"}
 

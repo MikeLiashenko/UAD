@@ -80,10 +80,10 @@ func _init(d := {}, cid := "custom") -> void:
 	threat_sectors = [0.0, 30.0, 60.0, 90.0, 110.0, 130.0, 150.0, 180.0]
 	raid = {
 		"drone": [["shahed", 0.7, 1], ["gerbera", 0.3, 2], ["geran3", 0.12, 8]],
-		"cruise": [["cruise", 0.55, 3], ["kalibr", 0.45, 4]],
+		"cruise": [["cruise", 0.55, 3], ["kalibr", 0.45, 4], ["banderol", 0.25, 6]],
 		"ballistic": [["ballistic", 0.7, 5], ["kh22", 0.3, 7]],
 	}
-	raid_sectors = {"ballistic": [80.0, 100.0, 120.0, 140.0], "kalibr": [150.0, 170.0, 190.0, 210.0], "kh22": [100.0, 130.0, 160.0]}
+	raid_sectors = {"ballistic": [80.0, 100.0, 120.0, 140.0], "kalibr": [150.0, 170.0, 190.0, 210.0], "kh22": [100.0, 130.0, 160.0], "banderol": [60.0, 80.0, 100.0]}
 	sites_as = "dnipro"
 	for r in data.rivers:
 		add_river(String(r.n), r.p)
