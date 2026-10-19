@@ -920,6 +920,7 @@ const T := {
 	"%s · от %s": "%s · %s",
 	"У вас %s": "You have %s",
 	"Скачайте новую версию и запустите её вместо этой — миры и настройки сохранятся.": "Download the new version and run it instead of this one — your worlds and settings stay.",
+	"Скачайте установщик и запустите его — он обновит игру, миры и настройки сохранятся.": "Download the installer and run it: it updates the game, and your worlds and settings stay.",
 	"Скачать обновление": "Download the update",
 	"Открыть сайт игры": "Open the game's website",
 	"Позже": "Later",

@@ -409,7 +409,7 @@ section { overflow-x: clip; }
 		<h1><b class="w1">UKRAINE</b><span class="w2">AIR DEFENSE</span></h1>
 		<p class="tagline" data-i18n="tagline"></p>
 		<div class="cta" id="cta">
-			<a class="btn primary" id="btn-win" href="https://github.com/MikeLiashenko/UAD/releases/latest/download/UAD.exe">
+			<a class="btn primary" id="btn-win" href="https://github.com/MikeLiashenko/UAD/releases/latest/download/UAD_Setup.exe">
 				<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.1 10.4 4v7.2H3V5.1Zm0 13.8 7.4 1.1v-7.1H3v6Zm8.3 1.2L21 21.5V12.9h-9.7v7.2Zm0-16.2v7.3H21V2.5l-9.7 1.4Z"/></svg>
 				<span><b data-i18n="btn_win"></b><small id="win-meta">.exe</small></span>
 			</a>
@@ -613,7 +613,7 @@ section { overflow-x: clip; }
 			<div class="dlcard reveal" id="card-win">
 				<header><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.1 10.4 4v7.2H3V5.1Zm0 13.8 7.4 1.1v-7.1H3v6Zm8.3 1.2L21 21.5V12.9h-9.7v7.2Zm0-16.2v7.3H21V2.5l-9.7 1.4Z"/></svg><div><h3>Windows</h3><div class="meta" data-i18n="win_req"></div></div></header>
 				<ol><li data-i18n="win_1"></li><li data-i18n="win_2"></li><li data-i18n="win_3"></li></ol>
-				<a class="btn primary" id="btn-win2" href="https://github.com/MikeLiashenko/UAD/releases/latest/download/UAD.exe"><span><b data-i18n="btn_win"></b><small id="win-meta2">.exe</small></span></a>
+				<a class="btn primary" id="btn-win2" href="https://github.com/MikeLiashenko/UAD/releases/latest/download/UAD_Setup.exe"><span><b data-i18n="btn_win"></b><small id="win-meta2">.exe</small></span></a>
 			</div>
 			<div class="dlcard reveal" id="card-apk">
 				<header><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.6 9.5 19.4 6.4a.4.4 0 0 0-.7-.4l-1.8 3.2a11 11 0 0 0-9.8 0L5.3 6a.4.4 0 0 0-.7.4l1.8 3.1A10.4 10.4 0 0 0 1 18h22a10.4 10.4 0 0 0-5.4-8.5ZM7 15.3a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4Zm10 0a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4Z"/></svg><div><h3>Android</h3><div class="meta" data-i18n="apk_req"></div></div></header>
@@ -755,7 +755,8 @@ function renderRelease() {
 	if (!release) { tag.textContent = "v —"; return; }
 	tag.textContent = release.name ? String(release.name).slice(0, 32) : label(parseInt(release.build, 10));
 	document.getElementById("build-date").textContent = fmtDate(String(release.date || "").slice(0, 10));
-	const winMeta = ".exe" + (+release.exe_mb ? " · " + (+release.exe_mb) + " " + t("mb") : "");
+	// on Windows the button gives the installer (release.exe is UAD_Setup.exe since v1.3.16)
+	const winMeta = (/Setup\.exe$/.test(String(release.exe || "")) ? t("setup") : ".exe") + (+release.exe_mb ? " · " + (+release.exe_mb) + " " + t("mb") : "");
 	const apkMeta = ".apk" + (+release.apk_mb ? " · " + (+release.apk_mb) + " " + t("mb") : "");
 	["win-meta", "win-meta2"].forEach((id) => document.getElementById(id).textContent = winMeta);
 	["apk-meta", "apk-meta2"].forEach((id) => document.getElementById(id).textContent = apkMeta);

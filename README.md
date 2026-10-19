@@ -6,12 +6,12 @@
 **Все ресурсы процедурные**: здания, река, лес, техника, ракеты, небо со звёздами, UI-тема, шрифты (системные),
 даже звуки (сирена, взрывы, выстрелы) синтезируются в коде. Из файлов — только иконка и музыка.
 
-**Скачать**: https://mikeliashenko.github.io/UAD/ — Windows `.exe` и Android `.apk` последней сборки.
+**Скачать**: https://mikeliashenko.github.io/UAD/ — установщик для Windows `UAD_Setup.exe` (без прав администратора: ярлыки в «Пуске» и на рабочем столе, обновление поверх, удаление в «Параметры → Приложения»; его собирает `tools_scripts/installer`) и Android `.apk` последней сборки. Та же игра одним файлом — `UAD.exe` в релизах на GitHub.
 
 ## Быстрая сборка
 
 ```bat
-build.bat            :: -> build\windows\UAD.exe
+build.bat            :: -> build\windows\UAD.exe и установщик UAD_Setup.exe
 build.bat apk        :: -> build\android\UAD.apk
 build.bat aab        :: -> build\android\UAD.aab
 build.bat all        :: .exe и .apk

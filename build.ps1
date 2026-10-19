@@ -10,15 +10,17 @@
      version and the Android versionCode / versionName in export_presets.cfg. People see the
      version name "v1.3.N Alpha": VERSION and STAGE from build_info.gd, N = the build number
      counted from VERSION_BASE (build 23 = v1.3.1).
-  4. Imports the project headlessly and exports the requested targets. Release APKs are signed with
+  4. Imports the project headlessly and exports the requested targets; for Windows also the installer
+     build\windows\UAD_Setup.exe (tools_scripts\installer: Start menu and desktop shortcuts, an entry
+     in Settings -> Apps, an uninstaller, updates in place). Release APKs are signed with
      the project key in %USERPROFILE%\.uad (created on the first release build — back it up: an
      update signed with another key will not install over the old app).
-  5. With -Publish: commits the stamp, pushes, creates the GitHub release v1.3.N-alpha with the .exe and
-     the .apk, and writes the newest build into the database (uad/release) — every game that is
-     older offers the update in its main menu.
+  5. With -Publish: commits the stamp, pushes, creates the GitHub release v1.3.N-alpha with the
+     installer, the bare .exe and the .apk, and writes the newest build into the database
+     (uad/release) — every game that is older offers the update (on Windows: the installer).
 
 .EXAMPLE
-  .\build.ps1                          # Windows .exe  -> build\windows\UAD.exe
+  .\build.ps1                          # Windows .exe  -> build\windows\UAD.exe and UAD_Setup.exe
   .\build.ps1 -Target apk              # Android .apk  -> build\android\UAD.apk
   .\build.ps1 -Target all -Publish -Notes "Общие налёты в сети"
   .\build.ps1 -NoBump                  # rebuild without a new number
@@ -174,6 +176,9 @@ function Export-Preset($preset, $out, [string[]]$extra = @()) {
 
 if ($Target -in 'windows', 'all') {
     Export-Preset 'Windows Desktop' (Join-Path $Root 'build\windows\UAD.exe')
+    Step 'Packing the installer -> build\windows\UAD_Setup.exe'
+    & (Join-Path $Root 'tools_scripts\installer\make_installer.ps1') -Exe (Join-Path $Root 'build\windows\UAD.exe') `
+        -Out (Join-Path $Root 'build\windows\UAD_Setup.exe') -Label $VersionName -Number $AppVersion
 }
 if ($Target -in 'apk', 'aab', 'all') {
     if ($Target -in 'apk', 'all') { Export-Preset 'Android APK' (Join-Path $Root 'build\android\UAD.apk') }
@@ -194,8 +199,9 @@ if ($Publish) {
     if (-not $gh) { $gh = Join-Path $env:ProgramFiles 'GitHub CLI\gh.exe' }
     if (-not (Test-Path $gh)) { throw 'GitHub CLI (gh) is needed to publish: winget install GitHub.cli' }
     $exe = Join-Path $Root 'build\windows\UAD.exe'
+    $setup = Join-Path $Root 'build\windows\UAD_Setup.exe'
     $apk = Join-Path $Root 'build\android\UAD.apk'
-    foreach ($f in $exe, $apk) { if (-not (Test-Path $f)) { throw "Nothing to publish: $f is missing" } }
+    foreach ($f in $setup, $exe, $apk) { if (-not (Test-Path $f)) { throw "Nothing to publish: $f is missing" } }
     $tagName = if ($Stage) { "v$AppVersion-$($Stage.ToLower())" } else { "v$AppVersion" }
     if (-not $Notes) { $Notes = $VersionName }
 
@@ -206,13 +212,13 @@ if ($Publish) {
     if ($LASTEXITCODE -ne 0) { throw 'git push failed' }
 
     Step "GitHub release $tagName"
-    $body = "$Notes`n`n**Windows:** UAD.exe · **Android:** UAD.apk`n`nСайт: $Site"
+    $body = "$Notes`n`n**Windows:** UAD_Setup.exe — установщик (ярлыки, обновление поверх, удаление в «Приложениях»); UAD.exe — та же игра без установки · **Android:** UAD.apk`n`nСайт: $Site"
     & $gh release view $tagName --repo $Repo *> $null
     if ($LASTEXITCODE -eq 0) {
         # a second -Publish of the same number (-NoBump) replaces the files
-        & $gh release upload $tagName $exe $apk --repo $Repo --clobber | Out-Host
+        & $gh release upload $tagName $setup $exe $apk --repo $Repo --clobber | Out-Host
     } else {
-        & $gh release create $tagName $exe $apk --repo $Repo --title "UAD $VersionName" --notes $body --latest | Out-Host
+        & $gh release create $tagName $setup $exe $apk --repo $Repo --title "UAD $VersionName" --notes $body --latest | Out-Host
     }
     if ($LASTEXITCODE -ne 0) { throw 'gh release failed' }
 
@@ -223,10 +229,12 @@ if ($Publish) {
         name    = $VersionName
         date    = $Date
         notes   = $Notes
-        exe     = "https://github.com/$Repo/releases/download/$tagName/UAD.exe"
+        # "exe" is what a game on Windows downloads to update itself: the installer since v1.3.16
+        exe     = "https://github.com/$Repo/releases/download/$tagName/UAD_Setup.exe"
+        portable = "https://github.com/$Repo/releases/download/$tagName/UAD.exe"
         apk     = "https://github.com/$Repo/releases/download/$tagName/UAD.apk"
         site    = $Site
-        exe_mb  = [math]::Round((Get-Item $exe).Length / 1MB, 1)
+        exe_mb  = [math]::Round((Get-Item $setup).Length / 1MB, 1)
         apk_mb  = [math]::Round((Get-Item $apk).Length / 1MB, 1)
     }
     $json = $release | ConvertTo-Json
