@@ -554,4 +554,4 @@ func _note(text: String, col: Color, size := 13) -> Label:
 
 
 func _close_btn() -> void:
-	_side.add_child(UiKit.button(GS.t("Закрыть [%s]") % GS.key_label("strikes"), close, 360, 18))
+	_side.add_child(UiKit.button(GS.t("Закрыть [%s]") % GS.key_label("strikes") if not GS.touch() else GS.t("✕ Закрыть"), close, 360, 18))

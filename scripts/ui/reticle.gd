@@ -190,7 +190,9 @@ func _draw() -> void:
 		var lines := _kill_text.split("\n")
 		for i in lines.size():
 			_txt(Vector2(c.x - 300, c.y - 90 + i * 34), lines[i], 30 if i == 0 else 22, kc, HORIZONTAL_ALIGNMENT_CENTER, 600)
-	_txt(Vector2(c.x - 400, 150), GS.t("ЛКМ — огонь/пуск · ПКМ/колесо — зум · %s — ночной прицел · %s — вид сверху · 1-9 или %s/%s — ПВО · %s — дрон · Alt — курсор") % [GS.key_label("night"), GS.key_label("view"), GS.key_label("weapon_prev"), GS.key_label("weapon_next"), GS.key_label("fpv")], 12, Color(col.r, col.g, col.b, 0.6), HORIZONTAL_ALIGNMENT_CENTER, 800)
+	var how := GS.t("Ведите пальцем — наводка · «ОГОНЬ» — выстрел · + / − — зум") if GS.touch() \
+		else GS.t("ЛКМ — огонь/пуск · ПКМ/колесо — зум · %s — ночной прицел · %s — вид сверху · 1-9 или %s/%s — ПВО · %s — дрон · Alt — курсор") % [GS.key_label("night"), GS.key_label("view"), GS.key_label("weapon_prev"), GS.key_label("weapon_next"), GS.key_label("fpv")]
+	_txt(Vector2(c.x - 400, 150), how, 12, Color(col.r, col.g, col.b, 0.6), HORIZONTAL_ALIGNMENT_CENTER, 800)
 
 
 ## MaxRealism: the sight shows what a real one shows. Nothing is drawn on the targets; a gun

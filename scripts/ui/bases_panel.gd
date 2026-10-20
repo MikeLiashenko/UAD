@@ -47,7 +47,7 @@ func _ready() -> void:
 	_list = UiKit.vbox(6)
 	_list.custom_minimum_size = Vector2(940, 0)
 	scroll.add_child(_list)
-	var close_b := UiKit.button(GS.t("Закрыть [%s]") % GS.key_label("bases"), close, 300, 18)
+	var close_b := UiKit.button(GS.t("Закрыть [%s]") % GS.key_label("bases") if not GS.touch() else GS.t("✕ Закрыть"), close, 300, 18)
 	close_b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	v.add_child(close_b)
 	GS.state_changed.connect(_refresh)

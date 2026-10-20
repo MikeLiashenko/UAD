@@ -490,7 +490,9 @@ const T := {
 	"СЛЕДУЮЩИЙ ▶ [%s]": "NEXT ▶ [%s]",
 	"ПРОГУЛКА · WASD — идти · Shift — бегом · Пробел — прыжок · мышь — осмотреться · %s — назад к ПВО · %s — пауза": "WALKING · WASD — move · Shift — run · Space — jump · mouse — look · %s — back to the battery · %s — pause",
 	"ЛКМ по цели — огонь выбранной ПВО · ЛКМ по небу — отбой\nПКМ — поворот · колесо — зум · 1-9 или %s/%s — ПВО · %s — пульт FPV": "LMB on a target — engage with the selected system · LMB on the sky — cease fire\nRMB — rotate · wheel — zoom · 1-9 or %s/%s — systems · %s — FPV console",
+	"Касание цели — огонь выбранной ПВО · касание неба — отбой\nОдин палец — сдвиг карты · щипок — зум · два пальца — поворот и наклон": "Tap a target — engage with the selected system · tap the sky — cease fire\nOne finger — pan the map · pinch — zoom · two fingers — rotate and tilt",
 	"ЛКМ — огонь/пуск · ПКМ/колесо — зум · %s — ночной прицел · %s — вид сверху · 1-9 или %s/%s — ПВО · %s — дрон · Alt — курсор": "LMB — fire/launch · RMB/wheel — zoom · %s — night sight · %s — map view · 1-9 or %s/%s — systems · %s — drone · Alt — cursor",
+	"Ведите пальцем — наводка · «ОГОНЬ» — выстрел · + / − — зум": "Drag a finger — aim · «FIRE» — shoot · + / − — zoom",
 	"мышь — управление · W/S — тяга · Shift/ЛКМ — разгон · %s — следующий дрон · %s — на базу · %s — ночная камера · %s — пульт выкл · Alt — курсор": "mouse — steer · W/S — throttle · Shift/LMB — boost · %s — next drone · %s — send home · %s — night camera · %s — leave console · Alt — cursor",
 	# --- the nightly compilation ---------------------------------------------------------
 	"ПОДПИСКА": "FOLLOW",
@@ -1128,6 +1130,8 @@ const T := {
 	"Тепловая ракета ближнего боя: захват в конусе перед носом, до 4.5 км.": "Short-range heat-seeker: locks in a cone ahead of the nose, up to 4.5 km.",
 	"ФОРСАЖ": "AFTERBURNER",
 	"Экипаж стреляет сам [%s]: %s": "The crew fires on its own [%s]: %s",
+	"Экипаж стреляет сам: %s": "The crew fires on its own: %s",
+	"На месте! К ПУЛЕМЁТУ": "In position! TO THE GUN",
 	"взрыв рядом": "a blast nearby",
 	"возвращение на аэродром": "back to the airfield",
 	"захват…": "locking…",

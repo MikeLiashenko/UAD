@@ -51,7 +51,7 @@ func _draw() -> void:
 		_txt(Vector2(c.x - 500, 118), line, 17, AMBER, HORIZONTAL_ALIGNMENT_CENTER, 1000)
 		if mg.seat == "drive":
 			var to_beacon: float = mg.pos.distance_to(mg.tip_point)
-			var hint := GS.t("Жми к маяку: %d м") % int(to_beacon) if to_beacon > 25.0 else GS.t("На месте! К ПУЛЕМЁТУ — Пробел")
+			var hint := GS.t("Жми к маяку: %d м") % int(to_beacon) if to_beacon > 25.0 else (GS.t("На месте! К ПУЛЕМЁТУ") if GS.touch() else GS.t("На месте! К ПУЛЕМЁТУ — Пробел"))
 			_txt(Vector2(c.x - 500, 142), hint, 15, NEON if to_beacon <= 25.0 else Color(0.8, 1.0, 0.9), HORIZONTAL_ALIGNMENT_CENTER, 1000)
 			_edge_arrow(cam, mg.tip_point + Vector3(0, 3, 0), AMBER, "%d м" % int(to_beacon), sz)
 		else:
@@ -89,7 +89,7 @@ func _draw() -> void:
 	_bar(top + Vector2(0, 92), 170, mg.heat, heat_col, GS.t("НАГРЕВ СТВОЛА"))
 	var auto_on: bool = int(game.auto_fire) >= 1
 	if not real:
-		_txt(top + Vector2(0, 128), GS.t("Экипаж стреляет сам [%s]: %s") % [GS.key_label("auto"), GS.t("ДА") if auto_on else GS.t("НЕТ")], 13, NEON if auto_on else Color(0.6, 0.75, 0.7))
+		_txt(top + Vector2(0, 128), (GS.t("Экипаж стреляет сам: %s") % (GS.t("ДА") if auto_on else GS.t("НЕТ")) if GS.touch() else GS.t("Экипаж стреляет сам [%s]: %s") % [GS.key_label("auto"), GS.t("ДА") if auto_on else GS.t("НЕТ")]), 13, NEON if auto_on else Color(0.6, 0.75, 0.7))
 	# --- hints, bottom
 	var hint := GS.t("W/S — газ/тормоз · A/D — руль · мышь — осмотреться · ЛКМ — к пулемёту и огонь · Пробел — сменить место · %s — выйти из машины") % GS.key_label("mfg")
 	if mg.seat == "gun":

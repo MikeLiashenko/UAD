@@ -84,6 +84,8 @@ var _watch_lbl: Label
 var _players_btn: Button
 ## Time warp: offline only, so it takes the slot of the players button of a network game.
 var _warp_btn: Button
+## Matches a key in brackets ("[B]", "[]]", "[—]") for _keyless.
+var _key_tag: RegEx
 ## Buttons of the mobile fire group: out of the truck, swap seats (touch screens, Alt + mouse).
 var _mfg_ui: Control
 ## Buttons of the F-16 sortie (touch screens, Alt + mouse): missiles, afterburner, back home.
@@ -208,7 +210,7 @@ func _build_walk_ui() -> void:
 	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_walk_ui.add_child(hint)
 	var back := Button.new()
-	back.text = GS.t("⟵ К ПВО [%s]") % GS.key_label("walk")
+	back.text = _keyless(GS.t("⟵ К ПВО [%s]") % GS.key_label("walk"))
 	back.focus_mode = Control.FOCUS_NONE
 	back.add_theme_font_size_override("font_size", 16)
 	back.anchor_left = 0.5
@@ -327,7 +329,7 @@ func on_view_changed() -> void:
 			vname = GS.t("МОГ")
 		elif air:
 			vname = GS.t("F-16")
-		view_btn.text = GS.t("ВИД [%s]: %s") % [GS.key_label("view"), vname]
+		view_btn.text = _keyless(GS.t("ВИД [%s]: %s") % [GS.key_label("view"), vname])
 	if fire_btn:
 		fire_btn.visible = (base or fpv or mfg or air) and GS.touch()
 		fire_btn.text = GS.t("РАЗГОН") if fpv else (GS.t("ПУШКА") if air else GS.t("ОГОНЬ"))
@@ -607,7 +609,7 @@ func _rebuild_weapon_buttons() -> void:
 
 func _small_btn(parent: Control, text: String, cb: Callable) -> Button:
 	var b := Button.new()
-	b.text = text
+	b.text = _keyless(text)
 	b.custom_minimum_size = Vector2(116, 34)
 	b.add_theme_font_size_override("font_size", 13)
 	b.focus_mode = Control.FOCUS_NONE
@@ -615,6 +617,15 @@ func _small_btn(parent: Control, text: String, cb: Callable) -> Button:
 	b.pressed.connect(cb)
 	parent.add_child(b)
 	return b
+
+
+## A touch screen has no keyboard: "МАГАЗИН [B]" is shown as "МАГАЗИН", "ВИД [V]: …" as "ВИД: …".
+func _keyless(text: String) -> String:
+	if not GS.touch():
+		return text
+	if _key_tag == null:
+		_key_tag = RegEx.create_from_string("\\s*\\[(?:\\]|\\[|[^\\[\\]]{1,12})\\]")
+	return _key_tag.sub(text, "", true)
 
 
 func _build_target_info() -> void:
@@ -633,6 +644,8 @@ func _build_target_info() -> void:
 	predict_lbl = UiKit.label("", 17)
 	v.add_child(predict_lbl)
 	var hint := UiKit.label(GS.t("ЛКМ по цели — огонь выбранной ПВО · ЛКМ по небу — отбой\nПКМ — поворот · колесо — зум · 1-9 или %s/%s — ПВО · %s — пульт FPV") % [GS.key_label("weapon_prev"), GS.key_label("weapon_next"), GS.key_label("fpv")], 11, Color(0.5, 0.7, 0.6))
+	if GS.touch():
+		hint.text = GS.t("Касание цели — огонь выбранной ПВО · касание неба — отбой\nОдин палец — сдвиг карты · щипок — зум · два пальца — поворот и наклон")
 	v.add_child(hint)
 
 
@@ -949,7 +962,7 @@ func refresh() -> void:
 		var sel: bool = id == game.selected_weapon
 		b.add_theme_stylebox_override("normal", _style_sel if sel else _style_norm)
 		b.add_theme_color_override("font_color", Color(1, 1, 1) if sel else Color(0.7, 1.0, 0.85))
-	auto_btn.text = GS.t("АВТО [%s]: %s") % [GS.key_label("auto"), game.auto_mode_name()]
+	auto_btn.text = _keyless(GS.t("АВТО [%s]: %s") % [GS.key_label("auto"), game.auto_mode_name()])
 
 
 ## How many systems the group has in total, bought or not — shown on the tab as "have/total".
@@ -1130,12 +1143,12 @@ func _show_pause() -> void:
 	if not GS.realism:
 		# MaxRealism: supplies and the feed are at the command post
 		v.add_child(UiKit.button(GS.t("Магазин"), open_shop))
-		v.add_child(UiKit.button(GS.t("Лента города [%s]") % GS.key_label("feed"), open_feed))
+		v.add_child(UiKit.button(_keyless(GS.t("Лента города [%s]") % GS.key_label("feed")), open_feed))
 	v.add_child(UiKit.button(GS.t("Настройки"), _show_settings))
 	var note := GS.t("Мир «%s». Автосохранение — каждое утро.") % GS.world_name
 	if game.pvp != null:
 		var pv = game.pvp
-		v.add_child(UiKit.button(GS.t("Удар по противнику [%s]") % GS.key_label("strikes"), open_strikes))
+		v.add_child(UiKit.button(_keyless(GS.t("Удар по противнику [%s]") % GS.key_label("strikes")), open_strikes))
 		v.add_child(UiKit.button(GS.t("Закончить тест") if pv.bot else GS.t("Покинуть сервер"), func() -> void: game.main.leave_server()))
 		note = GS.t("Сервер «%s» · вы защищаете город %s. Здесь ничего не сохраняется.") % [String(pv.def.name), pv.my_name()]
 		if pv.bot:
@@ -1207,7 +1220,7 @@ func _update_warp_btn() -> void:
 		return
 	_warp_btn.visible = not Net.is_online()
 	var w := int(game.warp)
-	_warp_btn.text = GS.t("▶▶ ВРЕМЯ ×%d [%s]") % [w, GS.key_label("warp")]
+	_warp_btn.text = _keyless(GS.t("▶▶ ВРЕМЯ ×%d [%s]") % [w, GS.key_label("warp")])
 	if int(_warp_btn.get_meta("w", 0)) != w:
 		_warp_btn.set_meta("w", w)
 		_warp_btn.add_theme_color_override("font_color", Color(0.6, 0.9, 1.0) if w > 1 else Color(0.7, 1.0, 0.85))

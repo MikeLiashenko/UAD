@@ -39,7 +39,7 @@ func _ready() -> void:
 	_list = UiKit.vbox(8)
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(_list)
-	v.add_child(UiKit.button(GS.t("Закрыть [%s]") % GS.key_label("shop"), close))
+	v.add_child(UiKit.button(GS.t("Закрыть [%s]") % GS.key_label("shop") if not GS.touch() else GS.t("✕ Закрыть"), close))
 	_rebuild()
 
 

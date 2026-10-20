@@ -55,7 +55,7 @@ func _ready() -> void:
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(_list)
 	var close_btn := _flat(Button.new())
-	close_btn.text = GS.t("Закрыть [%s]") % GS.key_label("shop")
+	close_btn.text = GS.t("Закрыть [%s]") % GS.key_label("shop") if not GS.touch() else GS.t("✕ Закрыть")
 	close_btn.custom_minimum_size = Vector2(0, 40)
 	close_btn.pressed.connect(close)
 	v.add_child(close_btn)
