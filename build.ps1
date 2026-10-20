@@ -186,6 +186,8 @@ if ($Target -in 'apk', 'aab', 'all') {
         # .aab requires the Gradle build template (android/build); Godot installs it during export.
         $extra = @()
         if (-not (Test-Path (Join-Path $Root 'android\build\build.gradle'))) { $extra = @('--install-android-build-template') }
+        # no Gradle daemon: a daemon left running keeps Godot's console pipe open and the export never returns
+        $env:GRADLE_OPTS = '-Dorg.gradle.daemon=false'
         Export-Preset 'Android AAB' (Join-Path $Root 'build\android\UAD.aab') $extra
         # Stop the Gradle daemon so it doesn't keep the console/pipe busy after the build.
         $gradlew = Join-Path $Root 'android\build\gradlew.bat'

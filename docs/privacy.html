@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ukraine Air Defense — Privacy Policy</title>
+<meta name="description" content="Privacy policy of the game Ukraine Air Defense (UAD): what the game stores, what goes online, how to delete an account.">
+<meta name="theme-color" content="#030807">
+<link rel="icon" type="image/png" href="img/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Russo+One&display=swap" rel="stylesheet">
+<style>
+:root {
+	--bg: #030807;
+	--panel: rgba(9, 28, 22, 0.66);
+	--line: rgba(120, 255, 200, 0.14);
+	--line2: rgba(120, 255, 200, 0.42);
+	--neon: #3dffb0;
+	--text: #ecfff6;
+	--muted: #a9cfc0;
+	--dim: #6f9486;
+	--head: "Russo One", system-ui, sans-serif;
+	--body: "Manrope", system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--text); font: 400 16px/1.65 var(--body); }
+a { color: var(--neon); }
+.wrap { max-width: 860px; margin: 0 auto; padding: 0 16px; }
+header { border-bottom: 1px solid var(--line); padding: 16px 0; position: sticky; top: 0; background: rgba(3, 8, 7, 0.92); backdrop-filter: blur(8px); z-index: 2; }
+header .wrap { display: flex; align-items: center; gap: 12px; }
+.brand { display: flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none; font: 400 18px var(--head); }
+.brand img { width: 32px; height: 32px; border-radius: 8px; }
+.lang { display: flex; margin-left: auto; border: 1px solid var(--line2); border-radius: 999px; overflow: hidden; }
+.lang button { background: none; border: 0; color: var(--muted); font: 700 12px var(--body); padding: 7px 11px; cursor: pointer; letter-spacing: 0.6px; }
+.lang button.on { background: var(--neon); color: #01140c; }
+main { padding: 36px 0 60px; }
+h1 { font: 400 clamp(26px, 5vw, 38px)/1.2 var(--head); margin: 0 0 6px; }
+.date { color: var(--dim); font-size: 14px; margin: 0 0 28px; }
+h2 { font: 400 20px/1.3 var(--head); margin: 34px 0 10px; color: var(--neon); scroll-margin-top: 80px; }
+p, li { color: var(--muted); }
+strong { color: var(--text); }
+ul { padding-left: 22px; }
+.box { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 4px 20px; }
+section[data-l] { display: none; }
+section[data-l].on { display: block; }
+footer { border-top: 1px solid var(--line); padding: 28px 0 40px; color: var(--dim); font-size: 14px; }
+</style>
+</head>
+<body>
+<header>
+	<div class="wrap">
+		<a class="brand" href="./"><img src="img/icon.png" alt="">Ukraine Air Defense</a>
+		<div class="lang" role="group" aria-label="Language">
+			<button data-lang="uk">UA</button><button data-lang="ru">RU</button><button data-lang="en">EN</button>
+		</div>
+	</div>
+</header>
+
+<main class="wrap">
+
+<section data-l="uk">
+	<h1>Політика конфіденційності</h1>
+	<p class="date">Ukraine Air Defense (UAD) · оновлено 20 жовтня 2026</p>
+	<div class="box">
+		<p><strong>Коротко:</strong> у грі немає реклами, аналітики, трекерів і покупок. Без мережі гра працює повністю і нічого нікуди не надсилає. Акаунт необов'язковий.</p>
+	</div>
+
+	<h2>Що зберігається лише на вашому пристрої</h2>
+	<ul>
+		<li>Світи (збереження), налаштування, досягнення, намальовані міста.</li>
+		<li>Фото та відео, які ви самі зберігаєте з гри.</li>
+	</ul>
+	<p>Ці дані не залишають пристрій. Їх видаляє видалення гри або очищення її даних.</p>
+
+	<h2>Що надсилається в мережу</h2>
+	<p>Лише коли ви користуєтеся мережевими функціями (спільний наліт, друзі, сервери «місто проти міста»):</p>
+	<ul>
+		<li><strong>Нік</strong>, який ви обрали, і <strong>код друга</strong> — випадковий код, що гра створює сама.</li>
+		<li><strong>Стан у мережі:</strong> чи ви в грі, назва світу, місто, день, затримка зв'язку.</li>
+		<li><strong>Дані спільної гри:</strong> карта міста, ракети, перехоплення, результати бою, назва сервера.</li>
+		<li><strong>Номер версії гри</strong> — щоб гравці різних версій не з'єднувалися.</li>
+	</ul>
+	<p>Під час запуску гра також перевіряє, чи вийшла нова версія (запит без жодних даних про вас).</p>
+	<p>Записи сесії видаляються, коли ви виходите з гри; ті, що лишилися після обриву зв'язку, прибираються автоматично.</p>
+
+	<h2>Необов'язковий акаунт</h2>
+	<p>Якщо ви створите акаунт, зберігаються <strong>електронна пошта</strong> (для входу), нік, код друга і список друзів. Пароль обробляє Firebase Authentication — ми його не бачимо і не зберігаємо. На пристрої лишається токен входу, щоб не вводити пароль щоразу.</p>
+
+	<h2>Хто обробляє дані</h2>
+	<p>Мережеві дані зберігаються у <strong>Google Firebase</strong> (Realtime Database та Authentication). Google обробляє їх за власною <a href="https://firebase.google.com/support/privacy">політикою конфіденційності</a>. Ми не продаємо і не передаємо дані нікому іншому. Усі з'єднання зашифровані (HTTPS).</p>
+
+	<h2 id="delete">Як видалити акаунт і дані</h2>
+	<ul>
+		<li>У грі: <strong>Грати → Мультиплеєр → Акаунт → Видалити акаунт</strong>. Після підтвердження паролем видаляються нік, код друга, список друзів і сам акаунт — одразу й назавжди.</li>
+		<li>Якщо доступу до гри немає — напишіть нам (див. нижче) з адреси, на яку зареєстровано акаунт, і ми видалимо його протягом 30 днів.</li>
+		<li>Без акаунта в мережі зберігаються лише тимчасові записи сесії, які зникають самі.</li>
+	</ul>
+
+	<h2>Дозволи Android</h2>
+	<p>Лише <strong>Інтернет</strong> і <strong>стан мережі</strong> — для мережевої гри. Гра не просить доступу до контактів, місцезнаходження, камери чи мікрофона.</p>
+
+	<h2>Діти</h2>
+	<p>Гра не призначена для дітей до 13 років, і ми свідомо не збираємо їхніх даних.</p>
+
+	<h2>Зміни і зв'язок</h2>
+	<p>Про зміни цієї політики ми повідомимо на цій сторінці. Питання та запити на видалення — через <a href="https://github.com/MikeLiashenko/UAD/issues">GitHub Issues</a>.</p>
+</section>
+
+<section data-l="ru">
+	<h1>Политика конфиденциальности</h1>
+	<p class="date">Ukraine Air Defense (UAD) · обновлено 20 октября 2026</p>
+	<div class="box">
+		<p><strong>Коротко:</strong> в игре нет рекламы, аналитики, трекеров и покупок. Без сети игра работает полностью и ничего никуда не отправляет. Аккаунт необязателен.</p>
+	</div>
+
+	<h2>Что хранится только на вашем устройстве</h2>
+	<ul>
+		<li>Миры (сохранения), настройки, достижения, нарисованные города.</li>
+		<li>Фото и видео, которые вы сами сохраняете из игры.</li>
+	</ul>
+	<p>Эти данные не покидают устройство. Их удаляет удаление игры или очистка её данных.</p>
+
+	<h2>Что отправляется в сеть</h2>
+	<p>Только когда вы пользуетесь сетевыми функциями (общий налёт, друзья, серверы «город против города»):</p>
+	<ul>
+		<li><strong>Ник</strong>, который вы выбрали, и <strong>код друга</strong> — случайный код, который игра создаёт сама.</li>
+		<li><strong>Статус в сети:</strong> в игре ли вы, название мира, город, день, задержка связи.</li>
+		<li><strong>Данные общей игры:</strong> карта города, ракеты, перехваты, результаты боя, название сервера.</li>
+		<li><strong>Номер версии игры</strong> — чтобы игроки разных версий не соединялись.</li>
+	</ul>
+	<p>При запуске игра также проверяет, вышла ли новая версия (запрос без каких-либо данных о вас).</p>
+	<p>Записи сессии удаляются, когда вы выходите из игры; оставшиеся после обрыва связи убираются автоматически.</p>
+
+	<h2>Необязательный аккаунт</h2>
+	<p>Если вы создадите аккаунт, хранятся <strong>электронная почта</strong> (для входа), ник, код друга и список друзей. Пароль обрабатывает Firebase Authentication — мы его не видим и не храним. На устройстве остаётся токен входа, чтобы не вводить пароль каждый раз.</p>
+
+	<h2>Кто обрабатывает данные</h2>
+	<p>Сетевые данные хранятся в <strong>Google Firebase</strong> (Realtime Database и Authentication). Google обрабатывает их по своей <a href="https://firebase.google.com/support/privacy">политике конфиденциальности</a>. Мы не продаём и не передаём данные никому другому. Все соединения зашифрованы (HTTPS).</p>
+
+	<h2 id="delete-ru">Как удалить аккаунт и данные</h2>
+	<ul>
+		<li>В игре: <strong>Играть → Мультиплеер → Аккаунт → Удалить аккаунт</strong>. После подтверждения паролем удаляются ник, код друга, список друзей и сам аккаунт — сразу и навсегда.</li>
+		<li>Если доступа к игре нет — напишите нам (см. ниже) с адреса, на который зарегистрирован аккаунт, и мы удалим его в течение 30 дней.</li>
+		<li>Без аккаунта в сети хранятся только временные записи сессии, которые исчезают сами.</li>
+	</ul>
+
+	<h2>Разрешения Android</h2>
+	<p>Только <strong>Интернет</strong> и <strong>состояние сети</strong> — для сетевой игры. Игра не просит доступа к контактам, местоположению, камере или микрофону.</p>
+
+	<h2>Дети</h2>
+	<p>Игра не предназначена для детей до 13 лет, и мы сознательно не собираем их данные.</p>
+
+	<h2>Изменения и связь</h2>
+	<p>Об изменениях этой политики мы сообщим на этой странице. Вопросы и запросы на удаление — через <a href="https://github.com/MikeLiashenko/UAD/issues">GitHub Issues</a>.</p>
+</section>
+
+<section data-l="en">
+	<h1>Privacy Policy</h1>
+	<p class="date">Ukraine Air Defense (UAD) · updated 20 October 2026</p>
+	<div class="box">
+		<p><strong>In short:</strong> the game has no ads, no analytics, no trackers and no purchases. Offline it works in full and sends nothing anywhere. An account is optional.</p>
+	</div>
+
+	<h2>What stays on your device only</h2>
+	<ul>
+		<li>Worlds (saves), settings, achievements, cities you draw.</li>
+		<li>Photos and videos you choose to save from the game.</li>
+	</ul>
+	<p>This data never leaves the device. Uninstalling the game or clearing its data removes it.</p>
+
+	<h2>What goes online</h2>
+	<p>Only when you use online features (shared raids, friends, city-versus-city servers):</p>
+	<ul>
+		<li>The <strong>nickname</strong> you chose and a <strong>friend code</strong> — a random code the game creates itself.</li>
+		<li><strong>Online status:</strong> whether you are playing, the world name, city, day and connection delay.</li>
+		<li><strong>Shared game data:</strong> the city map, missiles, interceptions, battle results, server name.</li>
+		<li>The <strong>game version number</strong>, so players of different versions are not connected.</li>
+	</ul>
+	<p>At launch the game also checks whether a new version is out (a request that carries no data about you).</p>
+	<p>Session entries are removed when you leave the game; any left behind by a lost connection are cleaned up automatically.</p>
+
+	<h2>Optional account</h2>
+	<p>If you create an account, we store your <strong>email address</strong> (to sign in), nickname, friend code and friend list. The password is handled by Firebase Authentication — we never see or store it. A sign-in token stays on the device so you don't have to type the password every time.</p>
+
+	<h2>Who processes the data</h2>
+	<p>Online data is stored in <strong>Google Firebase</strong> (Realtime Database and Authentication). Google processes it under its own <a href="https://firebase.google.com/support/privacy">privacy policy</a>. We do not sell or share data with anyone else. All connections are encrypted (HTTPS).</p>
+
+	<h2 id="delete-en">How to delete your account and data</h2>
+	<ul>
+		<li>In the game: <strong>Play → Multiplayer → Account → Delete account</strong>. After you confirm with your password, the nickname, friend code, friend list and the account itself are deleted at once and for good.</li>
+		<li>If you can no longer open the game, contact us (see below) from the email address of the account and we will delete it within 30 days.</li>
+		<li>Without an account only temporary session entries are kept online, and they disappear on their own.</li>
+	</ul>
+
+	<h2>Android permissions</h2>
+	<p>Only <strong>Internet</strong> and <strong>network state</strong>, for online play. The game does not ask for contacts, location, camera or microphone.</p>
+
+	<h2>Children</h2>
+	<p>The game is not directed at children under 13, and we do not knowingly collect their data.</p>
+
+	<h2>Changes and contact</h2>
+	<p>Changes to this policy will be announced on this page. Questions and deletion requests: <a href="https://github.com/MikeLiashenko/UAD/issues">GitHub Issues</a>.</p>
+</section>
+
+</main>
+
+<footer>
+	<div class="wrap"><a href="./">← Ukraine Air Defense</a></div>
+</footer>
+
+<script>
+// Same language choice as the main page (localStorage "uad-lang"); ?lang=xx and #delete-xx win.
+const LANGS = ["uk", "ru", "en"];
+function pick() {
+	const q = new URLSearchParams(location.search).get("lang");
+	if (LANGS.includes(q)) return q;
+	const h = location.hash.match(/^#delete-(ru|en)$/);
+	if (h) return h[1];
+	try { const s = localStorage.getItem("uad-lang"); if (LANGS.includes(s)) return s; } catch (e) {}
+	const n = (navigator.language || "uk").slice(0, 2).toLowerCase();
+	return LANGS.includes(n) ? n : "en";
+}
+function show(l) {
+	document.documentElement.lang = l;
+	document.querySelectorAll("section[data-l]").forEach((s) => s.classList.toggle("on", s.dataset.l === l));
+	document.querySelectorAll(".lang button").forEach((b) => b.classList.toggle("on", b.dataset.lang === l));
+}
+document.querySelectorAll(".lang button").forEach((b) => b.addEventListener("click", () => {
+	try { localStorage.setItem("uad-lang", b.dataset.lang); } catch (e) {}
+	show(b.dataset.lang);
+}));
+show(pick());
+</script>
+</body>
+</html>

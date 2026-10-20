@@ -286,8 +286,11 @@ func check_release() -> void:
 		r.queue_free()
 
 
-## A newer build than this one has been published.
+## A newer build than this one has been published. Never in the Google Play build (export feature
+## "play"): Play updates the game itself and forbids offering an .apk from anywhere else.
 func update_available() -> bool:
+	if OS.has_feature("play"):
+		return false
 	return int(float(release.get("build", 0))) > BuildInfo.BUILD
 
 

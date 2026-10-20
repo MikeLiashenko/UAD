@@ -91,7 +91,8 @@ const T = {
 		q3: "Чи обов'язковий акаунт?", a3: "Ні. Акаунт потрібен лише для зручності: друзі за ніком і той самий код друга на всіх пристроях.",
 		q4: "Чим MaxRealism відрізняється від звичайного режиму?", a4: "У ньому немає виду згори, міток на цілях і панелі батареї: ви ходите позицією пішки, сідаєте за приціл або пульт радара й слухаєте радіо. Режим обирається під час створення світу; у ньому не можна відкрити світ друзям.",
 		q5: "Якими мовами доступна гра?", a5: "Українська, російська й англійська — перемикаються в налаштуваннях у будь-який момент.",
-		footer: "Зроблено на Godot. Усі моделі, звуки й текстури генеруються кодом."
+		footer: "Зроблено на Godot. Усі моделі, звуки й текстури генеруються кодом.",
+		privacy: "Політика конфіденційності"
 	},
 	ru: {
 		title: "ночное дежурство ПВО",
@@ -184,7 +185,8 @@ const T = {
 		q3: "Обязателен ли аккаунт?", a3: "Нет. Аккаунт нужен только для удобства: друзья по нику и тот же код друга на всех устройствах.",
 		q4: "Чем MaxRealism отличается от обычного режима?", a4: "В нём нет вида сверху, меток на целях и панели батареи: вы ходите по позиции пешком, садитесь за прицел или пульт радара и слушаете радио. Режим выбирается при создании мира; в нём нельзя открыть мир друзьям.",
 		q5: "На каких языках игра?", a5: "Украинский, русский и английский — переключаются в настройках в любой момент.",
-		footer: "Сделано на Godot. Все модели, звуки и текстуры генерируются кодом."
+		footer: "Сделано на Godot. Все модели, звуки и текстуры генерируются кодом.",
+		privacy: "Политика конфиденциальности"
 	},
 	en: {
 		title: "night air-defense duty",
@@ -277,6 +279,7 @@ const T = {
 		q3: "Do I need an account?", a3: "No. An account is a convenience: friends by nick and the same friend code on every device.",
 		q4: "How is MaxRealism different from the standard mode?", a4: "It has no map view, no target markers and no battery panel: you walk the position, sit down at a sight or a radar console and listen to the radio. The mode is chosen when a world is created; such a world cannot be opened to friends.",
 		q5: "Which languages does the game speak?", a5: "Ukrainian, Russian and English — switch in the settings at any moment.",
-		footer: "Made with Godot. Every model, sound and texture is generated in code."
+		footer: "Made with Godot. Every model, sound and texture is generated in code.",
+		privacy: "Privacy policy"
 	}
 };
