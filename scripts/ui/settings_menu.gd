@@ -75,6 +75,12 @@ func _build() -> void:
 	rn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	rn.custom_minimum_size = Vector2(560, 0)
 	_restart_box.add_child(rn)
+	var main := get_tree().current_scene if is_inside_tree() else null
+	if main != null and main.has_method("night_unsaved") and main.night_unsaved():
+		var nn := UiKit.label(GS.t("Сейчас ночь: после перезапуска она начнётся заново с вечера. День сохраняется, ночь — нет."), 12, Color(1.0, 0.55, 0.45))
+		nn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		nn.custom_minimum_size = Vector2(560, 0)
+		_restart_box.add_child(nn)
 	_restart_box.add_child(UiKit.button(GS.t("Перезапустить сейчас"), GS.restart_game, 300, 18))
 	v.add_child(_restart_box)
 	_restart_box.visible = GS.needs_restart()

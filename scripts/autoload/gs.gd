@@ -1268,12 +1268,18 @@ func store_renderer() -> void:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(RENDERER_PATH))
 
 
-## Starts the game again (with the same command line) so the new renderer takes over.
+## Starts the game again (with the same command line) so the new renderer takes over. It leaves
+## the way a normal quit does, the world saved first: a restart from the settings in the middle of
+## a day used to lose everything since the last autosave.
 func restart_game() -> void:
 	save_settings()
 	store_renderer()
 	OS.set_restart_on_exit(true, OS.get_cmdline_args())
-	get_tree().quit()
+	var main := get_tree().current_scene
+	if main != null and main.has_method("quit_game"):
+		main.quit_game()
+	else:
+		get_tree().quit()
 
 
 # --- Settings persistence ------------------------------------------------------

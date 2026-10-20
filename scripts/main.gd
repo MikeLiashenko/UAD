@@ -788,6 +788,12 @@ func quit_game() -> void:
 	get_tree().quit()
 
 
+## A night is going on in a world: a quit or a restart now plays it again from its evening.
+func night_unsaved() -> bool:
+	return game != null and is_instance_valid(game) and not game.game_over and GS.world_id != "" \
+		and game.director != null and game.director.is_night()
+
+
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
 		quit_game()
@@ -1043,6 +1049,9 @@ func _open_screen(what: String) -> void:
 			game.hud.open_strikes()
 		"pause":
 			game.hud.toggle_pause()
+		"settings":
+			game.hud._show_settings()
+			print("UAD SETTINGS night=%s saved_world=%s" % [game.director.is_night(), GS.world_id != ""])
 		"morning":
 			game.hud.show_morning({"day": 1, "kills": 12, "roofs": 2, "impacts": 1, "homes": 1, "earned": 14000, "penalties": 11000, "funding": 11000, "bonus": 0,
 				"aid": [["storm", 2], ["atacms", 1]], "order": {"done": true, "reward": 14000, "text": "%s · +%s" % [GS.t("Сбейте за ночь не меньше %d целей") % 12, GS.fmt_money(14000)]}})

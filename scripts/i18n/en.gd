@@ -1196,6 +1196,7 @@ const T := {
 	"Макс (свет фонарей, мокрый асфальт, затенение)": "Max (lamp light, wet asphalt, ambient occlusion)",
 	"УльтраМакс (всё на пределе, как на фото)": "UltraMax (everything at the limit, like a photo)",
 	"Перезапустить сейчас": "Restart now",
+	"Сейчас ночь: после перезапуска она начнётся заново с вечера. День сохраняется, ночь — нет.": "It is night now: after the restart it starts again from the evening. Days are saved, nights are not.",
 	"Эффект камеры на «Макс» (зерно, виньетка)": "Camera effect on Max (grain, vignette)",
 	"В сетевой игре время идёт для всех одинаково": "In a network game time runs the same for everyone",
 	"ВРЕМЯ ×%d": "TIME ×%d",
