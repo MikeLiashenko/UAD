@@ -204,7 +204,7 @@ func _ready() -> void:
 		# test hook: pretend the database announced a newer build (the update offer in the menu)
 		Net.release = {"build": int(_args.fakerelease), "version": "1.0.%d" % int(_args.fakerelease), "name": "v1.0.%d Alpha" % int(_args.fakerelease), "date": "2026-09-24",
 			"notes": GS.t("Общие налёты в сети, новые города, отражения в воде."), "exe": "https://example.invalid/UAD.exe",
-			"apk": "https://example.invalid/UAD.apk", "site": "https://mikeliashenko.github.io/UAD/"}
+			"apk": "https://example.invalid/UAD.apk", "portable": Net.RELEASES_URL + "download/test/UAD.exe", "site": "https://mikeliashenko.github.io/UAD/"}
 		# a link outside the game's releases must fall back to the site
 		print("fakerelease: update available=%s url=%s" % [Net.update_available(), Net.update_url()])
 	if _args.has("keytest"):
