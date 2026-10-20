@@ -80,7 +80,7 @@ const T = {
 
 		dl_e: "Завантаження", dl_t: "Заступайте на чергування", dl_s: "Безкоштовно, без реклами й покупок. Світи й налаштування зберігаються на вашому пристрої.",
 		win_req: "Windows 10/11 · OpenGL 3.3 · Vulkan для Max і UltraMax", win_1: "Завантажте інсталятор UAD_Setup.exe і встановіть гру — без прав адміністратора, з ярликами на робочому столі та в меню «Пуск».", setup: "інсталятор",
-		win_2: "Якщо з'явиться SmartScreen: «Докладніше» → «Однаково запустити».", win_3: "Нова версія? Гра сама запропонує оновитися, а інсталятор встановить її поверх. Видалити гру можна в «Параметри → Програми».",
+		win_2: "Якщо з'явиться SmartScreen: «Докладніше» → «Однаково запустити».", win_3: "Нова версія? Гра сама запропонує оновитися й завантажить новий UAD.exe — або встановіть свіжий інсталятор поверх старого. Видалити гру можна в «Параметри → Програми».",
 		apk_req: "Android 7.0+ · OpenGL ES 3.0", apk_1: "Завантажте UAD.apk на телефоні чи планшеті.",
 		apk_2: "Відкрийте файл і дозвольте встановлення з цього джерела.", apk_3: "Оновлення встановлюється поверх — прогрес зберігається.",
 		update_note: "Кожна версія має номер (v1.3.1 Alpha, v1.3.2 Alpha…). Коли вийде новіша, гра покаже це в головному меню й дасть посилання на завантаження.",
@@ -174,7 +174,7 @@ const T = {
 
 		dl_e: "Загрузка", dl_t: "Заступайте на дежурство", dl_s: "Бесплатно, без рекламы и покупок. Миры и настройки хранятся на вашем устройстве.",
 		win_req: "Windows 10/11 · OpenGL 3.3 · Vulkan для Max и UltraMax", win_1: "Скачайте установщик UAD_Setup.exe и установите игру — без прав администратора, с ярлыками на рабочем столе и в меню «Пуск».", setup: "установщик",
-		win_2: "Если появится SmartScreen: «Подробнее» → «Выполнить в любом случае».", win_3: "Вышла новая версия? Игра сама предложит обновиться, а установщик поставит её поверх. Удалить игру можно в «Параметры → Приложения».",
+		win_2: "Если появится SmartScreen: «Подробнее» → «Выполнить в любом случае».", win_3: "Вышла новая версия? Игра сама предложит обновиться и скачает новый UAD.exe — или поставьте свежий установщик поверх старого. Удалить игру можно в «Параметры → Приложения».",
 		apk_req: "Android 7.0+ · OpenGL ES 3.0", apk_1: "Скачайте UAD.apk на телефоне или планшете.",
 		apk_2: "Откройте файл и разрешите установку из этого источника.", apk_3: "Обновление ставится поверх — прогресс сохраняется.",
 		update_note: "У каждой версии есть номер (v1.3.1 Alpha, v1.3.2 Alpha…). Когда выйдет новее, игра покажет это в главном меню и даст ссылку на скачивание.",
@@ -268,7 +268,7 @@ const T = {
 
 		dl_e: "Download", dl_t: "Report for duty", dl_s: "Free, with no ads and no purchases. Worlds and settings stay on your device.",
 		win_req: "Windows 10/11 · OpenGL 3.3 · Vulkan for Max and UltraMax", win_1: "Download the installer UAD_Setup.exe and install the game: no administrator rights needed, shortcuts on the desktop and in the Start menu.", setup: "installer",
-		win_2: "If SmartScreen shows up: «More info» → «Run anyway».", win_3: "New version out? The game offers the update and the installer puts it over the old one. Remove the game in Settings → Apps.",
+		win_2: "If SmartScreen shows up: «More info» → «Run anyway».", win_3: "New version out? The game offers the update and downloads the new UAD.exe — or run the latest installer over the old one. Remove the game in Settings → Apps.",
 		apk_req: "Android 7.0+ · OpenGL ES 3.0", apk_1: "Download UAD.apk on your phone or tablet.",
 		apk_2: "Open the file and allow installing from this source.", apk_3: "Updates install over the top — your progress stays.",
 		update_note: "Every version has a number (v1.3.1 Alpha, v1.3.2 Alpha…). When a newer one is out, the game shows it in the main menu with a download link.",
