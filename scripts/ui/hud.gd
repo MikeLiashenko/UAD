@@ -82,6 +82,8 @@ var _requests_box: VBoxContainer
 var _req_cards := {}
 var _watch_lbl: Label
 var _players_btn: Button
+## Time warp: offline only, so it takes the slot of the players button of a network game.
+var _warp_btn: Button
 ## Buttons of the mobile fire group: out of the truck, swap seats (touch screens, Alt + mouse).
 var _mfg_ui: Control
 ## Buttons of the F-16 sortie (touch screens, Alt + mouse): missiles, afterburner, back home.
@@ -557,6 +559,8 @@ func _build_weapons() -> void:
 	_small_btn(side2, GS.t("🚙 МОГ [%s]") % GS.key_label("mfg"), func() -> void: game.toggle_mfg())
 	_players_btn = _small_btn(side2, GS.t("👥 ИГРОКИ [%s]") % GS.key_label("players"), toggle_players)
 	_players_btn.visible = Net.is_online()
+	_warp_btn = _small_btn(side2, "", func() -> void: game.cycle_warp())
+	_update_warp_btn()
 	var side3 := UiKit.vbox(6)
 	h.add_child(side3)
 	view_btn = _small_btn(side3, GS.t("ВИД [%s]") % GS.key_label("view"), func() -> void: game.toggle_view())
@@ -1197,9 +1201,22 @@ func _build_multiplayer() -> void:
 		_on_join_request(String(c), String(Net.pending[c].nick))
 
 
+## Lit while time runs faster, so the warp the clock shows is also one tap from going back to ×1.
+func _update_warp_btn() -> void:
+	if _warp_btn == null:
+		return
+	_warp_btn.visible = not Net.is_online()
+	var w := int(game.warp)
+	_warp_btn.text = GS.t("▶▶ ВРЕМЯ ×%d [%s]") % [w, GS.key_label("warp")]
+	if int(_warp_btn.get_meta("w", 0)) != w:
+		_warp_btn.set_meta("w", w)
+		_warp_btn.add_theme_color_override("font_color", Color(0.6, 0.9, 1.0) if w > 1 else Color(0.7, 1.0, 0.85))
+
+
 func _process_multiplayer(delta: float) -> void:
 	if _players_btn:
 		_players_btn.visible = Net.is_online()
+	_update_warp_btn()
 	if players_open() and not Net.is_online():
 		toggle_players()
 	if players_open():

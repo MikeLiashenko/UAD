@@ -567,7 +567,10 @@ func key_label(action: String) -> String:
 	var kc := key_of(action)
 	if kc == 0:
 		return t("—")
-	return OS.get_keycode_string(kc)
+	# punctuation keys by the sign printed on them, not "BracketRight"
+	var signs := {KEY_BRACKETLEFT: "[", KEY_BRACKETRIGHT: "]", KEY_COMMA: ",", KEY_PERIOD: ".", KEY_SLASH: "/",
+		KEY_BACKSLASH: "\\", KEY_SEMICOLON: ";", KEY_APOSTROPHE: "'", KEY_QUOTELEFT: "`", KEY_MINUS: "-", KEY_EQUAL: "="}
+	return signs.get(kc, OS.get_keycode_string(kc))
 
 
 # --- Settings ------------------------------------------------------------------

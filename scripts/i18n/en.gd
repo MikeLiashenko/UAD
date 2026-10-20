@@ -850,6 +850,7 @@ const T := {
 	"Жора": "Zhora",
 	"ДРУГ": "FRIEND",
 	"👥 ИГРОКИ [%s]": "👥 PLAYERS [%s]",
+	"▶▶ ВРЕМЯ ×%d [%s]": "▶▶ TIME ×%d [%s]",
 	"Отключиться": "Disconnect",
 	"Вы в гостях у %s. Здесь ничего не сохраняется — ваши миры остаются как были.": "You are visiting %s. Nothing is saved here — your own worlds stay as they were.",
 	"\nСетевая игра не останавливается: пока вы в паузе, друзья продолжают.": "\nA multiplayer game does not stop: while you are paused, your friends play on.",
