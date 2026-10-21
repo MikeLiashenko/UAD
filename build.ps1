@@ -8,14 +8,14 @@
      (from tools\templates.tpz, downloading it if missing).
   3. Stamps the next build number: scripts\build_info.gd (BUILD, date, commit), the Windows file
      version and the Android versionCode / versionName in export_presets.cfg. People see the
-     version name "v1.3.N Alpha": VERSION and STAGE from build_info.gd, N = the build number
-     counted from VERSION_BASE (build 23 = v1.3.1).
+     version name "v1.4.N Alpha": VERSION and STAGE from build_info.gd, N = the build number
+     counted from VERSION_BASE (build 34 = v1.4.1).
   4. Imports the project headlessly and exports the requested targets; for Windows also the installer
      build\windows\UAD_Setup.exe (Inno Setup 6, tools_scripts\installer\uad.iss: Start menu and desktop shortcuts, an entry
      in Settings -> Apps, an uninstaller, updates in place). Release APKs are signed with
      the project key in %USERPROFILE%\.uad (created on the first release build — back it up: an
      update signed with another key will not install over the old app).
-  5. With -Publish: commits the stamp, pushes, creates the GitHub release v1.3.N-alpha with the
+  5. With -Publish: commits the stamp, pushes, creates the GitHub release v1.4.N-alpha with the
      installer, the bare .exe and the .apk, and writes the newest build into the database
      (uad/release) — every game that is older offers the update (on Windows: the installer).
 
@@ -101,7 +101,7 @@ $InfoPath = Join-Path $Root 'scripts\build_info.gd'
 $info = [System.IO.File]::ReadAllText($InfoPath)
 $Build = [int]([regex]::Match($info, 'const BUILD := (\d+)').Groups[1].Value)
 if (-not $NoBump) { $Build += 1 }
-# the version people see: v<VERSION>.<build - VERSION_BASE> <STAGE> ("v1.3.1 Alpha" is build 23),
+# the version people see: v<VERSION>.<build - VERSION_BASE> <STAGE> ("v1.4.1 Alpha" is build 34),
 # all three from build_info.gd; the build number itself goes on counting (Android versionCode,
 # the update check)
 $Base = [regex]::Match($info, 'const VERSION := "([^"]+)"').Groups[1].Value
@@ -232,7 +232,7 @@ if ($Publish) {
         date    = $Date
         notes   = $Notes
         # "exe" (the installer) is what a game on Windows downloads to update itself. No "portable"
-        # (the bare UAD.exe) any more: v1.3.19 and v1.3.20 updated with it when it was there, and
+        # (the bare UAD.exe) any more: v1.4.8 and v1.4.9 updated with it when it was there, and
         # without it they fall back to "exe" as well. The bare UAD.exe is still in the release.
         exe     = "https://github.com/$Repo/releases/download/$tagName/UAD_Setup.exe"
         apk     = "https://github.com/$Repo/releases/download/$tagName/UAD.apk"

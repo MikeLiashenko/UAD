@@ -1,5 +1,5 @@
 # Builds the Windows installer UAD_Setup.exe around an exported UAD.exe (called by build.ps1).
-#   make_installer.ps1 -Exe build\windows\UAD.exe -Out build\windows\UAD_Setup.exe -Label "v1.3.19 Alpha" -Number 1.3.19
+#   make_installer.ps1 -Exe build\windows\UAD.exe -Out build\windows\UAD_Setup.exe -Label "v1.4.8 Alpha" -Number 1.4.8
 # Compiles uad.iss with Inno Setup 6 (ISCC.exe): $env:ISCC, or a per-user or machine-wide install.
 # Get it once with: winget install --id JRSoftware.InnoSetup --scope user
 param(

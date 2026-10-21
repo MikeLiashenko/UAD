@@ -147,7 +147,7 @@ func _show_update() -> void:
 		nl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		nl.custom_minimum_size = Vector2(480, 0)
 		v.add_child(nl)
-	# on Windows the link is the installer (since v1.3.16): it updates the game in place
+	# on Windows the link is the installer (since v1.4.5): it updates the game in place
 	var how := GS.t("Скачайте установщик и запустите его — он обновит игру, миры и настройки сохранятся.") if OS.get_name() == "Windows" 		else GS.t("Скачайте новую версию и запустите её вместо этой — миры и настройки сохранятся.")
 	var hint := UiKit.label(how, 14, Color(0.6, 0.85, 0.75), HORIZONTAL_ALIGNMENT_CENTER)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

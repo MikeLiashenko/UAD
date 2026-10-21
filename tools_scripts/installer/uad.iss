@@ -1,5 +1,5 @@
 ; The Windows installer of Ukraine Air Defense, built with Inno Setup 6 by make_installer.ps1:
-;   ISCC /DSrcExe=<UAD.exe> /DAppVer=1.3.19 /DAppVer4=1.3.19.0 "/DAppLabel=v1.3.19 Alpha" /O<dir> /FUAD_Setup uad.iss
+;   ISCC /DSrcExe=<UAD.exe> /DAppVer=1.4.8 /DAppVer4=1.4.8.0 "/DAppLabel=v1.4.8 Alpha" /O<dir> /FUAD_Setup uad.iss
 ; Inno Setup instead of a home-made installer: antivirus programs know its setup program, while a
 ; small unknown .exe that unpacks another .exe looked to them like a virus dropper.
 ;
@@ -8,7 +8,7 @@
 ; an entry in Settings -> Apps. Run again over an installed game it updates it in place (closing the
 ; running game first). Worlds and settings live in the game's own folder
 ; (%APPDATA%\Godot\app_userdata\...) and are never touched, not even by the uninstaller.
-; An installation made by the old installer (v1.3.16 - v1.3.18) is taken over: the same folder,
+; An installation made by the old installer (v1.4.5 - v1.4.7) is taken over: the same folder,
 ; its uninstaller and its Settings -> Apps entry are removed.
 ; Silent: UAD_Setup.exe /VERYSILENT [/DIR="folder"] [/TASKS=""] (no desktop shortcut).
 

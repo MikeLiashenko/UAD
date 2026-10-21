@@ -747,15 +747,16 @@ function fmtDate(s) {
 
 function trusted(url) { return typeof url === "string" && url.startsWith("https://github.com/" + REPO + "/releases/"); }
 
-// build N is called "v1.3.(N - 22) Alpha"; builds 12 … 22 came out as "v1.1.(N - 11)", the ones up to 11 as "v1.0.N"
-function label(n) { return n ? (n > 22 ? "v1.3." + (n - 22) : n > 11 ? "v1.1." + (n - 11) : "v1.0." + n) + " Alpha" : "v —"; }
+// build N is called "v1.4.(N - 33) Alpha"; builds 23 … 33 came out as "v1.3.(N - 22)", 12 … 22 as "v1.1.(N - 11)",
+// the ones up to 11 as "v1.0.N"
+function label(n) { return n ? (n > 33 ? "v1.4." + (n - 33) : n > 22 ? "v1.3." + (n - 22) : n > 11 ? "v1.1." + (n - 11) : "v1.0." + n) + " Alpha" : "v —"; }
 
 function renderRelease() {
 	const tag = document.getElementById("build-tag");
 	if (!release) { tag.textContent = "v —"; return; }
 	tag.textContent = release.name ? String(release.name).slice(0, 32) : label(parseInt(release.build, 10));
 	document.getElementById("build-date").textContent = fmtDate(String(release.date || "").slice(0, 10));
-	// on Windows the button gives the installer (release.exe is UAD_Setup.exe since v1.3.16)
+	// on Windows the button gives the installer (release.exe is UAD_Setup.exe since v1.4.5)
 	const winMeta = (/Setup\.exe$/.test(String(release.exe || "")) ? t("setup") : ".exe") + (+release.exe_mb ? " · " + (+release.exe_mb) + " " + t("mb") : "");
 	const apkMeta = ".apk" + (+release.apk_mb ? " · " + (+release.apk_mb) + " " + t("mb") : "");
 	["win-meta", "win-meta2"].forEach((id) => document.getElementById(id).textContent = winMeta);
