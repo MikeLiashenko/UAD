@@ -100,7 +100,7 @@ class Spinner extends Control:
 func _ready() -> void:
 	UiKit.full_rect(self)
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	var dim := UiKit.full_rect(ColorRect.new()) as ColorRect
+	var dim := UiKit.bleed(ColorRect.new()) as ColorRect
 	dim.color = Color(0, 0.02, 0.03, 0.55)
 	add_child(dim)
 	var center := UiKit.full_rect(CenterContainer.new())
@@ -401,9 +401,9 @@ func _ask_import() -> void:
 	v.add_child(UiKit.button(GS.t("Отмена"), _close_confirm))
 
 
-## The system's own file picker (Windows; Android where the engine has one).
+## The system's own file picker (Windows; Android and iOS where the engine has one).
 func _pick_world_file() -> void:
-	var filters := PackedStringArray() if OS.get_name() == "Android" else PackedStringArray(["*.%s ; %s" % [GS.WORLD_EXT, GS.t("Мир UAD")], "*.json ; JSON"])
+	var filters := PackedStringArray() if OS.has_feature("mobile") else PackedStringArray(["*.%s ; %s" % [GS.WORLD_EXT, GS.t("Мир UAD")], "*.json ; JSON"])
 	DisplayServer.file_dialog_show(GS.t("Выберите файл мира"), ProjectSettings.globalize_path(GS.worlds_dir()), "", false,
 		DisplayServer.FILE_DIALOG_MODE_OPEN_FILE, filters,
 		func(ok: bool, paths: PackedStringArray, _filter: int) -> void:

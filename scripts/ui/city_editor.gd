@@ -98,7 +98,7 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	data = CustomCity.clean(source)
 	_auto = not GS.touch()
-	_bg = UiKit.full_rect(ColorRect.new()) as ColorRect
+	_bg = UiKit.bleed(ColorRect.new()) as ColorRect
 	_bg.color = Color(0.0, 0.03, 0.03, 0.97)
 	_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_bg)
@@ -289,7 +289,7 @@ func _build3d() -> void:
 	if _building or view != "3d":
 		return
 	_building = true
-	_veil = UiKit.full_rect(ColorRect.new())
+	_veil = UiKit.bleed(ColorRect.new())
 	(_veil as ColorRect).color = Color(0.0, 0.03, 0.04, 0.6)
 	var lbl := UiKit.glow_label(GS.t("Строим город…"), 30, UiKit.NEON)
 	lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)

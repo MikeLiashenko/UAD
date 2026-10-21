@@ -52,10 +52,7 @@ func _ready() -> void:
 
 ## Picks a file next to the player's other videos: Видео/UAD/kyiv_cuts_day7.avi (the city of the world goes into the name).
 static func target_path(day: int) -> String:
-	var base := String(OS.get_system_dir(OS.SYSTEM_DIR_MOVIES))
-	if base == "" or not DirAccess.dir_exists_absolute(base):
-		base = "user://"
-	var dir := base.path_join("UAD")
+	var dir := GS.player_dir(OS.SYSTEM_DIR_MOVIES).path_join("UAD")
 	DirAccess.make_dir_recursive_absolute(dir)
 	return dir.path_join("%s_cuts_day%d.avi" % [GS.city_id, day])
 

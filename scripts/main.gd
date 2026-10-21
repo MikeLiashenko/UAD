@@ -24,6 +24,8 @@ extends Node
 ##   --daystrike=ballistic|cruise   (with --autotest) a strike in the daytime, without the dice
 ##   --touch --alarmtouch       fingers on the air-raid alarm button of the usual game
 ##   --touch --hunttouch        a finger on the launcher button (a hunt) opens the strike map on it
+##   --safe=L,T,R,B             the cut-outs of a phone's screen in window pixels (notch, home bar):
+##                              an iPhone 15 on its side is SHOTS_WINDOW=2556x1179 --touch --safe=177,0,177,63
 ##   --basetest                 (with --autotest) an outpost set up by a tap, a system driven there, the
 ##                              nearest base firing at a target, outposts saved, an outpost taken down
 ##   --keytest                  verify the rebindable control map
@@ -112,6 +114,8 @@ var cam: Camera3D
 var ui: CanvasLayer
 var screen: Node
 var game: Node
+## The screens' frame inside ui, clear of a phone's notch and rounded corners.
+var ui_safe: Control
 var pending_world := {"name": GS.t("Оборона Киева"), "difficulty": 1, "city": "kyiv"}
 ## The match on a server being set up or played: {"def": ServerDef, "side": 0 | 1, "bot": bool}.
 var server := {}
@@ -146,6 +150,7 @@ func _ready() -> void:
 		get_window().min_size = Vector2i(960, 540)
 	CityStore.register_all() # the cities drawn in the map editor are cities like the others
 	# the menu shows the city of the most recently played world
+	get_window().content_scale_factor = GS.ui_scale()
 	var start_city := Cities.DEFAULT
 	var recent := GS.list_worlds()
 	if not recent.is_empty():
@@ -174,6 +179,8 @@ func _ready() -> void:
 	add_child(ui)
 	_setup_post()
 	if _args.has("offscreen"):
+	ui_safe = UiKit.safe_area()
+	ui.add_child(ui_safe)
 		_setup_offscreen()
 	Net.main = self
 	Net.session_ended.connect(_on_session_ended)
@@ -377,6 +384,10 @@ func _build_map(id: String) -> void:
 
 var _loading: Control
 
+	if _args.has("safe"):
+		var cut := String(_args.safe).split(",")
+		if cut.size() == 4:
+			GS.force_safe = Vector4i(int(cut[0]), int(cut[1]), int(cut[2]), int(cut[3]))
 
 ## Makes sure the map shows city `id`, then calls `then`. Building a city takes a moment, so a
 ## loading screen is drawn first (two frames, so it is really on screen before the hitch).
@@ -432,7 +443,7 @@ func _show(node: Control, mode: String) -> void:
 	_clear_screen()
 	_mode = mode
 	screen = node
-	ui.add_child(node)
+	ui_safe.add_child(node)
 
 
 func show_menu() -> void:
@@ -3500,8 +3511,8 @@ func _touch_button(id: String) -> Vector2:
 		if String(b.id) == id:
 			if b.has("rect"):
 				var rc: Rect2 = b.rect
-				return rc.get_center()
-			return b.c
+				return rc.get_center() + game.rl.hud._at
+			return b.c + game.rl.hud._at
 	return Vector2(-1, -1)
 
 
@@ -3598,3 +3609,4 @@ func _twist_selftest() -> void:
 			print("UAD TWIST rotate button held 0.9 s: yaw %+.2f, shown=%s" % [rig._t_yaw - _tt.p0.x, game.hud.turn_box.visible])
 			game.hud.turn_box.get_child(1).button_up.emit()
 	_tt.stage = int(_tt.stage) + 1
+## Where a MaxRealism button is on the screen (the overlay lays them out clear of a phone's notch).

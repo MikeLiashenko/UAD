@@ -1,6 +1,8 @@
 extends RefCounted
 ## Neon "air-defense console" theme and small UI builders, all created in code.
 
+const SafeArea = preload("res://scripts/ui/safe_area.gd")
+
 const NEON := Color(0.2, 1.0, 0.65)
 const NEON_DIM := Color(0.2, 1.0, 0.65, 0.35)
 const AMBER := Color(1.0, 0.75, 0.25)
@@ -124,6 +126,23 @@ static func full_rect(c: Control) -> Control:
 	return c
 
 
+## A full-screen frame for an interface, clear of a phone's notch and rounded corners (SafeArea).
+static func safe_area() -> Control:
+	return SafeArea.new()
+
+
+## A full-screen control inside a safe frame that must still reach the edges of the screen: a
+## dimmer, a filter, an overlay drawn where the 3D camera puts things. Works before or after the
+## control enters the tree (its own _ready, which may set the frame's size, comes first).
+static func bleed(c: Control) -> Control:
+	c.add_to_group(&"bleed")
+	if c.is_node_ready():
+		SafeArea.bleed_fit(c)
+	else:
+		c.ready.connect(func() -> void: SafeArea.bleed_fit(c), CONNECT_ONE_SHOT)
+	return c
+
+
 ## Controls under a CanvasLayer don't inherit the Window theme, so the neon theme is
 ## merged into the engine default theme once at startup.
 static func install_theme() -> void:
@@ -143,7 +162,7 @@ static func modal(parent: Node, min_size: Vector2) -> Array:
 	root.mouse_filter = Control.MOUSE_FILTER_STOP
 	var dim := ColorRect.new()
 	dim.color = Color(0, 0.02, 0.02, 0.65)
-	full_rect(dim)
+	bleed(dim)
 	root.add_child(dim)
 	var center := CenterContainer.new()
 	full_rect(center)

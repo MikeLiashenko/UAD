@@ -117,8 +117,9 @@ var _pvp_line: Label
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	layer = 5
-	root = UiKit.full_rect(Control.new())
-	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# panels and buttons keep clear of a phone's notch and rounded corners; what is drawn over the
+	# 3D picture (filters, the reticle, the drone's and the fighter's screens) still covers all of it
+	root = UiKit.safe_area()
 	add_child(root)
 	_style_sel = UiKit.sbox(Color(0.06, 0.3, 0.18, 0.95), Color(0.4, 1.0, 0.7), 3, 6, 6)
 	_style_norm = UiKit.sbox(Color(0.02, 0.1, 0.07, 0.88), UiKit.NEON_DIM, 2, 6, 6)
@@ -127,24 +128,24 @@ func _ready() -> void:
 	nv_rect.material = Shaders.canvas_material(Shaders.NIGHT_VISION)
 	nv_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	nv_rect.visible = false
-	root.add_child(nv_rect)
+	root.add_child(UiKit.bleed(nv_rect))
 	reticle = Reticle.new()
 	reticle.game = game
 	reticle.bv = game.base_view
-	root.add_child(reticle)
+	root.add_child(UiKit.bleed(reticle))
 	fpv_osd = FpvOsd.new()
 	fpv_osd.game = game
 	fpv_osd.fv = game.fpv_view
 	game.fpv_view.osd = fpv_osd
-	root.add_child(fpv_osd)
+	root.add_child(UiKit.bleed(fpv_osd))
 	var mh := MfgHud.new()
 	mh.game = game
 	mh.mg = game.mfg
-	root.add_child(mh)
+	root.add_child(UiKit.bleed(mh))
 	var fh := FighterHud.new()
 	fh.game = game
 	fh.fg = game.fighter
-	root.add_child(fh)
+	root.add_child(UiKit.bleed(fh))
 	_build_status()
 	_build_radar()
 	_build_alert()
@@ -161,7 +162,7 @@ func _ready() -> void:
 	flash_rect = UiKit.full_rect(ColorRect.new()) as ColorRect
 	flash_rect.color = Color(1.0, 0.92, 0.8, 0.0)
 	flash_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(flash_rect)
+	root.add_child(UiKit.bleed(flash_rect))
 	_build_walk_ui()
 	_build_fpv_ui()
 	_build_mfg_ui()
@@ -1462,8 +1463,9 @@ func _saved_video_dialog(saved: String) -> void:
 	v.add_child(UiKit.label(GS.t("Формат AVI (Motion JPEG) со звуком — открывается любым плеером."), 14, UiKit.CYAN))
 	var h := UiKit.hbox(12)
 	v.add_child(h)
-	h.add_child(UiKit.button(GS.t("Открыть папку"), func() -> void:
-		OS.shell_open(saved.get_base_dir()), 240, 18))
+	if not OS.has_feature("ios"): # no folders to open there: the file is in the Files app
+		h.add_child(UiKit.button(GS.t("Открыть папку"), func() -> void:
+			OS.shell_open(saved.get_base_dir()), 240, 18))
 	h.add_child(UiKit.button(GS.t("Закрыть"), _leave_saved_dialog, 240, 18))
 
 

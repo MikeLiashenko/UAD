@@ -7,7 +7,7 @@
   2. Installs the export templates into %APPDATA%\Godot\export_templates\4.7.2.stable
      (from tools\templates.tpz, downloading it if missing).
   3. Stamps the next build number: scripts\build_info.gd (BUILD, date, commit), the Windows file
-     version and the Android versionCode / versionName in export_presets.cfg. People see the
+     version, the Android versionCode / versionName and the iOS versions in export_presets.cfg. People see the
      version name "v1.4.N Alpha": VERSION and STAGE from build_info.gd, N = the build number
      counted from VERSION_BASE (build 34 = v1.4.1).
   4. Imports the project headlessly and exports the requested targets; for Windows also the installer
@@ -132,6 +132,9 @@ $presets = [regex]::Replace($presets, 'application/file_version="[^"]*"', "appli
 $presets = [regex]::Replace($presets, 'application/product_version="[^"]*"', "application/product_version=`"$FileVersion`"")
 $presets = [regex]::Replace($presets, 'version/code=\d+', "version/code=$Build")
 $presets = [regex]::Replace($presets, 'version/name="[^"]*"', "version/name=`"$("$AppVersion $Stage".Trim())`"")
+# iOS: the version people see and the build number (the GitHub Actions build adds the run number to it)
+$presets = [regex]::Replace($presets, 'application/short_version="[^"]*"', "application/short_version=`"$AppVersion`"")
+$presets = [regex]::Replace($presets, 'application/version="[^"]*"', "application/version=`"$Build`"")
 Write-Text $PresetsPath $presets
 
 # --- 4. Android signing key ---------------------------------------------------------------------
@@ -236,6 +239,8 @@ if ($Publish) {
         # without it they fall back to "exe" as well. The bare UAD.exe is still in the release.
         exe     = "https://github.com/$Repo/releases/download/$tagName/UAD_Setup.exe"
         apk     = "https://github.com/$Repo/releases/download/$tagName/UAD.apk"
+        # iPhone: the release page — GitHub Actions (ios.yml) adds UAD_iOS.ipa to it some minutes later
+        ipa     = "https://github.com/$Repo/releases/tag/$tagName"
         site    = $Site
         exe_mb  = [math]::Round((Get-Item $setup).Length / 1MB, 1)
         apk_mb  = [math]::Round((Get-Item $apk).Length / 1MB, 1)

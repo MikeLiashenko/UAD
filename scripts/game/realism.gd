@@ -12,6 +12,7 @@ extends Node
 ## Threats carry no labels: what is coming is told over the radio (bearing, distance, how many)
 ## and read off the scope (speed and altitude of the tracked blip).
 
+const UiKit = preload("res://scripts/ui/ui_kit.gd")
 const RealismHud = preload("res://scripts/ui/realism_hud.gd")
 const Training = preload("res://scripts/game/training.gd")
 
@@ -77,7 +78,7 @@ func attach_hud() -> void:
 	hud = RealismHud.new()
 	hud.game = game
 	hud.rl = self
-	game.hud.root.add_child(hud)
+	game.hud.root.add_child(UiKit.bleed(hud))
 	game.hud.root.move_child(hud, 1)
 
 

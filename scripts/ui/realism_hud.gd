@@ -20,6 +20,10 @@ var rl
 ## stick nothing else could be pressed; these are hit-tested for every finger (see _input).
 var _btns: Array = []
 var _held := {}
+## The part of the screen clear of a phone's notch and rounded corners: where the overlay draws its
+## panels and buttons (the overlay itself covers the whole screen, as fingers do).
+var _at := Vector2.ZERO
+var _safe_sz := Vector2.ZERO
 
 
 func _ready() -> void:
@@ -30,10 +34,17 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	if rl.touch:
 		var live: bool = not get_tree().paused and not game.game_over
-		_btns = _layout(size) if live else []
+		_safe_fit()
+		_btns = _layout(_safe_sz) if live else []
 		if not live:
 			_release_all()
 	queue_redraw()
+
+
+func _safe_fit() -> void:
+	var e := GS.safe_insets()
+	_at = Vector2(e.x, e.y)
+	_safe_sz = size - _at - Vector2(e.z, e.w)
 
 
 func _txt(pos: Vector2, s: String, size: int, col: Color, align := HORIZONTAL_ALIGNMENT_LEFT, width := -1.0) -> void:
@@ -49,9 +60,12 @@ func _para(pos: Vector2, s: String, size: int, col: Color, width: float) -> floa
 
 
 func _draw() -> void:
-	var sz := size
 	if game.view == "post":
-		draw_rect(Rect2(Vector2.ZERO, sz), Color(0.035, 0.045, 0.04, 0.97))
+		draw_rect(Rect2(Vector2.ZERO, size), Color(0.035, 0.045, 0.04, 0.97))
+	# everything else keeps clear of a phone's notch and rounded corners
+	_safe_fit()
+	draw_set_transform(_at)
+	var sz := _safe_sz
 	# the instructor's card first: the radio traffic goes under it
 	_draw_radio(sz, _draw_training(sz) if rl.training != null else 0.0)
 	match String(game.view):
@@ -418,6 +432,7 @@ func _layout(sz: Vector2) -> Array:
 
 ## The button under a finger ("" when it is on none); a little generous around the edge.
 func _hit(p: Vector2) -> String:
+	p -= _at
 	for b in _btns:
 		if b.has("rect"):
 			var rc: Rect2 = b.rect
@@ -508,13 +523,13 @@ func _draw_touch(sz: Vector2) -> void:
 		shown = true
 		on = int(game.walker._move_touch) >= 0
 		if on:
-			origin = game.walker._move_origin
+			origin = game.walker._move_origin - _at
 			vec = game.walker._move_vec
 	elif game.view == "mfg" and game.mfg.seat == "drive":
 		shown = true
 		on = int(game.mfg._touch_move) >= 0
 		if on:
-			origin = game.mfg._touch_origin
+			origin = game.mfg._touch_origin - _at
 			vec = game.mfg._touch_vec
 	if shown and not get_tree().paused:
 		draw_arc(origin, 90.0, 0, TAU, 48, Color(INK.r, INK.g, INK.b, 0.55 if on else 0.2), 2.0)

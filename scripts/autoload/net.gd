@@ -287,7 +287,8 @@ func check_release() -> void:
 
 
 ## A newer build than this one has been published. Never in the Google Play build (export feature
-## "play"): Play updates the game itself and forbids offering an .apk from anywhere else.
+## "play"): Play updates the game itself and forbids offering an .apk from anywhere else. The iPhone
+## build is not in the App Store (it is put on the phone with Sideloadly / AltStore): it is offered.
 func update_available() -> bool:
 	if OS.has_feature("play"):
 		return false
@@ -300,13 +301,16 @@ func release_label() -> String:
 	return n if n != "" else BuildInfo.label(int(float(release.get("build", 0))))
 
 
-## Where this platform gets the new build: the .apk on Android, the .exe on Windows. The record in
+## Where this platform gets the new build: the .apk on Android, the .exe on Windows, the release
+## page with UAD_iOS.ipa on iPhone / iPad (built a little later on GitHub). The record in
 ## the database only picks the file: a link that leads anywhere but this game's GitHub releases
 ## (or its site) is replaced by the site, so a forged record cannot hand players a strange .exe.
 func update_url() -> String:
 	var key := "site"
 	if OS.get_name() == "Android":
 		key = "apk"
+	elif OS.has_feature("ios"):
+		key = "ipa"
 	elif OS.get_name() == "Windows":
 		key = "exe"
 	var url := String(release.get(key, ""))

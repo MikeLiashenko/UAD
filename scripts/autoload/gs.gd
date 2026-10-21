@@ -531,6 +531,48 @@ func key_of(action: String) -> int:
 	for a in KEY_ACTIONS:
 		if String(a[0]) == action:
 			return int(a[2])
+## Test switch: -- --safe=L,T,R,B, the cut-outs of a phone's screen in window pixels (notch,
+## rounded corners, home bar), e.g. an iPhone 15 on its side: 177,0,177,63 at 2556x1179.
+var force_safe := Vector4i.ZERO
+
+
+## The cut-outs of the screen in window pixels: Vector4i(left, top, right, bottom). Zero on a computer.
+func _cut_px() -> Vector4i:
+	if force_safe != Vector4i.ZERO:
+		return force_safe
+	if not OS.has_feature("mobile"):
+		return Vector4i.ZERO
+	var win := DisplayServer.window_get_size()
+	var s := DisplayServer.get_display_safe_area()
+	if s.size.x <= 0 or s.size.y <= 0:
+		return Vector4i.ZERO
+	return Vector4i(maxi(s.position.x, 0), maxi(s.position.y, 0), maxi(win.x - s.end.x, 0), maxi(win.y - s.end.y, 0))
+
+
+## How far the interface keeps from the edges of the screen (the notch or the camera hole, rounded
+## corners, the home bar), in interface units: Vector4(left, top, right, bottom).
+func safe_insets() -> Vector4:
+	var win := DisplayServer.window_get_size()
+	var cut := _cut_px()
+	if cut == Vector4i.ZERO or win.x <= 0:
+		return Vector4.ZERO
+	return Vector4(cut) * (get_tree().root.get_visible_rect().size.x / float(win.x))
+
+
+## The scale of the interface (the window's content scale factor): the whole 1280x720 layout must
+## fit in the part of the screen clear of the cut-outs — a phone on its side loses about a twentieth
+## of its height to the home bar, and the buttons at the bottom would end under it. 1 everywhere else.
+func ui_scale() -> float:
+	var win := DisplayServer.window_get_size()
+	var cut := _cut_px()
+	if cut == Vector4i.ZERO or win.x <= 0 or win.y <= 0:
+		return 1.0
+	var base := Vector2(ProjectSettings.get_setting("display/window/size/viewport_width"), ProjectSettings.get_setting("display/window/size/viewport_height"))
+	var unit := minf(win.x / base.x, win.y / base.y) # pixels per unit at scale 1 (the "expand" aspect)
+	var free := Vector2(win.x - cut.x - cut.z, win.y - cut.y - cut.w)
+	return clampf(minf(free.x / (base.x * unit), free.y / (base.y * unit)), 0.5, 1.0)
+
+
 	return 0
 
 
@@ -1107,10 +1149,18 @@ const WORLD_FILE_VERSION := 1
 ## Where exported worlds go and where the import looks first: Documents/UAD/Worlds (on Windows
 ## «Документы\UAD\Worlds», on Android the shared Documents folder), the game's own folder failing that.
 func worlds_dir() -> String:
-	var base := String(OS.get_system_dir(OS.SYSTEM_DIR_DOCUMENTS))
-	if base == "" or not DirAccess.dir_exists_absolute(base):
-		base = "user://"
-	return base.path_join("UAD").path_join("Worlds")
+	return player_dir(OS.SYSTEM_DIR_DOCUMENTS).path_join("UAD").path_join("Worlds")
+
+
+## One of the player's folders (OS.SYSTEM_DIR_DOCUMENTS, _PICTURES, _MOVIES…) for the game's files,
+## the game's own folder where the system has none to give. Always the game's own folder on iPhone /
+## iPad: the engine answers "." there (inside the app, not writable), and that folder is what the
+## Files app shows under "UAD" (the iOS preset makes it visible).
+func player_dir(kind: int) -> String:
+	var base := String(OS.get_system_dir(kind))
+	if OS.has_feature("ios") or not base.is_absolute_path() or not DirAccess.dir_exists_absolute(base):
+		return "user://"
+	return base
 
 
 ## Writes the world into dir (worlds_dir() when empty). Returns the file's path, "" on failure.
@@ -1150,7 +1200,7 @@ func export_world(id: String, dir := "") -> String:
 func world_files() -> Array:
 	var out := []
 	var seen := {}
-	for dir in [worlds_dir(), String(OS.get_system_dir(OS.SYSTEM_DIR_DOWNLOADS))]:
+	for dir in [worlds_dir(), player_dir(OS.SYSTEM_DIR_DOWNLOADS)]:
 		if dir == "" or not DirAccess.dir_exists_absolute(dir):
 			continue
 		for fname in DirAccess.get_files_at(dir):

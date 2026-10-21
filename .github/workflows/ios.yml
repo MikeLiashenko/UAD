@@ -1,0 +1,143 @@
+# The iPhone / iPad build, on a GitHub macOS machine (free for this public repository): Godot
+# exports the Xcode project (export preset "iOS"), Xcode builds it into UAD_iOS.ipa.
+#
+# The .ipa is not signed: it goes on the iPhone without the App Store and without a paid Apple
+# account through Sideloadly or AltStore on a Windows PC, which sign it with the player's own free
+# Apple ID (such an install runs for 7 days, then it is refreshed or installed again). It is kept as
+# the run's artifact (Actions → the run → Artifacts) and, for a published GitHub release, attached
+# to that release.
+#
+# Optional, only with the paid Apple Developer Program: with the secrets below the same run also
+# signs the build (automatic signing through an App Store Connect API key) and sends it to TestFlight.
+#   APPLE_TEAM_ID         the 10-character Team ID (developer.apple.com → Account → Membership)
+#   ASC_KEY_ID            App Store Connect → Users and Access → Integrations → App Store Connect
+#   ASC_ISSUER_ID         API → Team Keys: a key with the Admin role; its Key ID, the Issuer ID
+#   ASC_KEY_P8            above the list, and the whole text of the downloaded AuthKey_….p8 file
+# And for every build:
+#   UAD_FIREBASE_WEB_KEY  optional: player accounts (scripts/keys.gd is kept out of the repository)
+
+name: iOS
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: write # the .ipa goes onto the release
+
+jobs:
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 90
+    env:
+      GODOT_VERSION: 4.7.2
+      GODOT: /Users/runner/godot/Godot.app/Contents/MacOS/Godot
+      TEMPLATES: /Users/runner/Library/Application Support/Godot/export_templates/4.7.2.stable
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Godot and its iOS export template (cached)
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            /Users/runner/godot
+            ${{ env.TEMPLATES }}
+          key: godot-${{ env.GODOT_VERSION }}-ios
+
+      - name: Download Godot
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          base="https://github.com/godotengine/godot/releases/download/$GODOT_VERSION-stable"
+          curl -L --fail -o /tmp/godot.zip "$base/Godot_v$GODOT_VERSION-stable_macos.universal.zip"
+          mkdir -p /Users/runner/godot && unzip -q /tmp/godot.zip -d /Users/runner/godot
+          curl -L --fail -o /tmp/templates.tpz "$base/Godot_v$GODOT_VERSION-stable_export_templates.tpz"
+          mkdir -p "$TEMPLATES"
+          unzip -j /tmp/templates.tpz templates/ios.zip templates/version.txt -d "$TEMPLATES"
+          rm /tmp/godot.zip /tmp/templates.tpz
+
+      - name: Keys and Team ID
+        env:
+          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+          FIREBASE_WEB_KEY: ${{ secrets.UAD_FIREBASE_WEB_KEY }}
+        run: |
+          if [ -n "$FIREBASE_WEB_KEY" ]; then
+            printf 'const FIREBASE_WEB_KEY := "%s"\n' "$FIREBASE_WEB_KEY" > scripts/keys.gd
+          fi
+          # Godot will not export without a Team ID; an unsigned build gets a made-up one
+          sed -i '' "s/^application\/app_store_team_id=\"\"/application\/app_store_team_id=\"${TEAM:-ABCDE12345}\"/" export_presets.cfg
+
+      - name: Export the Xcode project
+        timeout-minutes: 30
+        run: |
+          mkdir -p build/ios
+          "$GODOT" --headless --path . --import || true
+          "$GODOT" --headless --path . --export-release "iOS" build/ios/UAD.ipa
+          test -d build/ios/UAD.xcodeproj
+          # the build number iOS sees grows with every run: <build>.<run>
+          build=$(sed -n 's/^application\/version="\([0-9]*\)"/\1/p' export_presets.cfg)
+          echo "VERSION=$build.$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
+
+      - name: Build the unsigned .ipa
+        run: |
+          set -o pipefail
+          xcodebuild -project build/ios/UAD.xcodeproj -scheme UAD -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -archivePath build/ios/unsigned.xcarchive \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            CURRENT_PROJECT_VERSION="$VERSION" archive -quiet
+          # an .ipa is the app in a Payload folder, zipped
+          mkdir -p build/ios/ipa/Payload
+          cp -R build/ios/unsigned.xcarchive/Products/Applications/*.app build/ios/ipa/Payload/
+          (cd build/ios/ipa && zip -qry ../UAD_iOS.ipa Payload)
+          ls -lh build/ios/UAD_iOS.ipa
+
+      - name: Keep the .ipa
+        uses: actions/upload-artifact@v4
+        with:
+          name: UAD_iOS-${{ env.VERSION }}
+          path: build/ios/UAD_iOS.ipa
+          retention-days: 30
+
+      - name: Attach the .ipa to the release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" build/ios/UAD_iOS.ipa --clobber
+
+      - name: Sign and send to TestFlight (paid Apple account only)
+        env:
+          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+          KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ISSUER: ${{ secrets.ASC_ISSUER_ID }}
+          KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          if [ -z "$TEAM" ] || [ -z "$KEY_ID" ] || [ -z "$ISSUER" ] || [ -z "$KEY_P8" ]; then
+            echo "No Apple Developer secrets: TestFlight skipped (the unsigned .ipa above is the build)"
+            exit 0
+          fi
+          set -o pipefail
+          key="$RUNNER_TEMP/AuthKey_$KEY_ID.p8"
+          printf '%s\n' "$KEY_P8" > "$key"
+          auth=(-allowProvisioningUpdates -authenticationKeyPath "$key" -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER")
+          xcodebuild -project build/ios/UAD.xcodeproj -scheme UAD -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath build/ios/UAD.xcarchive "${auth[@]}" \
+            DEVELOPMENT_TEAM="$TEAM" CODE_SIGN_STYLE=Automatic CODE_SIGN_IDENTITY="Apple Development" \
+            CURRENT_PROJECT_VERSION="$VERSION" archive -quiet
+          cat > "$RUNNER_TEMP/export.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>$TEAM</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+            <key>uploadSymbols</key><true/>
+          </dict></plist>
+          EOF
+          xcodebuild -exportArchive -archivePath build/ios/UAD.xcarchive -exportPath build/ios/out \
+            -exportOptionsPlist "$RUNNER_TEMP/export.plist" "${auth[@]}"
+          rm -f "$key"
+          echo "::notice::Build $VERSION sent to TestFlight: it shows up in App Store Connect after Apple's processing (10–30 min)"

@@ -19,7 +19,7 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	UiKit.full_rect(self)
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	var dim := UiKit.full_rect(ColorRect.new()) as ColorRect
+	var dim := UiKit.bleed(ColorRect.new()) as ColorRect
 	dim.color = Color(0, 0.02, 0.02, 0.6)
 	add_child(dim)
 	var center := UiKit.full_rect(CenterContainer.new())

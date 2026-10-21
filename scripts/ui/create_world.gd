@@ -30,7 +30,7 @@ var _auto_name := true
 func _ready() -> void:
 	UiKit.full_rect(self)
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	var dim := UiKit.full_rect(ColorRect.new()) as ColorRect
+	var dim := UiKit.bleed(ColorRect.new()) as ColorRect
 	dim.color = Color(0, 0.02, 0.03, 0.55)
 	add_child(dim)
 	var center := UiKit.full_rect(CenterContainer.new())

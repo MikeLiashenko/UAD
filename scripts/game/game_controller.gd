@@ -1936,7 +1936,7 @@ func take_photo() -> void:
 		main.set_post_amount(0.45)
 	hud.visible = true
 	_photo_busy = false
-	var dir := OS.get_system_dir(OS.SYSTEM_DIR_PICTURES).path_join("UAD")
+	var dir := GS.player_dir(OS.SYSTEM_DIR_PICTURES).path_join("UAD")
 	DirAccess.make_dir_recursive_absolute(dir)
 	var t := Time.get_datetime_dict_from_system()
 	var path := dir.path_join("uad_%04d%02d%02d_%02d%02d%02d.jpg" % [t.year, t.month, t.day, t.hour, t.minute, t.second])

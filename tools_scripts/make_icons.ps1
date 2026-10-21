@@ -3,6 +3,7 @@
 #   icon.ico (16..256)        Windows .exe icon (PNG-compressed ICO)  <- art/icon_source.png
 #   icon_192.png              Android launcher icon, the site's icon  <- art/icon_source.png
 #   icon_fg_432.png / icon_bg_432.png   Android adaptive icon layers  <- art/icon_fg.png, art/icon_bg.png
+#   icon_ios_1024.png         iPhone / iPad and App Store icon, opaque <- art/icon_bg.png + art/icon_fg.png
 param([string]$Root = (Split-Path $PSScriptRoot -Parent))
 Add-Type -AssemblyName System.Drawing
 
@@ -35,6 +36,21 @@ Save-Scaled 432 (Join-Path $Root 'icon_bg_432.png')
 $src.Dispose()
 $src = $full
 Copy-Item (Join-Path $Root 'icon_192.png') (Join-Path $Root 'docs\img\icon.png') -Force
+
+# iPhone / iPad and App Store icon: the full square without transparency (Apple refuses an icon
+# with an alpha channel and rounds the corners itself) — the background with the letters over it
+$ios = New-Object System.Drawing.Bitmap 1024, 1024, ([System.Drawing.Imaging.PixelFormat]::Format24bppRgb)
+$g = [System.Drawing.Graphics]::FromImage($ios)
+$g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+$g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+foreach ($layer in 'icon_bg.png', 'icon_fg.png') {
+    $img = [System.Drawing.Image]::FromFile((Join-Path $Root "art\$layer"))
+    $g.DrawImage($img, 0, 0, 1024, 1024)
+    $img.Dispose()
+}
+$g.Dispose()
+$ios.Save((Join-Path $Root 'icon_ios_1024.png'), [System.Drawing.Imaging.ImageFormat]::Png)
+$ios.Dispose()
 
 # ICO with PNG-compressed images
 $sizes = @(16, 24, 32, 48, 64, 128, 256)

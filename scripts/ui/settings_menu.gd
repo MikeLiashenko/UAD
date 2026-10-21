@@ -31,7 +31,7 @@ func _set_language(idx: int) -> void:
 
 
 func _build() -> void:
-	var dim := UiKit.full_rect(ColorRect.new()) as ColorRect
+	var dim := UiKit.bleed(ColorRect.new()) as ColorRect
 	dim.color = Color(0, 0.02, 0.02, 0.6)
 	add_child(dim)
 	var center := UiKit.full_rect(CenterContainer.new())

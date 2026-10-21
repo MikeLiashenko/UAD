@@ -36,8 +36,7 @@ func _ready() -> void:
 	vignette.texture = g
 	vignette.stretch_mode = TextureRect.STRETCH_SCALE
 	vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	UiKit.full_rect(vignette)
-	add_child(vignette)
+	add_child(UiKit.bleed(vignette))
 
 	var center := UiKit.full_rect(CenterContainer.new())
 	add_child(center)
@@ -79,6 +78,8 @@ func _ready() -> void:
 	for spec in [[GS.t("Играть"), func() -> void: main.show_worlds()], [GS.t("Редактор карт"), func() -> void: main.show_cities()],
 			[GS.t("🏆 Достижения · %d/%d") % [Achievements.count(), Achievements.total()], func() -> void: main.show_achievements()],
 			[GS.t("Настройки"), func() -> void: main.show_settings()], [GS.t("Выход"), func() -> void: main.quit_game()]]:
+		if spec[0] == GS.t("Выход") and OS.has_feature("ios"):
+			continue # an iPhone game is left with the Home gesture: Apple does not let apps quit themselves
 		var b := UiKit.button(spec[0], spec[1], 340, 26)
 		b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		b.custom_minimum_size = Vector2(340, 52)
@@ -162,6 +163,8 @@ func _show_update() -> void:
 
 func _process(delta: float) -> void:
 	_t += delta
+	if OS.has_feature("ios"):
+		how = GS.t("Скачайте UAD_iOS.ipa и поставьте его через Sideloadly или AltStore поверх этой версии — миры и настройки сохранятся.")
 	var s := 1.0 + 0.06 * absf(sin(_t * 5.0))
 	_splash.pivot_offset = _splash.size * 0.5
 	_splash.scale = Vector2(s, s)
