@@ -221,7 +221,38 @@ static func patriot() -> Node3D:
 	return root
 
 
+## The model of a system. A mod's system (GS.WEAPONS) wears one of the built-in models ("model"),
+## tinted and scaled as the mod says.
 static func weapon_model(id: String) -> Node3D:
+	var wd: Dictionary = GS.WEAPONS.get(id, {})
+	var model := String(wd.get("model", id))
+	return _modded(_builtin_weapon(model if GS.BASE_WEAPONS.has(model) else id), wd)
+
+
+## A built-in model tinted ("tint", a colour) and scaled ("scale") by a mod.
+static func _modded(root: Node3D, d: Dictionary) -> Node3D:
+	if d.has("scale"):
+		root.scale = Vector3.ONE * float(d.scale)
+	if d.get("tint") is Color:
+		_tint(root, d.tint)
+	return root
+
+
+static func _tint(n: Node, c: Color) -> void:
+	if n is MeshInstance3D:
+		var mi := n as MeshInstance3D
+		if mi.mesh != null:
+			for s in mi.mesh.get_surface_count():
+				var m := mi.get_active_material(s)
+				if m is BaseMaterial3D:
+					var dup := (m as BaseMaterial3D).duplicate() as BaseMaterial3D
+					dup.albedo_color = dup.albedo_color * c
+					mi.set_surface_override_material(s, dup)
+	for ch in n.get_children():
+		_tint(ch, c)
+
+
+static func _builtin_weapon(id: String) -> Node3D:
 	match id:
 		"zu23":
 			return zu23()
@@ -684,6 +715,12 @@ static func oreshnik() -> Node3D:
 
 
 static func enemy_model(type: String) -> Node3D:
+	var ed: Dictionary = GS.ENEMIES.get(type, {})
+	var model := String(ed.get("model", type))
+	return _modded(_builtin_enemy(model if GS.BASE_ENEMIES.has(model) else type), ed)
+
+
+static func _builtin_enemy(type: String) -> Node3D:
 	match type:
 		"scout":
 			return scout()

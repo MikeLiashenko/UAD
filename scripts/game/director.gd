@@ -19,6 +19,7 @@ extends Node
 const Strikes = preload("res://scripts/game/strikes.gd")
 const Orders = preload("res://scripts/game/orders.gd")
 const Achievements = preload("res://scripts/core/achievements.gd")
+const Mods = preload("res://scripts/mods/mods.gd")
 
 enum Phase { DAY, NIGHT, MORNING }
 
@@ -110,6 +111,7 @@ func start_day() -> void:
 	_print_plan("day %d (%d s)" % [GS.day, int(phase_len)])
 	game.hud.alert(GS.t("ДЕНЬ %d — разведка противника в воздухе") % GS.day, Color(0.5, 0.9, 1.0))
 	game.hud.log_event(GS.t("Утро дня %d. Ищите и сбивайте разведчиков!") % GS.day, Color(0.5, 0.9, 1.0))
+	Mods.emit("day", {"day": GS.day})
 
 
 ## A strike in the daytime: one or two ballistic missiles, or a salvo of two to four cruise
@@ -274,6 +276,7 @@ func start_night() -> void:
 	night_start_stats = GS.stats.duplicate()
 	schedule.clear()
 	_strike_results()
+	Mods.emit("night", {"day": d})
 	var span := phase_len * 0.75
 	# The raid grows slowly and then plateaus: past a point more targets than the player can
 	# physically engage is not difficulty, it is a scripted loss. Shaheds come first, cruise
@@ -538,6 +541,7 @@ func _morning() -> void:
 		GS.add_money(int(report.award))
 		game.save_progress()
 	GS.add_money(funding + bonus + relief)
+	Mods.emit("morning", report)
 	game.on_morning(report)
 	if not follower:
 		# the night's money is on disk at once, not only when the report is closed (save_progress

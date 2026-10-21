@@ -3,6 +3,7 @@ extends CanvasLayer
 ## AA weapon panel, debris-fall prediction and modal overlays (pause, shop, reports).
 
 const UiKit = preload("res://scripts/ui/ui_kit.gd")
+const Mods = preload("res://scripts/mods/mods.gd")
 const Radar = preload("res://scripts/ui/radar.gd")
 const Shop = preload("res://scripts/ui/shop.gd")
 const Supply = preload("res://scripts/ui/supply.gd")
@@ -1337,6 +1338,9 @@ func _on_player_left(nick: String) -> void:
 
 
 func _open_world() -> void:
+	if Mods.has_code():
+		log_event(GS.t("Мир с модами нельзя открыть друзьям: у них этих модов нет."), UiKit.AMBER)
+		return
 	Net.open_world()
 	log_event(GS.t("Мир открыт для друзей. Ваш код: %s") % Net.fmt_code(Net.code()), UiKit.CYAN)
 	_show_pause()

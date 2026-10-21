@@ -75,11 +75,24 @@ func _ready() -> void:
 	var spacer := Control.new()
 	spacer.custom_minimum_size = Vector2(0, 8)
 	v.add_child(spacer)
-	for spec in [[GS.t("Играть"), func() -> void: main.show_worlds()], [GS.t("Редактор карт"), func() -> void: main.show_cities()],
+	for spec in [[GS.t("Играть"), func() -> void: main.show_worlds()], ["tools", null],
 			[GS.t("🏆 Достижения · %d/%d") % [Achievements.count(), Achievements.total()], func() -> void: main.show_achievements()],
 			[GS.t("Настройки"), func() -> void: main.show_settings()], [GS.t("Выход"), func() -> void: main.quit_game()]]:
 		if spec[0] == GS.t("Выход") and OS.has_feature("ios"):
 			continue # an iPhone game is left with the Home gesture: Apple does not let apps quit themselves
+		if spec[0] == "tools":
+			# the two editors share a row: the map editor and the mod workshop
+			var row := UiKit.hbox(8)
+			row.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+			for t in [[GS.t("Редактор карт"), func() -> void: main.show_cities()], [GS.t("Мастерская модов"), func() -> void:
+					main.pending_world = {}
+					main.show_workshop()]]:
+				var tb := UiKit.button(t[0], t[1], 166, 19)
+				tb.custom_minimum_size = Vector2(166, 52)
+				tb.clip_text = true
+				row.add_child(tb)
+			v.add_child(row)
+			continue
 		var b := UiKit.button(spec[0], spec[1], 340, 26)
 		b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		b.custom_minimum_size = Vector2(340, 52)
@@ -150,6 +163,8 @@ func _show_update() -> void:
 		v.add_child(nl)
 	# on Windows the link is the installer (since v1.4.5): it updates the game in place
 	var how := GS.t("Скачайте установщик и запустите его — он обновит игру, миры и настройки сохранятся.") if OS.get_name() == "Windows" 		else GS.t("Скачайте новую версию и запустите её вместо этой — миры и настройки сохранятся.")
+	if OS.has_feature("ios"):
+		how = GS.t("Скачайте UAD_iOS.ipa и поставьте его через Sideloadly или AltStore поверх этой версии — миры и настройки сохранятся.")
 	var hint := UiKit.label(how, 14, Color(0.6, 0.85, 0.75), HORIZONTAL_ALIGNMENT_CENTER)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint.custom_minimum_size = Vector2(480, 0)
@@ -163,8 +178,6 @@ func _show_update() -> void:
 
 func _process(delta: float) -> void:
 	_t += delta
-	if OS.has_feature("ios"):
-		how = GS.t("Скачайте UAD_iOS.ipa и поставьте его через Sideloadly или AltStore поверх этой версии — миры и настройки сохранятся.")
 	var s := 1.0 + 0.06 * absf(sin(_t * 5.0))
 	_splash.pivot_offset = _splash.size * 0.5
 	_splash.scale = Vector2(s, s)

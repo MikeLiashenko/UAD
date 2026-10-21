@@ -65,7 +65,7 @@ func real_kmh(v: float) -> float:
 # "fcs" = fire-control computer: shows a lead indicator in the gunner sight.
 # "class" groups the roster in the shop and sets the unit's ring around the base:
 #   gun — barrels, short / medium / long — missiles by reach.
-const WEAPONS := {
+const BASE_WEAPONS := {
 	"mg": {
 		"name": "Пикап с пулемётом", "short": "ПИКАП", "kind": "gun", "class": "gun", "group": "manual", "unlock": 0, "fcs": false,
 		"range": 1800.0, "ceil": 1500.0, "rate": 0.085, "damage": 8.0, "spread": 0.0045, "speed": 850.0, "eye": 4.2,
@@ -194,9 +194,14 @@ const WEAPONS := {
 ## An F-16 flight for interceptor sorties over the city (scripts/game/fighter.gd).
 const F16_PRICE := 40000
 ## Panel and shop order: barrels, then short range, then medium, then long.
-const WEAPON_ORDER := ["mg", "zu23", "gepard", "shilka", "igla", "avenger", "drone", "osa", "nasams", "iris", "buk", "s300", "patriot", "s400", "s500"]
+const BASE_WEAPON_ORDER := ["mg", "zu23", "gepard", "shilka", "igla", "avenger", "drone", "osa", "nasams", "iris", "buk", "s300", "patriot", "s400", "s500"]
 ## Systems whose shots are bought as ammunition.
-const AMMO_ORDER := ["igla", "avenger", "drone", "osa", "nasams", "iris", "buk", "s300", "patriot", "s400", "s500"]
+const BASE_AMMO_ORDER := ["igla", "avenger", "drone", "osa", "nasams", "iris", "buk", "s300", "patriot", "s400", "s500"]
+## The tables the game reads: the built-in ones above, with whatever the mods of the world running
+## add or change (scripts/mods/mods.gd puts them back to these copies when the world closes).
+var WEAPONS: Dictionary = BASE_WEAPONS.duplicate(true)
+var WEAPON_ORDER: Array = BASE_WEAPON_ORDER.duplicate()
+var AMMO_ORDER: Array = BASE_AMMO_ORDER.duplicate()
 ## Control groups: how the battery panel and the shop are split up.
 const WEAPON_GROUPS := [
 	["manual", "РУЧНОЕ"],
@@ -225,7 +230,7 @@ const WEAPON_CLASSES := [
 #   own_alt = keeps to its own altitude band instead of the Shahed layers,
 #   crush = how much of a house the warhead takes down (× the kind's), mirv = splits on impact,
 #   eff_mult = per weapon (or "*") multiplier of the weapons' efficiency against it.
-const ENEMIES := {
+const BASE_ENEMIES := {
 	"scout": {
 		"name": "Разведчик «Орлан»", "plural": "РАЗВЕДЧИК", "abbr": "Р", "hp": 24.0, "speed": 33.0,
 		"alt_min": 500.0, "alt_max": 1300.0,
@@ -394,6 +399,8 @@ const ENEMIES := {
 		"eff_mult": {"patriot": 1.0, "s500": 1.0, "s400": 0.8, "s300": 0.4, "*": 0.2},
 	},
 }
+## The threats the game reads (see WEAPONS).
+var ENEMIES: Dictionary = BASE_ENEMIES.duplicate(true)
 ## Where the radars pick up a cruise missile that names no launch_dist, metres from its target.
 const CRUISE_PICKUP := 30000.0
 
@@ -473,6 +480,7 @@ const VIDEO_KEEP := 20
 
 const Cities = preload("res://scripts/world/cities.gd")
 const BuildInfo = preload("res://scripts/build_info.gd")
+const Mods = preload("res://scripts/mods/mods.gd")
 
 
 ## The channel that publishes the compilation (every city has its own).
@@ -523,14 +531,6 @@ func touch() -> bool:
 	return force_touch or DisplayServer.is_touchscreen_available()
 
 
-## Keycode currently bound to an action (falls back to the default).
-func key_of(action: String) -> int:
-	var bound: Dictionary = settings.get("keys", {})
-	if bound.has(action):
-		return int(bound[action])
-	for a in KEY_ACTIONS:
-		if String(a[0]) == action:
-			return int(a[2])
 ## Test switch: -- --safe=L,T,R,B, the cut-outs of a phone's screen in window pixels (notch,
 ## rounded corners, home bar), e.g. an iPhone 15 on its side: 177,0,177,63 at 2556x1179.
 var force_safe := Vector4i.ZERO
@@ -573,6 +573,14 @@ func ui_scale() -> float:
 	return clampf(minf(free.x / (base.x * unit), free.y / (base.y * unit)), 0.5, 1.0)
 
 
+## Keycode currently bound to an action (falls back to the default).
+func key_of(action: String) -> int:
+	var bound: Dictionary = settings.get("keys", {})
+	if bound.has(action):
+		return int(bound[action])
+	for a in KEY_ACTIONS:
+		if String(a[0]) == action:
+			return int(a[2])
 	return 0
 
 
@@ -683,6 +691,10 @@ var day_len := 0.0
 ## A match on a server (scripts/game/pvp.gd): {"def": ServerDef, "side": 0 | 1, "bot": bool}; {} in
 ## the usual game. Never saved: main sets it after new_world.
 var pvp := {}
+## The mods this world is played with (scripts/mods/mods.gd): copies of the packages, kept in the
+## save; and each mod's own dict (uad.data) by mod id.
+var mods: Array = []
+var mod_data := {}
 ## How well the city stands a hit (a rule of the server; 1 in the usual game).
 var city_armor := 1.0
 
@@ -778,6 +790,8 @@ func new_world(wname: String, diff: int, pos: Vector3, loc: int, cid := "kyiv", 
 	day_len = 0.0
 	pvp = {}
 	city_armor = 1.0
+	mods = []
+	mod_data = {}
 	money_changed.emit(money)
 	state_changed.emit()
 
@@ -965,6 +979,9 @@ func save_world() -> void:
 	if Cities.is_custom(city_id):
 		# a city drawn in the map editor: the world keeps its own copy and plays on without the editor's
 		d["city_data"] = city_def().data
+	if not mods.is_empty():
+		d["mods"] = mods
+		d["mod_data"] = mod_data
 	# Written beside the save and only then put in its place, the last good save kept as .bak: a
 	# game killed in the middle of writing (a crash, a phone that ran out of memory) used to leave a
 	# cut-off file, and the whole world was gone from the list.
@@ -1116,6 +1133,13 @@ func load_world(id: String) -> bool:
 				arsenal[String(k)] = int(ars[k])
 	anger = float(d.get("anger", 0.0))
 	revenge_night = int(d.get("revenge_night", 0))
+	mods = Mods.sanitize(d.get("mods", []))
+	mod_data = {}
+	var md = d.get("mod_data", {})
+	if md is Dictionary:
+		for k in md:
+			if md[k] is Dictionary:
+				mod_data[String(k)] = _ints(md[k])
 	day_clock = maxf(float(d.get("day_t", 0.0)), 0.0)
 	day_len = maxf(float(d.get("day_len", 0.0)), 0.0)
 	for op in d.get("outposts", []):
@@ -1132,6 +1156,20 @@ func load_world(id: String) -> bool:
 	money_changed.emit(money)
 	state_changed.emit()
 	return true
+
+
+## A dict read back from JSON with its whole numbers whole again (JSON keeps every number as a float).
+func _ints(v):
+	if v is Dictionary:
+		var out := {}
+		for k in v:
+			out[k] = _ints(v[k])
+		return out
+	if v is Array:
+		return v.map(func(x): return _ints(x))
+	if v is float and v == floorf(v) and absf(v) < 9.0e15:
+		return int(v)
+	return v
 
 
 func delete_world(id: String) -> void:

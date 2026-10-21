@@ -139,6 +139,8 @@ const SYSTEM_TIERS := {"mg": 100, "gepard": 250, "shilka": 100, "igla": 50, "dro
 const TARGET_ICON := {"shahed": "🛩", "cruise": "🚀", "ballistic": "☄"}
 
 static var dry := false
+## A world played with code mods (scripts/mods/mods.gd): nothing is earned in it.
+static var off := false
 ## Where they are kept (the self-test points it at a file of its own).
 static var path := PATH
 ## {id: unix time it was earned}
@@ -167,16 +169,17 @@ static func all() -> Array:
 				"day":
 					desc = ["Доживите до %d-го дня.", [int(c[1])]]
 		_add(String(a[0]), String(a[1]), String(a[2]), [String(a[3]), []], desc, c)
-	for t in GS.ENEMIES:
+	# the built-in roster only: what a mod adds earns nothing here
+	for t in GS.BASE_ENEMIES:
 		var kind := GS.kind_of(String(t))
 		var icon := String(TARGET_ICON.get(kind, "🎯"))
-		var nm := String(GS.ENEMIES[t].name)
+		var nm := String(GS.BASE_ENEMIES[t].name)
 		_add("first_" + String(t), icon, "targets", ["Сбит: %s", [nm]], ["Впервые сбейте цель «%s».", [nm]], ["stat", "k_" + String(t), 1])
 		if TARGET_TIERS.has(t):
 			var n := int(TARGET_TIERS[t])
-			_add("many_" + String(t), icon, "targets", ["%s ×%d", [String(GS.ENEMIES[t].plural), n]], ["Сбейте %d целей «%s» в одном мире.", [n, nm]], ["stat", "k_" + String(t), n])
-	for w in GS.WEAPON_ORDER:
-		var wn := String(GS.WEAPONS[w].name)
+			_add("many_" + String(t), icon, "targets", ["%s ×%d", [String(GS.BASE_ENEMIES[t].plural), n]], ["Сбейте %d целей «%s» в одном мире.", [n, nm]], ["stat", "k_" + String(t), n])
+	for w in GS.BASE_WEAPON_ORDER:
+		var wn := String(GS.BASE_WEAPONS[w].name)
 		_add("first_w_" + String(w), "🎯", "systems", ["%s: первая цель", [wn]], ["Сбейте цель системой «%s».", [wn]], ["stat", "w_" + String(w), 1])
 		if SYSTEM_TIERS.has(w):
 			var n := int(SYSTEM_TIERS[w])
@@ -280,6 +283,8 @@ static func count_in(cat: String) -> Array:
 
 ## Earns `id` if it is not earned yet; true when it is new.
 static func earn(id: String) -> bool:
+	if off:
+		return false
 	_load()
 	if got.has(id):
 		return false

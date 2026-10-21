@@ -107,15 +107,17 @@ const CityStore = preload("res://scripts/core/city_store.gd")
 const CitiesMenu = preload("res://scripts/ui/cities_menu.gd")
 const StrikesRules = preload("res://scripts/game/strikes.gd")
 const AchievementsMenu = preload("res://scripts/ui/achievements_menu.gd")
+const ModWorkshop = preload("res://scripts/ui/mod_workshop.gd")
 const Achievements = preload("res://scripts/core/achievements.gd")
+const Mods = preload("res://scripts/mods/mods.gd")
 
 var map
 var cam: Camera3D
 var ui: CanvasLayer
-var screen: Node
-var game: Node
 ## The screens' frame inside ui, clear of a phone's notch and rounded corners.
 var ui_safe: Control
+var screen: Node
+var game: Node
 var pending_world := {"name": GS.t("Оборона Киева"), "difficulty": 1, "city": "kyiv"}
 ## The match on a server being set up or played: {"def": ServerDef, "side": 0 | 1, "bot": bool}.
 var server := {}
@@ -148,9 +150,9 @@ func _ready() -> void:
 	_parse_args()
 	if not _args.has("offscreen"):
 		get_window().min_size = Vector2i(960, 540)
+	get_window().content_scale_factor = GS.ui_scale()
 	CityStore.register_all() # the cities drawn in the map editor are cities like the others
 	# the menu shows the city of the most recently played world
-	get_window().content_scale_factor = GS.ui_scale()
 	var start_city := Cities.DEFAULT
 	var recent := GS.list_worlds()
 	if not recent.is_empty():
@@ -177,10 +179,10 @@ func _ready() -> void:
 	ui = CanvasLayer.new()
 	ui.layer = 10
 	add_child(ui)
-	_setup_post()
-	if _args.has("offscreen"):
 	ui_safe = UiKit.safe_area()
 	ui.add_child(ui_safe)
+	_setup_post()
+	if _args.has("offscreen"):
 		_setup_offscreen()
 	Net.main = self
 	Net.session_ended.connect(_on_session_ended)
@@ -196,6 +198,8 @@ func _ready() -> void:
 		_strike_selftest()
 	if _args.has("achtest"):
 		_ach_selftest()
+	if _args.has("modtest"):
+		_mod_selftest.call_deferred()
 	if _args.has("srvunit"):
 		_srv_unit_selftest()
 	if _args.has("edittest"):
@@ -290,6 +294,30 @@ func _ready() -> void:
 		"training":
 			# the MaxRealism range (--train-bot walks through its lessons by itself)
 			start_training()
+		"workshop":
+			# the mod workshop on projects in memory; --ws=<template> opens a new one from it
+			ModWorkshop.dry = true
+			Mods.dry = true
+			show_workshop()
+			if _args.has("ws"):
+				screen.new_project(String(_args.ws))
+				if _args.has("wsbreak"):
+					# a mistake on the tenth line: the check must point at it
+					var lines: PackedStringArray = screen._code.text.split("\n")
+					lines[9] += " oops"
+					screen._code.text = "\n".join(lines)
+				if _args.has("wscheck"):
+					screen._check.call_deferred()
+		"createmods":
+			# "create world" with the mods window open over a few mods in memory
+			Mods.dry = true
+			Mods.install(Mods.mod_package({"id": "strela", "name": "Стрела-М", "author": "Tablet_Mike", "version": "1.2",
+				"description": "Свой ЗРК малой дальности и премия за серии сбитий."}, {"main.py": "import uad\n"}, "x"))
+			Mods.install(Mods.mod_package({"id": "lancet", "name": "Ланцеты", "version": "0.9", "description": "Барражирующие боеприпасы в налётах со второй ночи."}, {"main.py": "import uad\n"}, "x"))
+			Mods.install(Mods.shader_package("// name: Ночное видение\n// description: Зелёный ПНВ, ночью сильнее\nvoid fragment() {}\n", "nv"))
+			show_create_world()
+			if not _args.has("closed"):
+				screen._pick_mods.call_deferred()
 		_:
 			show_menu()
 
@@ -356,6 +384,10 @@ func _parse_args() -> void:
 		Net.dry = true
 	if _args.has("touch"):
 		GS.force_touch = true # the interface of a touch screen (sticks, on-screen buttons)
+	if _args.has("safe"):
+		var cut := String(_args.safe).split(",")
+		if cut.size() == 4:
+			GS.force_safe = Vector4i(int(cut[0]), int(cut[1]), int(cut[2]), int(cut[3]))
 	if _args.has("quality"):
 		# test hook: the graphics level of this run only (the settings file is not touched)
 		GS.settings.quality = int(_args.quality)
@@ -384,10 +416,6 @@ func _build_map(id: String) -> void:
 
 var _loading: Control
 
-	if _args.has("safe"):
-		var cut := String(_args.safe).split(",")
-		if cut.size() == 4:
-			GS.force_safe = Vector4i(int(cut[0]), int(cut[1]), int(cut[2]), int(cut[3]))
 
 ## Makes sure the map shows city `id`, then calls `then`. Building a city takes a moment, so a
 ## loading screen is drawn first (two frames, so it is really on screen before the hitch).
@@ -430,6 +458,7 @@ func _end_game() -> void:
 	if game and is_instance_valid(game):
 		game.queue_free()
 	game = null
+	Mods.deactivate() # the game's own tables again, outside a world with mods
 	get_tree().paused = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	map.restore_area()
@@ -449,6 +478,12 @@ func _show(node: Control, mode: String) -> void:
 func show_menu() -> void:
 	Net.close()
 	_end_game()
+	if mod_test_project != "":
+		# back from a test of a mod: straight into the workshop, at that project
+		var id := mod_test_project
+		mod_test_project = ""
+		show_workshop(id)
+		return
 	map.set_labels_visible(false)
 	map.set_night(1.0)
 	var m := MainMenu.new()
@@ -467,6 +502,41 @@ func show_achievements() -> void:
 	a.closed.connect(show_menu)
 	# "settings" mode: the menu camera keeps circling the city behind it
 	_show(a, "settings")
+
+
+## The mod workshop (scripts/ui/mod_workshop.gd), at a project when one is given.
+func show_workshop(project_id := "") -> void:
+	_end_game()
+	map.set_labels_visible(false)
+	map.set_night(1.0)
+	var w := ModWorkshop.new()
+	w.main = self
+	w.closed.connect(func() -> void:
+		# from the "create world" screen back there, from the main menu back to it
+		if pending_world.is_empty():
+			show_menu()
+		else:
+			show_create_world())
+	# "settings" mode: the menu camera keeps circling the city behind it (a picture mod is seen on it)
+	_show(w, "settings")
+	if project_id != "":
+		w.open_project(project_id)
+
+
+## The project the running game is a test of: leaving the game goes back to it in the workshop.
+var mod_test_project := ""
+
+
+## A battle with a mod from the workshop: a new world on the city on screen, never saved, with
+## money to try things with.
+func start_mod_test(pkg: Dictionary, project_id: String) -> void:
+	var spot := _find_spot(GS.Loc.RIVER)
+	GS.new_world(GS.t("Испытание мода"), 1, spot, GS.Loc.RIVER, map.city_id, false)
+	GS.world_id = "" # never written to disk
+	GS.money = 200000
+	GS.mods = [pkg]
+	mod_test_project = project_id
+	_start_session()
 
 
 func show_worlds() -> void:
@@ -522,6 +592,7 @@ func create_world(pos: Vector3, loc: int) -> void:
 		GS.day = maxi(1, int(Net.world.get("day", 1)))
 		_start_session()
 		return
+	GS.mods = Mods.sanitize(pending_world.get("mods", []))
 	GS.save_world()
 	_start_session()
 
@@ -744,6 +815,8 @@ func _start_session() -> void:
 		if l >= 0:
 			GS.base_loc = l
 	map.clear_area(GS.base_pos, 34.0)
+	# the world's mods change the tables before anything of the session is built from them
+	Mods.activate(GS.mods)
 	game = Game.new()
 	game.process_mode = Node.PROCESS_MODE_PAUSABLE
 	game.main = self
@@ -751,6 +824,7 @@ func _start_session() -> void:
 	game.cam = cam
 	game.autotest = _args.has("autotest")
 	add_child(game)
+	Mods.begin(game, self)
 	if GS.world_id != "":
 		game.save_progress() # with the hour of the day the world goes on at
 
@@ -1319,6 +1393,19 @@ func _start_autotest() -> void:
 	var pos := _find_spot(loc_want)
 	GS.new_world("autotest", 1, pos, loc_want, map.city_id, _args.has("realism"))
 	GS.world_id = "" # never written to disk
+	if _args.has("mods"):
+		# test hook: --mods=a.uadmod,b.uadshader,c.py — the world is played with these files (a bare
+		# .py is a mod of that one main.py)
+		for p in String(_args.mods).split(","):
+			var pkg: Dictionary
+			if p.get_extension() == "py":
+				pkg = Mods.mod_package({"id": p.get_file().get_basename(), "name": p.get_file().get_basename()}, {"main.py": FileAccess.get_file_as_string(p)}, "test")
+			else:
+				pkg = Mods.read_package(p)
+			if pkg.has("error"):
+				print("UAD MOD FILE %s: %s" % [p, pkg.error])
+			else:
+				GS.mods.append(pkg)
 	_start_session()
 	var ids := String(_args.get("weapons", "mg,gepard,drone,iris,patriot")).split(",")
 	GS.money = 400000
@@ -2819,6 +2906,105 @@ func _ach_selftest() -> void:
 	print("UAD ACHTEST: %s" % ("OK" if fails.is_empty() else "FAIL " + ", ".join(fails)))
 
 
+## Mods: packages written and read back, a world saved and loaded with its mods, every template of
+## the workshop checked, the game's tables put back. Nothing lands in the player's mods or projects
+## (Mods.dry, ModWorkshop.dry); the test world is deleted.
+func _mod_selftest() -> void:
+	var fails := []
+	var check := func(ok: bool, what: String) -> void:
+		if not ok:
+			fails.append(what)
+	Mods.dry = true
+	ModWorkshop.dry = true
+	var dir := "user://modtest_tmp/"
+	DirAccess.make_dir_recursive_absolute(dir)
+	var src := "import uad
+import helpers
+uad.weapon(\"t_sam\", base=\"osa\", name={\"ru\": \"Тест\", \"en\": \"Test SAM\"}, range=9000, unlock=100)
+" 		+ "uad.enemy(\"t_drone\", base=\"shahed\", hp=5, speed=40)
+uad.raid(\"t_drone\", night=1, weight=2)
+" 		+ "@uad.on(\"start\")
+def s(e):
+    uad.data[\"n\"] = uad.data.get(\"n\", 0) + helpers.ONE
+"
+	var pkg := Mods.mod_package({"id": "t_mod", "name": "Test mod", "version": "2.0"}, {"main.py": src, "helpers.py": "ONE = 1
+"}, "x")
+	check.call(not pkg.has("error"), "package: %s" % str(pkg.get("error", "")))
+	check.call(Mods.write_package(pkg, dir + "t.uadmod"), "zip written")
+	var back := Mods.read_package(dir + "t.uadmod")
+	check.call(String(back.get("name", "")) == "Test mod" and (back.get("files", {}) as Dictionary).has("helpers.py") and String(back.get("version", "")) == "2.0", "zip read back: %s" % str(back.keys()))
+	var shader := "// name: Grey
+shader_type canvas_item;
+uniform sampler2D screen : hint_screen_texture;
+void fragment() { COLOR = vec4(vec3(dot(texture(screen, SCREEN_UV).rgb, vec3(0.33))), 1.0); }
+"
+	var f := FileAccess.open(dir + "g.uadshader", FileAccess.WRITE)
+	f.store_string(shader)
+	f.close()
+	var sp := Mods.read_package(dir + "g.uadshader")
+	check.call(String(sp.get("kind", "")) == "shader" and String(sp.get("name", "")) == "Grey", "shader read: %s" % str(sp))
+	check.call(Mods.read_package(dir + "missing.uadmod").has("error"), "a missing file is an error")
+	Mods.install(back)
+	Mods.install(sp)
+	check.call(Mods.installed().size() == 2, "installed: %d" % Mods.installed().size())
+	# a world with the mod: the tables change while it plays and come back after
+	var raid0 := str(GS.city_def(map.city_id).raid)
+	GS.new_world("modtest", 1, _find_spot(GS.Loc.RIVER), GS.Loc.RIVER, map.city_id, false)
+	GS.mods = Mods.sanitize([Mods.for_world(back), Mods.for_world(sp)])
+	check.call(GS.mods.size() == 2, "sanitized list: %d" % GS.mods.size())
+	GS.save_world()
+	var wid := GS.world_id
+	check.call(GS.load_world(wid) and GS.mods.size() == 2 and String(GS.mods[0].name) == "Test mod", "mods kept in the save")
+	_start_session()
+	check.call(GS.WEAPONS.has("t_sam") and GS.WEAPON_ORDER.has("t_sam") and GS.AMMO_ORDER.has("t_sam") and GS.ENEMIES.has("t_drone"), "definitions in the tables")
+	check.call(float(GS.WEAPONS.t_sam.range) == 9000.0 and String(GS.WEAPONS.t_sam.kind) == "missile", "fields of the new system")
+	check.call(GS.WEAPON_ORDER.find("t_sam") == GS.WEAPON_ORDER.find("osa") + 1 or String(GS.WEAPONS[GS.WEAPON_ORDER[GS.WEAPON_ORDER.find("t_sam") - 1]].class) == "medium", "in its shop section")
+	check.call(int(GS.mod_data.get("t_mod", {}).get("n", 0)) == 1, "start event ran (data %s)" % str(GS.mod_data))
+	check.call(Achievements.off, "no achievements with code mods")
+	check.call(str(map.city.raid).contains("t_drone"), "in the raid")
+	check.call(game.purchase_weapon("t_sam"), "the new system can be bought")
+	game.launch("t_drone", 2, false)
+	check.call(game.enemies.filter(func(e) -> bool: return String(e.variant) == "t_drone").size() == 2, "the new threat flies")
+	game.save_progress()
+	_end_game()
+	check.call(not GS.WEAPONS.has("t_sam") and GS.WEAPON_ORDER == GS.BASE_WEAPON_ORDER and GS.ENEMIES.size() == GS.BASE_ENEMIES.size() and str(GS.city_def(map.city_id).raid) == raid0 and not Achievements.off, "tables put back")
+	check.call(GS.load_world(wid) and int(GS.mod_data.get("t_mod", {}).get("n", 0)) == 1, "mod data saved: %s" % str(GS.mod_data))
+	GS.delete_world(wid)
+	GS.world_id = ""
+	# a broken mod changes nothing and says where it broke
+	var bad := Mods.mod_package({"id": "bad"}, {"main.py": "import uad
+uad.weapon(\"b1\", base=\"igla\")
+uad.weapon(\"b2\", rnage=5)
+"}, "bad")
+	var errs := Mods.activate([bad])
+	check.call(errs.size() == 1 and int(errs[0].line) == 3 and String(errs[0].text).contains("range") and not GS.WEAPONS.has("b1"), "a broken mod: %s" % str(errs))
+	Mods.deactivate()
+	# every template of the workshop checks clean
+	var ws := ModWorkshop.new()
+	ws.main = self
+	ui_safe.add_child(ws)
+	for t in ModWorkshop.Ref.TEMPLATES:
+		ws.new_project(String(t.id))
+		await ws._check()
+		var txt := ws._console.get_parsed_text()
+		var flat := " | ".join(txt.split("\n", false))
+		check.call(txt.contains("✔") and not txt.contains("Error"), "template %s: %s" % [t.id, flat])
+		print("UAD MODTEST template %s: %s" % [t.id, flat])
+		ws._show_list()
+	ws.queue_free()
+	# a test battle from the workshop, and back into it at the project
+	var proj_id := String(ModWorkshop.list_projects()[0].id)
+	start_mod_test(Mods.for_world(back), proj_id)
+	check.call(game != null and GS.WEAPONS.has("t_sam") and GS.world_id == "" and String(GS.WEAPONS.t_sam.short) == "ТЕСТ", "test battle with the mod")
+	show_menu()
+	check.call(screen is ModWorkshop and not (screen.project as Dictionary).is_empty() and mod_test_project == "" and not GS.WEAPONS.has("t_sam"), "back into the workshop")
+	for nm in DirAccess.get_files_at(dir):
+		DirAccess.remove_absolute(dir + nm)
+	DirAccess.remove_absolute(dir)
+	print("UAD MODTEST: %s" % ("OK" if fails.is_empty() else "FAIL " + ", ".join(fails)))
+	get_tree().quit()
+
+
 ## Waits for an account call that answers through cb(ok: bool, text: String); returns [ok, text].
 func _acct_call(f: Callable) -> Array:
 	var box := []
@@ -3506,6 +3692,7 @@ func _slide(index: int, at: Vector2, by: Vector2) -> void:
 	Input.parse_input_event(ev)
 
 
+## Where a MaxRealism button is on the screen (the overlay lays them out clear of a phone's notch).
 func _touch_button(id: String) -> Vector2:
 	for b in game.rl.hud._btns:
 		if String(b.id) == id:
@@ -3609,4 +3796,3 @@ func _twist_selftest() -> void:
 			print("UAD TWIST rotate button held 0.9 s: yaw %+.2f, shown=%s" % [rig._t_yaw - _tt.p0.x, game.hud.turn_box.visible])
 			game.hud.turn_box.get_child(1).button_up.emit()
 	_tt.stage = int(_tt.stage) + 1
-## Where a MaxRealism button is on the screen (the overlay lays them out clear of a phone's notch).

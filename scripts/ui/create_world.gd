@@ -1,12 +1,15 @@
 extends Control
 ## "Create new world": name, city, difficulty and mode (the usual game or MaxRealism), then the
 ## base position is picked on the city map. The city is one of the game's four or one the player
-## has drawn in the map editor ("Свой город…", CityStore).
+## has drawn in the map editor ("Свой город…", CityStore). The world's mods (scripts/ui/mods_menu.gd)
+## are chosen here too.
 
 const UiKit = preload("res://scripts/ui/ui_kit.gd")
 const Cities = preload("res://scripts/world/cities.gd")
 const CityStore = preload("res://scripts/core/city_store.gd")
 const CitiesMenu = preload("res://scripts/ui/cities_menu.gd")
+const ModsMenu = preload("res://scripts/ui/mods_menu.gd")
+const Mods = preload("res://scripts/mods/mods.gd")
 
 var main
 var _name: LineEdit
@@ -25,6 +28,9 @@ var _mode_btns: Array = []
 var _mode_desc: Label
 ## The name field still holds the suggested name (so switching the city renames the world too).
 var _auto_name := true
+## The mods the world is created with (packages, Mods.for_world) and the button that shows them.
+var _mods: Array = []
+var _mods_btn: Button
 
 
 func _ready() -> void:
@@ -37,7 +43,7 @@ func _ready() -> void:
 	add_child(center)
 	var p := UiKit.panel(Vector2(640, 0))
 	center.add_child(p)
-	var v := UiKit.vbox(10)
+	var v := UiKit.vbox(7)
 	p.add_child(v)
 	v.add_child(UiKit.glow_label(GS.t("СОЗДАНИЕ МИРА"), 36, UiKit.NEON))
 	v.add_child(UiKit.label(GS.t("Название мира"), 16, UiKit.AMBER))
@@ -120,9 +126,21 @@ func _ready() -> void:
 	_mode_desc.custom_minimum_size = Vector2(600, 58)
 	v.add_child(_mode_desc)
 	_set_mode(bool(main.pending_world.get("realism", false)))
-	var spacer := Control.new()
-	spacer.custom_minimum_size = Vector2(0, 8)
-	v.add_child(spacer)
+	var modr := UiKit.hbox(10)
+	v.add_child(modr)
+	var ml := UiKit.label(GS.t("Моды"), 16, UiKit.AMBER)
+	ml.custom_minimum_size = Vector2(70, 0)
+	modr.add_child(ml)
+	_mods_btn = Button.new()
+	_mods_btn.focus_mode = Control.FOCUS_NONE
+	_mods_btn.clip_text = true
+	_mods_btn.custom_minimum_size = Vector2(0, 44)
+	_mods_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_mods_btn.add_theme_font_size_override("font_size", 17)
+	_mods_btn.pressed.connect(_pick_mods)
+	modr.add_child(_mods_btn)
+	var keep = main.pending_world.get("mods", [])
+	_set_mods(keep if keep is Array else [])
 	v.add_child(UiKit.button(GS.t("Выбрать позицию на карте ▶"), _next, 580, 22))
 	v.add_child(UiKit.button(GS.t("Отмена"), func() -> void: main.show_worlds(), 580, 18))
 	# start from the city on screen: the one last played, or the one picked before "Back"
@@ -161,6 +179,38 @@ func _pick_own() -> void:
 	_pick = CitiesMenu.pick(self, func(e: Dictionary) -> void: _set_city(CityStore.city_id(String(e.id))), func() -> void: main.show_cities())
 
 
+## The mods window: the installed mods to tick, their import, the way to the workshop.
+func _pick_mods() -> void:
+	SFX.play("click", -8.0)
+	_pick = ModsMenu.pick(self, _mods, _set_mods, func() -> void:
+		_remember()
+		main.show_workshop())
+
+
+func _set_mods(list: Array) -> void:
+	_mods = list
+	main.pending_world["mods"] = list
+	var code := 0
+	var pics := 0
+	for p in list:
+		if String(p.kind) == "mod":
+			code += 1
+		else:
+			pics += 1
+	if list.is_empty():
+		_mods_btn.text = GS.t("Без модов — выбрать…")
+	else:
+		_mods_btn.text = GS.t("🧩 %d · 🎨 %d — %s") % [code, pics, Mods.names_of(list)]
+
+
+## What is chosen so far stays for when the screen comes back (from the workshop).
+func _remember() -> void:
+	main.pending_world["name"] = _name.text
+	main.pending_world["difficulty"] = _diff
+	main.pending_world["realism"] = _real
+	main.create_city = _city
+
+
 func _set_diff(i: int) -> void:
 	_diff = i
 	for k in _diff_btns.size():
@@ -182,7 +232,7 @@ func _next() -> void:
 	var n := _name.text.strip_edges()
 	if n == "":
 		n = GS.ctext("defense", _city)
-	main.show_map_select({"name": n, "difficulty": _diff, "city": _city, "realism": _real})
+	main.show_map_select({"name": n, "difficulty": _diff, "city": _city, "realism": _real, "mods": _mods})
 
 
 func _unhandled_input(event: InputEvent) -> void:

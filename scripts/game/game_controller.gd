@@ -25,6 +25,7 @@ const Hud = preload("res://scripts/ui/hud.gd")
 const RemotePlayers = preload("res://scripts/game/remote_players.gd")
 const Realism = preload("res://scripts/game/realism.gd")
 const Pvp = preload("res://scripts/game/pvp.gd")
+const Mods = preload("res://scripts/mods/mods.gd")
 
 ## Every system gets its own spot around the base: guns close in, launchers further out,
 ## spread over a 320° arc so the western sector stays free for the fire station.
@@ -1101,6 +1102,7 @@ func launch(type: String, count: int, at_base: bool, alt := -1.0, aim := "") -> 
 	if not GS.ENEMIES.has(type):
 		type = "shahed"
 	launched[type] = int(launched.get(type, 0)) + count
+	Mods.emit("launch", {"type": type, "count": count, "at_base": at_base})
 	# the radar tracks the launch back: the site it came from goes on the strike map
 	var found: Dictionary = Strikes.seen(map.city, type) if pvp == null else {}
 	if not found.is_empty():
@@ -1327,6 +1329,8 @@ func enemy_destroyed(e) -> void:
 		_bank(killer, "e", reward)
 		_bank(killer, "k", 1)
 	record_clip(e)
+	Mods.emit("kill", {"type": String(e.variant), "weapon": String(e.last_hit_by), "reward": reward,
+		"x": snappedf(e.position.x, 0.1), "y": snappedf(e.position.y, 0.1), "z": snappedf(e.position.z, 0.1)})
 	_event_seq += 1
 	_event_owner[_event_seq] = killer
 	var airburst := false
@@ -1453,6 +1457,7 @@ func enemy_impact(e) -> void:
 		_remove_enemy(e)
 		return
 	var friend_base: bool = e.strike_base and e.net_base_owner != ""
+	Mods.emit("impact", {"type": String(e.variant), "x": snappedf(p.x, 0.1), "z": snappedf(p.z, 0.1), "base": bool(e.strike_base)})
 	if Net.role == "host" and e.net_id >= 0:
 		var decoy: bool = e.def.get("decoy", false) and not e.strike_base
 		var flags := (1 if decoy else 0) | (2 if e.strike_base else 0) | (4 if e.missed or e.crippled else 0)
@@ -1831,6 +1836,7 @@ func _input(event: InputEvent) -> void:
 
 func _process(delta: float) -> void:
 	_t += delta
+	Mods.process(delta)
 	# the names of the bases only over the map; a pending outpost only while the map is shown
 	for l in _base_labels:
 		l.visible = view == "top"
@@ -2009,6 +2015,7 @@ func purchase_weapon(id: String) -> bool:
 		SFX.play("cash", -4.0)
 		hud.log_event(GS.t("Получено: %s") % GS.t(String(GS.WEAPONS[id].name)), Color(0.4, 1.0, 0.6))
 		select_weapon(id)
+		Mods.emit("buy", {"weapon": id})
 		return true
 	return false
 
