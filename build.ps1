@@ -231,10 +231,10 @@ if ($Publish) {
         name    = $VersionName
         date    = $Date
         notes   = $Notes
-        # "exe" (the installer) is what a game on Windows downloads to update itself, and the site's
-        # download; v1.3.19 and v1.3.20 alone updated with "portable" (the bare game)
+        # "exe" (the installer) is what a game on Windows downloads to update itself. No "portable"
+        # (the bare UAD.exe) any more: v1.3.19 and v1.3.20 updated with it when it was there, and
+        # without it they fall back to "exe" as well. The bare UAD.exe is still in the release.
         exe     = "https://github.com/$Repo/releases/download/$tagName/UAD_Setup.exe"
-        portable = "https://github.com/$Repo/releases/download/$tagName/UAD.exe"
         apk     = "https://github.com/$Repo/releases/download/$tagName/UAD.apk"
         site    = $Site
         exe_mb  = [math]::Round((Get-Item $setup).Length / 1MB, 1)
