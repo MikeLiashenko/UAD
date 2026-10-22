@@ -1,4 +1,6 @@
 extends RefCounted
+
+const ModelEditor = preload("res://scripts/ui/model_editor.gd")
 ## What the mod workshop (scripts/ui/mod_workshop.gd) tells and offers: the reference of the "uad"
 ## module and of picture mods (each entry inserts its example at the caret), and the templates new
 ## projects start from. Texts are in the three languages of the game, {"ru", "uk", "en"}.
@@ -43,12 +45,18 @@ static func sections(kind: String) -> Array:
 static func _mod_sections() -> Array:
 	return [
 		{"title": _t("Определения (верх файла)", "Визначення (верх файлу)", "Definitions (top of the file)"), "items": [
-			{"sig": "uad.weapon(id, base=…, …)", "ins": "uad.weapon(\"my_sam\", base=\"igla\",\n    name={\"ru\": \"Мой ЗРК\", \"uk\": \"Мій ЗРК\", \"en\": \"My SAM\"},\n    range=6000, damage=120, unlock=8000, missile_price=900)\n",
-				"doc": _t("Новая система ПВО: копия base с вашими полями. Появится в магазине в своём разделе.", "Нова система ППО: копія base з вашими полями. З'явиться в магазині у своєму розділі.", "A new air defence system: a copy of base with your fields. It shows up in the shop in its section.")},
+			{"sig": "uad.weapon(id, type=…, model=…)", "ins": "uad.weapon(\"my_sam\", type=\"short\", model=\"avenger\",\n    name={\"ru\": \"Мой ЗРК\", \"uk\": \"Мій ЗРК\", \"en\": \"My SAM\"},\n    range=6000, damage=120, unlock=8000, missile_price=900)\n",
+				"doc": _t("Новая система ПВО: тип задаёт, как она стреляет и с каких чисел начинается; модель — наша (\"avenger\") или своя (\"имя.uadmodel\"). Появится в магазине в своём разделе.", "Нова система ППО: тип задає, як вона стріляє і з яких чисел починається; модель — наша (\"avenger\") або своя (\"ім'я.uadmodel\"). З'явиться в магазині у своєму розділі.", "A new air defence system: the type sets how it fires and the numbers it starts from; the model is ours (\"avenger\") or your own (\"name.uadmodel\"). It shows up in the shop in its section.")},
+			{"sig": "типы ПВО / system types", "ins": "# gun_manual  стволы, наводка вручную (ЗУ-23)\n# gun_auto    стволы с радаром (Gepard)\n# manpads     ПЗРК (Игла)\n# short       ракеты ближнего рубежа (Avenger)\n# drone       дроны-перехватчики (Шершень)\n# medium      ЗРК средней дальности (IRIS-T)\n# long        дальний рубеж (С-300)\n# abm         ПРО, сбивает баллистику (Patriot)\n",
+				"doc": _t("Тип системы: стволы, ПЗРК, ракеты, дроны, ПРО.", "Тип системи: стволи, ПЗРК, ракети, дрони, ПРО.", "System type: guns, MANPADS, missiles, drones, missile defence.")},
 			{"sig": "uad.change_weapon(id, …)", "ins": "uad.change_weapon(\"mg\", range=2200, damage=10)\n",
 				"doc": _t("Меняет поля системы игры (или своей).", "Змінює поля системи гри (або своєї).", "Changes fields of a game's (or your) system.")},
-			{"sig": "uad.enemy(id, base=…, …)", "ins": "uad.enemy(\"my_drone\", base=\"shahed\",\n    name={\"ru\": \"Мой дрон\", \"uk\": \"Мій дрон\", \"en\": \"My drone\"},\n    plural=\"МОИ ДРОНЫ\", speed=70, hp=30, reward=1500)\n",
-				"doc": _t("Новая угроза: копия base (модель полёта, награда, урон) с вашими полями.", "Нова загроза: копія base (модель польоту, нагорода, шкода) з вашими полями.", "A new threat: a copy of base (flight model, reward, damage) with your fields.")},
+			{"sig": "uad.enemy(id, type=…, model=…)", "ins": "uad.enemy(\"my_drone\", type=\"drone\", model=\"shahed\",\n    name={\"ru\": \"Мой дрон\", \"uk\": \"Мій дрон\", \"en\": \"My drone\"},\n    speed=70, hp=30, reward=1500)\n",
+				"doc": _t("Новая угроза: тип задаёт, как она летит; модель — наша или своя (\"имя.uadmodel\").", "Нова загроза: тип задає, як вона летить; модель — наша або своя (\"ім'я.uadmodel\").", "A new threat: the type sets how it flies; the model is ours or your own (\"name.uadmodel\").")},
+			{"sig": "типы угроз / threat types", "ins": "# scout       разведчик (Орлан)\n# drone       ударный дрон (Шахед)\n# jet_drone   реактивный дрон (Герань-3)\n# decoy       ложная цель (Гербера)\n# cruise      крылатая ракета (Х-101)\n# glide_bomb  планирующая бомба (КАБ)\n# ballistic   баллистика (Искандер)\n# hypersonic  аэробаллистика (Кинжал)\n",
+				"doc": _t("Тип угрозы: дроны, ракеты, бомбы, баллистика.", "Тип загрози: дрони, ракети, бомби, балістика.", "Threat type: drones, missiles, bombs, ballistic.")},
+			{"sig": "model=\"имя.uadmodel\"", "ins": "model=\"my_model.uadmodel\"",
+				"doc": _t("Своя модель из 3D-редактора: «＋ Файл» → 3D-модель. Башня поворачивается, ствол наклоняется вокруг своих осей.", "Своя модель із 3D-редактора: «＋ Файл» → 3D-модель. Башта повертається, ствол нахиляється навколо своїх осей.", "Your own model from the 3D editor: \"＋ File\" → 3D model. The turret turns and the gun tilts round their pivots.")},
 			{"sig": "uad.change_enemy(id, …)", "ins": "uad.change_enemy(\"shahed\", hp=40)\n",
 				"doc": _t("Меняет поля угрозы.", "Змінює поля загрози.", "Changes fields of a threat.")},
 			{"sig": "uad.raid(enemy, night=1, weight=1.0)", "ins": "uad.raid(\"my_drone\", night=2, weight=1.5)\n",
@@ -146,7 +154,9 @@ const TEMPLATES := [
 	{"id": "empty", "kind": "mod", "icon": "🧩", "title": {"ru": "Пустой мод", "uk": "Порожній мод", "en": "Empty mod"},
 		"desc": {"ru": "Сообщение в начале игры — с чего начать.", "uk": "Повідомлення на початку гри — з чого почати.", "en": "A message when the game starts — a place to begin."}},
 	{"id": "weapon", "kind": "mod", "icon": "🛡", "title": {"ru": "Новая система ПВО", "uk": "Нова система ППО", "en": "New air defence system"},
-		"desc": {"ru": "Свой ЗРК на основе «Иглы»: дальность, урон, цена, цвет.", "uk": "Свій ЗРК на основі «Голки»: дальність, шкода, ціна, колір.", "en": "Your own SAM based on the Igla: range, damage, price, colour."}},
+		"desc": {"ru": "Свой ЗРК ближнего рубежа: дальность, урон, цена, наша модель с цветом.", "uk": "Свій ЗРК ближнього рубежу: дальність, шкода, ціна, наша модель із кольором.", "en": "Your own short range SAM: range, damage, price, our model in a colour."}},
+	{"id": "own_model", "kind": "mod", "icon": "🧱", "title": {"ru": "Своя модель (3D)", "uk": "Своя модель (3D)", "en": "Own model (3D)"},
+		"desc": {"ru": "Система ПВО и угроза со своими моделями из 3D-редактора.", "uk": "Система ППО і загроза зі своїми моделями з 3D-редактора.", "en": "A system and a threat with models of their own from the 3D editor."}},
 	{"id": "enemy", "kind": "mod", "icon": "🛩", "title": {"ru": "Новая угроза и налёт", "uk": "Нова загроза і наліт", "en": "New threat and raid"},
 		"desc": {"ru": "Свой дрон: скорость, прочность, награда — и он летит в налётах.", "uk": "Свій дрон: швидкість, міцність, нагорода — і він летить у нальотах.", "en": "Your own drone: speed, toughness, reward — and it flies in the raids."}},
 	{"id": "rules", "kind": "mod", "icon": "⚙", "title": {"ru": "Свои правила (события)", "uk": "Свої правила (події)", "en": "Your own rules (events)"},
@@ -172,7 +182,7 @@ static func template_files(id: String) -> Dictionary:
 			return {"main.py": """# %s
 import uad
 
-uad.weapon("my_sam", base="igla",
+uad.weapon("my_sam", type="short",
     name={"ru": "ЗРК «Стрела-М»", "uk": "ЗРК «Стріла-М»", "en": "Strela-M SAM"},
     short="СТРЕЛА-М",
     desc={"ru": "Свой комплекс малой дальности.", "uk": "Свій комплекс малої дальності.", "en": "A short range system of our own."},
@@ -193,7 +203,7 @@ print("my_sam:", uad.weapon_info("my_sam")["range"], "m")
 			return {"main.py": """# %s
 import uad
 
-uad.enemy("lancet", base="shahed",
+uad.enemy("lancet", type="drone", model="shahed",
     name={"ru": "Барражирующий «Ланцет»", "uk": "Баражуючий «Ланцет»", "en": "Lancet loitering munition"},
     plural="ЛАНЦЕТЫ", abbr="Л",
     speed=80, hp=22, alt_min=150, alt_max=900,
@@ -210,6 +220,20 @@ def lancet_down(e):
         uad.give_money(300)
 """ % [c.call("Новая угроза и её место в налётах.", "Нова загроза і її місце в нальотах.", "A new threat and its place in the raids."),
 				c.call("Летит в налётах со второй ночи, в полтора раза чаще обычного.", "Летить у нальотах із другої ночі, у півтора раза частіше звичайного.", "Flies in the raids from night two, half again as often as usual.")]}
+		"own_model":
+			return {"main.py": """# %s
+import uad
+
+uad.weapon("my_sam", type="medium", model="my_sam.uadmodel",
+    name={"ru": "Мой ЗРК", "uk": "Мій ЗРК", "en": "My SAM"},
+    range=9000, damage=150, unlock=12000, missile_price=1000)
+
+uad.enemy("my_drone", type="drone", model="my_drone.uadmodel",
+    name={"ru": "Мой дрон", "uk": "Мій дрон", "en": "My drone"},
+    speed=60, hp=26, reward=1500)
+uad.raid("my_drone", night=1, weight=2)
+""" % c.call("Модели — в файлах my_sam.uadmodel и my_drone.uadmodel слева: откройте и меняйте в 3D.", "Моделі — у файлах my_sam.uadmodel і my_drone.uadmodel ліворуч: відкрийте й змінюйте в 3D.", "The models are the files my_sam.uadmodel and my_drone.uadmodel on the left: open and change them in 3D."),
+				"my_sam.uadmodel": JSON.stringify(ModelEditor.starter("weapon"), "\t"), "my_drone.uadmodel": JSON.stringify(ModelEditor.starter("enemy"), "\t")}
 		"rules":
 			return {"main.py": """# %s
 import uad

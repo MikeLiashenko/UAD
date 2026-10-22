@@ -16,6 +16,7 @@ extends RefCounted
 ## when the world opens; the game actions (give_money, launch, message…) work from event handlers.
 
 const VM = preload("res://scripts/mods/py_vm.gd")
+const Model3D = preload("res://scripts/mods/model3d.gd")
 const BuildInfo = preload("res://scripts/build_info.gd")
 
 ## Events a handler can be put on, with what its dict argument holds.
@@ -47,7 +48,13 @@ const ENEMY_KINDS := ["scout", "shahed", "cruise", "ballistic"]
 ## The fields that are names people read: a str, or {"ru": …, "uk": …, "en": …}.
 const TEXT_FIELDS := ["name", "short", "desc", "plural", "abbr"]
 ## Fields every mod may add to a weapon or a threat besides the game's own ones.
-const EXTRA_FIELDS := ["model", "tint", "scale", "base"]
+const EXTRA_FIELDS := ["model", "tint", "scale", "base", "type"]
+## What a new system or threat is: its type, and the game's own one whose numbers it starts from
+## (and whose model it wears unless it brings its own). "base" (a system / threat id) still works.
+const WEAPON_TYPES := {"gun_manual": "zu23", "gun_auto": "gepard", "manpads": "igla", "short": "avenger",
+	"drone": "drone", "medium": "iris", "long": "s300", "abm": "patriot"}
+const ENEMY_TYPES := {"scout": "scout", "drone": "shahed", "jet_drone": "geran3", "decoy": "gerbera",
+	"cruise": "cruise", "glide_bomb": "kab", "ballistic": "ballistic", "hypersonic": "kinzhal"}
 
 ## The mods host (scripts/mods/mods.gd) — a class, all static.
 static var host
@@ -224,11 +231,32 @@ static func _define(vm, mod: Dictionary, args: Array, kw: Dictionary, weapon: bo
 			return vm.throw("ValueError", "the id '%s' must be latin small letters, digits and _ (up to 24), starting with a letter" % id)
 		if table.has(id):
 			return vm.throw("ValueError", "there is already a %s called '%s' — use uad.change_%s() to change it" % [what, id, what])
-		var base := String(kw.get("base", "igla" if weapon else "shahed"))
-		if not table.has(base):
-			return vm.throw("KeyError", "no %s called '%s' to start from" % [what, base])
+		var types: Dictionary = WEAPON_TYPES if weapon else ENEMY_TYPES
+		var base := ""
+		var ty := ""
+		if kw.has("type"):
+			ty = String(kw.type)
+			if not types.has(ty):
+				return vm.throw("ValueError", "type must be one of: %s" % ", ".join(PackedStringArray(types.keys())))
+			base = String(types[ty])
+		elif kw.has("base"):
+			base = String(kw.base)
+			if not table.has(base):
+				return vm.throw("KeyError", "no %s called '%s' to start from" % [what, base])
+		else:
+			ty = "short" if weapon else "drone"
+			base = String(types[ty])
 		entry = (table[base] as Dictionary).duplicate(true)
-		if not entry.has("model"):
+		if ty != "":
+			entry["type"] = ty
+			# a type, not that system: its own name until the mod gives one
+			for f in TEXT_FIELDS:
+				entry.erase(f)
+			entry["name"] = id
+			entry[("short" if weapon else "plural")] = id.to_upper().left(14)
+			if not weapon:
+				entry["abbr"] = id.to_upper().left(2)
+		if not entry.has("model") and not entry.has("model_data"):
 			entry["model"] = base if base_table.has(base) else String(table[base].get("model", base))
 		if not weapon and not entry.has("kind"):
 			entry["kind"] = GS.kind_of(base)
@@ -239,7 +267,16 @@ static func _define(vm, mod: Dictionary, args: Array, kw: Dictionary, weapon: bo
 	var known := _known_fields(base_table)
 	for k in kw:
 		var key := String(k)
-		if key == "base":
+		if key == "base" or key == "type":
+			continue
+		if key == "model" and String(kw[k]).ends_with(".uadmodel"):
+			var md := _model_file(vm, mod, String(kw[k]), weapon)
+			if vm.failed():
+				return null
+			entry["model_data"] = md
+			entry.erase("model")
+			if weapon and not kw.has("eye"):
+				entry["eye"] = Model3D.eye_height(md)
 			continue
 		if not known.has(key) and not EXTRA_FIELDS.has(key):
 			var hint := _closest(key, known.keys() + EXTRA_FIELDS)
@@ -261,12 +298,34 @@ static func _define(vm, mod: Dictionary, args: Array, kw: Dictionary, weapon: bo
 		return vm.throw("ValueError", "kind must be one of %s" % [ENEMY_KINDS])
 	if entry.has("alt_min") and entry.has("alt_max") and float(entry.alt_min) > float(entry.alt_max):
 		return vm.throw("ValueError", "alt_min is above alt_max")
+	if kw.has("model") and entry.has("model"):
+		entry.erase("model_data") # a built-in model again
 	var model := String(entry.get("model", id))
 	var models: Dictionary = GS.BASE_WEAPONS if weapon else GS.BASE_ENEMIES
 	if entry.has("model") and not models.has(model):
 		return vm.throw("ValueError", "no built-in model '%s' — the models are the game's own %ss: %s" % [model, what, ", ".join(PackedStringArray(models.keys()))])
 	host.put(weapon, id, entry, new)
 	return id
+
+
+## A model file of the mod («name.uadmodel», made in a 3D editor), read and checked.
+static func _model_file(vm, mod: Dictionary, path: String, weapon: bool) -> Dictionary:
+	var files: Dictionary = mod.get("files", {})
+	var fname := path.get_file()
+	if not files.has(fname):
+		vm.throw("ValueError", "the mod has no model file '%s' (its files: %s)" % [fname, ", ".join(PackedStringArray(files.keys()))])
+		return {}
+	var j := JSON.new()
+	if j.parse(String(files[fname])) != OK:
+		vm.throw("ValueError", "%s is not a model file (line %d: %s)" % [fname, j.get_error_line(), j.get_error_message()])
+		return {}
+	var md := Model3D.sanitize(j.data)
+	if md.has("error"):
+		vm.throw("ValueError", "%s: %s" % [fname, md.error])
+		return {}
+	# a threat's model on a system gets the turret it needs, and the other way round
+	md.kind = "weapon" if weapon else "enemy"
+	return md
 
 
 ## The fields the game's own entries have, with a sample value of each (its type).

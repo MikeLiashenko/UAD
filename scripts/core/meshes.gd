@@ -4,6 +4,7 @@ extends RefCounted
 ## Weapon models expose meta: "turret" (yaw node), "pitch" (elevation node), "muzzle", optional "spin".
 
 const Fx = preload("res://scripts/core/fx.gd")
+const Model3D = preload("res://scripts/mods/model3d.gd")
 
 
 static func part(parent: Node3D, mesh: Mesh, mat: Material, pos := Vector3.ZERO, rot_deg := Vector3.ZERO) -> MeshInstance3D:
@@ -221,35 +222,44 @@ static func patriot() -> Node3D:
 	return root
 
 
-## The model of a system. A mod's system (GS.WEAPONS) wears one of the built-in models ("model"),
-## tinted and scaled as the mod says.
+## The model of a system. A mod's system (GS.WEAPONS) wears a model of its own ("model_data", made in
+## a 3D editor, scripts/mods/model3d.gd) or one of the built-in ones ("model"), tinted and scaled as
+## the mod says.
 static func weapon_model(id: String) -> Node3D:
 	var wd: Dictionary = GS.WEAPONS.get(id, {})
+	if wd.get("model_data") is Dictionary:
+		return _modded(Model3D.build(wd.model_data), wd)
 	var model := String(wd.get("model", id))
 	return _modded(_builtin_weapon(model if GS.BASE_WEAPONS.has(model) else id), wd)
 
 
-## A built-in model tinted ("tint", a colour) and scaled ("scale") by a mod.
+## A model tinted ("tint", a colour) and scaled ("scale") by a mod.
 static func _modded(root: Node3D, d: Dictionary) -> Node3D:
 	if d.has("scale"):
 		root.scale = Vector3.ONE * float(d.scale)
 	if d.get("tint") is Color:
-		_tint(root, d.tint)
+		_tint(root, d.tint, {})
 	return root
 
 
-static func _tint(n: Node, c: Color) -> void:
-	if n is MeshInstance3D:
+## Every material of the model times `c` (the camouflage paint through its "base" colour); `done`
+## shares the tinted copy of a material between the parts that wore it.
+static func _tint(n: Node, c: Color, done: Dictionary) -> void:
+	if n is MeshInstance3D and (n as MeshInstance3D).material_override != null:
 		var mi := n as MeshInstance3D
-		if mi.mesh != null:
-			for s in mi.mesh.get_surface_count():
-				var m := mi.get_active_material(s)
-				if m is BaseMaterial3D:
-					var dup := (m as BaseMaterial3D).duplicate() as BaseMaterial3D
-					dup.albedo_color = dup.albedo_color * c
-					mi.set_surface_override_material(s, dup)
+		var m := mi.material_override
+		if not done.has(m):
+			var dup := m.duplicate() as Material
+			if dup is BaseMaterial3D:
+				(dup as BaseMaterial3D).albedo_color *= c
+				if (dup as BaseMaterial3D).emission_enabled:
+					(dup as BaseMaterial3D).emission *= c
+			elif dup is ShaderMaterial and (dup as ShaderMaterial).get_shader_parameter("base") is Color:
+				(dup as ShaderMaterial).set_shader_parameter("base", (dup as ShaderMaterial).get_shader_parameter("base") * c)
+			done[m] = dup
+		mi.material_override = done[m]
 	for ch in n.get_children():
-		_tint(ch, c)
+		_tint(ch, c, done)
 
 
 static func _builtin_weapon(id: String) -> Node3D:
@@ -716,6 +726,8 @@ static func oreshnik() -> Node3D:
 
 static func enemy_model(type: String) -> Node3D:
 	var ed: Dictionary = GS.ENEMIES.get(type, {})
+	if ed.get("model_data") is Dictionary:
+		return _modded(Model3D.build(ed.model_data), ed)
 	var model := String(ed.get("model", type))
 	return _modded(_builtin_enemy(model if GS.BASE_ENEMIES.has(model) else type), ed)
 

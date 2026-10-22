@@ -200,6 +200,10 @@ func _ready() -> void:
 		_ach_selftest()
 	if _args.has("modtest"):
 		_mod_selftest.call_deferred()
+	if _args.has("exportmodels"):
+		# tool: --exportmodels=<file.json> writes every built-in model in the 3D editors' format
+		# (the mod maker site starts from them: UAD-Mods/js/models.js)
+		_export_models(String(_args.exportmodels))
 	if _args.has("srvunit"):
 		_srv_unit_selftest()
 	if _args.has("edittest"):
@@ -306,6 +310,16 @@ func _ready() -> void:
 					var lines: PackedStringArray = screen._code.text.split("\n")
 					lines[9] += " oops"
 					screen._code.text = "\n".join(lines)
+				if _args.has("wsfile"):
+					# a file of the project open: --wsfile=my_sam.uadmodel shows the 3D editor
+					screen._store_file()
+					screen._file = String(_args.wsfile)
+					screen._load_file(screen._file)
+					screen._refresh_files()
+					if _args.has("wsbuiltin"):
+						screen._model_ed.use_builtin(String(_args.wsbuiltin), not _args.has("wsenemy"))
+					if _args.has("wspick"):
+						screen._model_ed.select(int(_args.wspick))
 				if _args.has("wscheck"):
 					screen._check.call_deferred()
 		"createmods":
@@ -1400,6 +1414,12 @@ func _start_autotest() -> void:
 			var pkg: Dictionary
 			if p.get_extension() == "py":
 				pkg = Mods.mod_package({"id": p.get_file().get_basename(), "name": p.get_file().get_basename()}, {"main.py": FileAccess.get_file_as_string(p)}, "test")
+			elif DirAccess.dir_exists_absolute(p):
+				# a folder: a mod of every file in it (main.py, models, pictures)
+				var fl := {}
+				for fname in DirAccess.get_files_at(p):
+					fl[fname] = FileAccess.get_file_as_string(p.path_join(fname))
+				pkg = Mods.mod_package({"id": p.get_file(), "name": p.get_file()}, fl, "test")
 			else:
 				pkg = Mods.read_package(p)
 			if pkg.has("error"):
@@ -2906,6 +2926,28 @@ func _ach_selftest() -> void:
 	print("UAD ACHTEST: %s" % ("OK" if fails.is_empty() else "FAIL " + ", ".join(fails)))
 
 
+func _export_models(path: String) -> void:
+	const Meshes = preload("res://scripts/core/meshes.gd")
+	const Model3D = preload("res://scripts/mods/model3d.gd")
+	var out := {"weapons": {}, "enemies": {}}
+	var n := 0
+	for id in GS.BASE_WEAPON_ORDER:
+		var m: Node3D = Meshes.weapon_model(String(id))
+		out.weapons[id] = Model3D.from_node(m, "weapon", String(id))
+		n += (out.weapons[id].parts as Array).size()
+		m.free()
+	for id in GS.BASE_ENEMIES:
+		var m: Node3D = Meshes.enemy_model(String(id))
+		out.enemies[id] = Model3D.from_node(m, "enemy", String(id))
+		n += (out.enemies[id].parts as Array).size()
+		m.free()
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	f.store_string(JSON.stringify(out))
+	f.close()
+	print("UAD EXPORTMODELS: %d weapons, %d enemies, %d parts → %s" % [out.weapons.size(), out.enemies.size(), n, path])
+	get_tree().quit()
+
+
 ## Mods: packages written and read back, a world saved and loaded with its mods, every template of
 ## the workshop checked, the game's tables put back. Nothing lands in the player's mods or projects
 ## (Mods.dry, ModWorkshop.dry); the test world is deleted.
@@ -2992,6 +3034,47 @@ uad.weapon(\"b2\", rnage=5)
 		print("UAD MODTEST template %s: %s" % [t.id, flat])
 		ws._show_list()
 	ws.queue_free()
+	# types and models of the mod's own: built from the file, aimed like the game's own
+	const Model3D = preload("res://scripts/mods/model3d.gd")
+	const ModelEditor = preload("res://scripts/ui/model_editor.gd")
+	const Meshes = preload("res://scripts/core/meshes.gd")
+	var msrc := "import uad\nuad.weapon(\"m_sam\", type=\"medium\", model=\"m_sam.uadmodel\", name=\"M\")\n" \
+		+ "uad.enemy(\"m_drone\", type=\"jet_drone\", model=\"m_drone.uadmodel\")\nuad.weapon(\"m_gun\", type=\"gun_auto\")\n"
+	var mpkg := Mods.mod_package({"id": "m_mod", "name": "Models"}, {"main.py": msrc,
+		"m_sam.uadmodel": JSON.stringify(ModelEditor.starter("weapon")), "m_drone.uadmodel": JSON.stringify(ModelEditor.starter("enemy"))}, "x")
+	var merrs := Mods.activate([mpkg])
+	check.call(merrs.is_empty(), "model mod: %s" % str(merrs))
+	if merrs.is_empty():
+		check.call(GS.WEAPONS.m_sam.get("model_data") is Dictionary and String(GS.WEAPONS.m_sam.class) == "medium" and String(GS.WEAPONS.m_sam.type) == "medium", "type and model of the system")
+		check.call(String(GS.WEAPONS.m_gun.kind) == "gun" and bool(GS.WEAPONS.m_gun.fcs) and String(GS.WEAPONS.m_gun.name) == "m_gun" and String(GS.WEAPONS.m_gun.model) == "gepard", "a type without a name or model")
+		check.call(String(GS.ENEMIES.m_drone.kind) == "shahed" and GS.ENEMIES.m_drone.get("model_data") is Dictionary, "type and model of the threat")
+		var wm: Node3D = Meshes.weapon_model("m_sam")
+		check.call(wm.has_meta("turret") and wm.has_meta("pitch") and wm.has_meta("muzzle"), "the own model has a turret, a gun and a muzzle")
+		wm.free()
+		var em: Node3D = Meshes.enemy_model("m_drone")
+		check.call(em.has_meta("spin"), "the own threat model has its propeller")
+		em.free()
+	var bad_model := Mods.mod_package({"id": "bm"}, {"main.py": "import uad\nuad.weapon(\"b\", type=\"short\", model=\"nope.uadmodel\")\n"}, "x")
+	var berrs := Mods.activate([bad_model])
+	check.call(berrs.size() == 1 and String(berrs[0].text).contains("nope.uadmodel"), "a missing model file is named")
+	var btype := Mods.activate([Mods.mod_package({"id": "bt"}, {"main.py": "import uad\nuad.enemy(\"b\", type=\"tank\")\n"}, "x")])
+	check.call(btype.size() == 1 and String(btype[0].text).contains("type must be one of"), "an unknown type is named")
+	Mods.deactivate()
+	# the game's own models into the format and back: the same parts
+	for id in ["mg", "gepard", "patriot", "drone"]:
+		var a: Node3D = Meshes.weapon_model(id)
+		var md := Model3D.sanitize(Model3D.from_node(a, "weapon", id))
+		var b := Model3D.build(md)
+		var na := a.find_children("*", "MeshInstance3D", true, false).size()
+		var nb := b.find_children("*", "MeshInstance3D", true, false).size()
+		check.call(not md.has("error") and na == nb and na > 10, "%s round trip: %d / %d parts" % [id, na, nb])
+		a.free()
+		b.free()
+	for id in ["shahed", "cruise", "kinzhal"]:
+		var a: Node3D = Meshes.enemy_model(id)
+		var md := Model3D.sanitize(Model3D.from_node(a, "enemy", id))
+		check.call(not md.has("error"), "%s exports" % id)
+		a.free()
 	# a test battle from the workshop, and back into it at the project
 	var proj_id := String(ModWorkshop.list_projects()[0].id)
 	start_mod_test(Mods.for_world(back), proj_id)

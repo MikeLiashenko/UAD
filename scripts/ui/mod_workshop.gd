@@ -12,6 +12,8 @@ const UiKit = preload("res://scripts/ui/ui_kit.gd")
 const Mods = preload("res://scripts/mods/mods.gd")
 const Parser = preload("res://scripts/mods/py_parser.gd")
 const Ref = preload("res://scripts/ui/mod_reference.gd")
+const ModelEditor = preload("res://scripts/ui/model_editor.gd")
+const Model3D = preload("res://scripts/mods/model3d.gd")
 
 const DIR := "user://mod_projects/"
 const LIMIT := 80
@@ -23,6 +25,10 @@ var _file := "main.py"
 var _code: CodeEdit
 var _files_box: VBoxContainer
 var _console: RichTextLabel
+## The 3D editor of the project's .uadmodel files, in the code's place (and its panel in the reference's).
+var _model_ed
+var _code_parts: Array = []
+var _ref_parts: Array = []
 var _title: Label
 var _list_view: Control
 var _edit_view: Control
@@ -335,8 +341,17 @@ func _build_editor() -> void:
 	_code.code_completion_requested.connect(_complete)
 	_style_code()
 	code_box.add_child(_code)
+	_code_parts = [_code]
 	if GS.touch():
-		code_box.add_child(_key_bar())
+		var kb := _key_bar()
+		code_box.add_child(kb)
+		_code_parts.append(kb)
+	_model_ed = ModelEditor.new()
+	_model_ed.view.visible = false
+	code_box.add_child(_model_ed.view)
+	_model_ed.changed.connect(func() -> void:
+		_dirty = true
+		_save_t = 1.5)
 	_console = RichTextLabel.new()
 	_console.bbcode_enabled = true
 	_console.scroll_following = true
@@ -349,11 +364,15 @@ func _build_editor() -> void:
 	var right := UiKit.vbox(4)
 	right.custom_minimum_size = Vector2(290, 0)
 	body.add_child(right)
-	right.add_child(UiKit.label(GS.t("Справочник — нажмите, чтобы вставить"), 14, UiKit.AMBER))
+	var ref_title := UiKit.label(GS.t("Справочник — нажмите, чтобы вставить"), 14, UiKit.AMBER)
+	right.add_child(ref_title)
 	var rs := ScrollContainer.new()
 	rs.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	rs.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	right.add_child(rs)
+	_ref_parts = [ref_title, rs]
+	_model_ed.panel.visible = false
+	right.add_child(_model_ed.panel)
 	var rl := UiKit.vbox(4)
 	rl.name = "RefList"
 	rl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -444,6 +463,14 @@ func _refresh_files() -> void:
 
 
 func _load_file(nm: String) -> void:
+	var is_model := nm.get_extension() == Mods.MODEL_EXT
+	for c in _code_parts + _ref_parts:
+		c.visible = not is_model
+	_model_ed.view.visible = is_model
+	_model_ed.panel.visible = is_model
+	if is_model:
+		_model_ed.load_text(String(project.files.get(nm, "")))
+		return
 	_code.text = String(project.files.get(nm, ""))
 	_code.clear_undo_history()
 	_code.set_caret_line(0)
@@ -453,6 +480,9 @@ func _load_file(nm: String) -> void:
 
 func _store_file() -> void:
 	if project.is_empty() or _code == null:
+		return
+	if _file.get_extension() == Mods.MODEL_EXT:
+		project.files[_file] = _model_ed.to_text()
 		return
 	project.files[_file] = _code.text
 
@@ -657,9 +687,17 @@ func _check() -> void:
 			lines.append(["chg", GS.t("Налёты на город изменены")])
 		for ev in Mods.handlers:
 			lines.append(["ev", GS.t("Событие «%s»: обработчиков %d") % [ev, Mods.handlers[ev].size()]])
+	for f in project.files:
+		if String(f).get_extension() == Mods.MODEL_EXT:
+			var j := JSON.new()
+			var md := Model3D.sanitize(j.data) if j.parse(String(project.files[f])) == OK else {"error": j.get_error_message()}
+			if md.has("error"):
+				lines.append(["bad", "%s: %s" % [f, md.error]])
+			else:
+				lines.append(["ev", GS.t("Модель %s: деталей %d") % [f, (md.parts as Array).size()]])
 	Mods.deactivate()
 	for l in lines:
-		var col: Color = {"print": Color(0.85, 0.95, 0.9), "add": UiKit.NEON, "chg": UiKit.AMBER, "ev": UiKit.CYAN}[l[0]]
+		var col: Color = {"print": Color(0.85, 0.95, 0.9), "add": UiKit.NEON, "chg": UiKit.AMBER, "ev": UiKit.CYAN, "bad": UiKit.RED}[l[0]]
 		_out(String(l[1]), col)
 	if not errs.is_empty():
 		var e: Dictionary = errs[0]
@@ -779,7 +817,7 @@ func _ask_new_file() -> void:
 	_modal = m[0]
 	var v: VBoxContainer = m[1]
 	v.add_child(UiKit.glow_label(GS.t("Новый файл"), 28, UiKit.NEON))
-	v.add_child(UiKit.label(GS.t("Имя модуля (его подключают так: import имя)"), 14, Color(0.65, 0.88, 0.78)))
+	v.add_child(UiKit.label(GS.t("Имя: модуль подключают так: import имя, модель — model=\"имя.uadmodel\""), 14, Color(0.65, 0.88, 0.78)))
 	var e := LineEdit.new()
 	e.max_length = 24
 	e.placeholder_text = "helpers"
@@ -787,22 +825,28 @@ func _ask_new_file() -> void:
 	v.add_child(e)
 	var err := UiKit.label("", 14, UiKit.RED)
 	v.add_child(err)
-	v.add_child(UiKit.button(GS.t("Создать"), func() -> void:
-		var n := e.text.strip_edges().to_lower().trim_suffix(".py")
+	var make := func(ext: String, body: String) -> void:
+		var n := e.text.strip_edges().to_lower().trim_suffix(".py").trim_suffix("." + Mods.MODEL_EXT)
 		if RegEx.create_from_string("^[a-z_][a-z0-9_]{0,23}$").search(n) == null or n == "main" or n == "uad":
 			err.text = GS.t("Только латинские буквы, цифры и _.")
 			return
 		if project.files.size() >= Mods.MAX_FILES:
 			err.text = GS.t("Слишком много файлов.")
 			return
+		if project.files.has(n + "." + ext):
+			err.text = GS.t("Такой файл уже есть.")
+			return
 		_store_file()
-		project.files[n + ".py"] = "# %s.py\nimport uad\n\n" % n
-		_file = n + ".py"
+		project.files[n + "." + ext] = body.replace("{n}", n)
+		_file = n + "." + ext
 		_dirty = true
 		_save_now()
 		_refresh_files()
 		_load_file(_file)
-		_modal.queue_free()))
+		_modal.queue_free()
+	v.add_child(UiKit.button(GS.t("🐍 Модуль Python"), func() -> void: make.call("py", "# {n}.py\nimport uad\n\n")))
+	v.add_child(UiKit.button(GS.t("🛡 3D-модель системы ПВО"), func() -> void: make.call(Mods.MODEL_EXT, JSON.stringify(ModelEditor.starter("weapon"), "\t"))))
+	v.add_child(UiKit.button(GS.t("🛩 3D-модель угрозы"), func() -> void: make.call(Mods.MODEL_EXT, JSON.stringify(ModelEditor.starter("enemy"), "\t"))))
 	v.add_child(UiKit.button(GS.t("Отмена"), func() -> void: _modal.queue_free()))
 	e.grab_focus.call_deferred()
 

@@ -23,6 +23,8 @@ const Achievements = preload("res://scripts/core/achievements.gd")
 
 const MOD_EXT := "uadmod"
 const SHADER_EXT := "uadshader"
+## A 3D model of the mod's own (scripts/mods/model3d.gd), inside a .uadmod.
+const MODEL_EXT := "uadmodel"
 const DIR := "user://mods/"
 const MAX_FILE := 2 * 1024 * 1024
 const MAX_FILES := 40
@@ -114,7 +116,7 @@ static func read_package(path: String) -> Dictionary:
 			var j := JSON.new()
 			if j.parse(text) == OK and j.data is Dictionary:
 				meta = j.data
-		elif name.get_extension() in ["py", SHADER_EXT, "txt", "md"]:
+		elif name.get_extension() in ["py", SHADER_EXT, MODEL_EXT, "txt", "md"]:
 			files[name.get_file()] = text
 	zip.close()
 	if tmp != "":
@@ -131,7 +133,7 @@ static func mod_package(meta: Dictionary, files: Dictionary, fallback_id: String
 		if clean.size() >= MAX_FILES:
 			break
 		var name := String(k).get_file()
-		if name.get_extension() in ["py", SHADER_EXT, "txt", "md"] and String(files[k]).length() <= MAX_TEXT:
+		if name.get_extension() in ["py", SHADER_EXT, MODEL_EXT, "txt", "md"] and String(files[k]).length() <= MAX_TEXT:
 			clean[name] = String(files[k])
 	var shaders_in := []
 	for k in clean:
