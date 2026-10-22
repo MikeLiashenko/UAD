@@ -18,9 +18,9 @@ const V13_BASE := 22
 ## Builds 34 … 43 came out as version 1.4.
 const V14_BASE := 33
 const STAGE := "Alpha"
-const BUILD := 43
-const DATE := "2026-10-21"
-const COMMIT := "3b96071"
+const BUILD := 44
+const DATE := "2026-10-22"
+const COMMIT := "1ab8767"
 
 
 ## "v1.5.1 Alpha" for the given build number (this build by default).
