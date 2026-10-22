@@ -85,9 +85,9 @@ static func read_package(path: String) -> Dictionary:
 		return {"error": "Файл слишком большой."}
 	var zip := ZIPReader.new()
 	# ZIPReader opens files only: a copy in user:// for one coming from a content:// picker
+	# (the bytes are read already: a content:// path of Android's file picker is fine though
+	# FileAccess.file_exists() says no to it)
 	var tmp := ""
-	if not path.begins_with("user://") and not FileAccess.file_exists(path):
-		return {"error": "Файл не найден."}
 	if zip.open(path) != OK:
 		tmp = "user://mod_import.tmp"
 		var w := FileAccess.open(tmp, FileAccess.WRITE)
