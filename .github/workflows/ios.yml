@@ -28,7 +28,7 @@ permissions:
 
 jobs:
   ios:
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 90
     env:
       GODOT_VERSION: 4.7.2
@@ -36,6 +36,14 @@ jobs:
       TEMPLATES: /Users/runner/Library/Application Support/Godot/export_templates/4.7.2.stable
     steps:
       - uses: actions/checkout@v4
+
+      # Godot's iOS template is built with the iOS 26 SDK: an older Xcode fails to link it
+      # (undefined _CADynamicRange…, _MTLTensorDomain), so the newest Xcode on the machine is taken
+      - name: Newest Xcode
+        run: |
+          xc=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          sudo xcode-select -s "$xc"
+          xcodebuild -version
 
       - name: Godot and its iOS export template (cached)
         id: cache
