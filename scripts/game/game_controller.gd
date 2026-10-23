@@ -972,6 +972,14 @@ const CLIP_SCORE := {"ballistic": 4.0, "cruise": 2.5, "shahed": 1.0, "scout": 0.
 
 
 ## Somebody on a balcony filmed this one: remembered until the morning edit.
+## What was brought down and by what (the achievements count both): the weapon itself — a
+## Kinzhal, not the ballistic kind it flies as.
+static func _count_kill(e) -> void:
+	GS.stats["k_" + String(e.variant)] = int(GS.stats.get("k_" + String(e.variant), 0)) + 1
+	if String(e.last_hit_by) != "":
+		GS.stats["w_" + String(e.last_hit_by)] = int(GS.stats.get("w_" + String(e.last_hit_by), 0)) + 1
+
+
 func record_clip(e) -> void:
 	if night_clips.size() > 80:
 		return
@@ -1321,10 +1329,7 @@ func enemy_destroyed(e) -> void:
 	if killer == "":
 		GS.add_money(reward)
 		GS.stats.kills = int(GS.stats.kills) + 1
-		# what was brought down and by what (the achievements count both)
-		GS.stats["k_" + String(e.type)] = int(GS.stats.get("k_" + String(e.type), 0)) + 1
-		if String(e.last_hit_by) != "":
-			GS.stats["w_" + String(e.last_hit_by)] = int(GS.stats.get("w_" + String(e.last_hit_by), 0)) + 1
+		_count_kill(e)
 	else:
 		_bank(killer, "e", reward)
 		_bank(killer, "k", 1)
@@ -2305,6 +2310,7 @@ func _net_kill(key: String, k: Array) -> void:
 	_event_seq += 1
 	var killer := String(k[0])
 	if killer == Net.code():
+		_count_kill(e)
 		record_clip(e)
 		if view == "base" and not e.has_meta("boomed"):
 			hud.reticle.kill(GS.t("ЦЕЛЬ ПОРАЖЕНА  +%s") % GS.fmt_money(int(k[9])), Color(0.3, 1.0, 0.5))

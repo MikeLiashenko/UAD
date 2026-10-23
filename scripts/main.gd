@@ -2907,6 +2907,16 @@ func _ach_selftest() -> void:
 	check.call(got.has("first_blood") and got.has("kills_100") and got.has("first_strike") and not got.has("kills_500") and not got.has("hunter"), "earned from the state: %s" % str(got))
 	check.call(Achievements.scan(null).is_empty(), "each only once")
 	check.call(Achievements.night_done({"impacts": 0, "homes": 0, "kills": 12}) == ["clean_night"] and Achievements.night_done({"impacts": 0, "kills": 12}).is_empty(), "a clean night, once")
+	# a Kinzhal counts as a Kinzhal, not as the ballistic kind it flies as
+	preload("res://scripts/game/game_controller.gd")._count_kill({"variant": "kinzhal", "type": "ballistic", "last_hit_by": "patriot"})
+	got = Achievements.scan(null)
+	check.call(got.has("first_kinzhal") and got.has("first_w_patriot") and not got.has("first_ballistic"), "a kill of a weapon earns its own: %s" % str(got))
+	# an older world: what its night videos show was brought down comes back
+	var keep_videos := GS.videos
+	GS.videos = [{"day": 2, "clips": [{"type": "cruise", "variant": "kalibr"}, {"type": "shahed", "variant": "shahed"}]}]
+	GS._kills_from_videos()
+	GS.videos = keep_videos
+	check.call(int(GS.stats.get("k_kalibr", 0)) == 1 and not GS.stats.has("k_shahed") and Achievements.scan(null).has("first_kalibr"), "kills read back from old videos")
 	for c in ["kharkiv", "dnipro", "odesa"]:
 		GS.city_id = c
 		Achievements.scan(null)

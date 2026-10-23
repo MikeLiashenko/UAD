@@ -512,7 +512,10 @@ func _morning() -> void:
 			report["revenge"] = {"held": held, "bonus": rb}
 			if held:
 				GS.stats["revenge_held"] = int(GS.stats.get("revenge_held", 0)) + 1
+	if not pvp:
+		# a friend's guest earns the nightly ones too
 		game.hud.on_achievements(Achievements.night_done(report))
+	if not follower and not pvp:
 		report["aid"] = Strikes.aid(_rng)
 		report["strikes"] = _landed
 		_landed = [0, 0]

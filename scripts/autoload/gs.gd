@@ -902,6 +902,19 @@ func buy_ammo(id: String, count: int) -> bool:
 
 
 ## Stores one published compilation, keeping only the most recent nights.
+## Worlds from before kills were counted by the weapon itself had a Kinzhal, a Kalibr or a Gerbera
+## counted as its kind (ballistic, cruise, shahed): the night videos still name what was brought
+## down, so at least those come back.
+func _kills_from_videos() -> void:
+	var n := {}
+	for v in videos:
+		for c in v.get("clips", []):
+			if c is Dictionary and String(c.get("variant", "")) != String(c.get("type", "")):
+				n[String(c.variant)] = int(n.get(String(c.variant), 0)) + 1
+	for id in n:
+		stats["k_" + id] = maxi(int(stats.get("k_" + id, 0)), int(n[id]))
+
+
 func add_video(v: Dictionary) -> void:
 	# replaying a night replaces its cut instead of publishing a second one
 	for i in videos.size():
@@ -1099,6 +1112,7 @@ func load_world(id: String) -> bool:
 	for v in d.get("videos", []):
 		if v is Dictionary and (v as Dictionary).has("clips"):
 			videos.append(v)
+	_kills_from_videos()
 	crushed = []
 	for v in (d.get("crushed", []) if same_map else []):
 		if v is Array and (v as Array).size() == 2:
