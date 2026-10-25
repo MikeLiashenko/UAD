@@ -14,12 +14,14 @@ extends Node
 ## Our counter-strikes (scripts/game/strikes.gd) land at dusk: a damaged launch site sends half
 ## of its usual share, a destroyed one sends nothing until the enemy has rebuilt it.
 ##  A match on a server (GS.pvp): only the clock is left of all this — day and night follow each
-##  other without a morning report, and what flies is what the other city's players launch.
+##  other without a morning report, and what flies is what the other city's players launch. In a
+##  duel the days and nights are those of the clock both its games share (Pvp.dclock).
 
 const Strikes = preload("res://scripts/game/strikes.gd")
 const Orders = preload("res://scripts/game/orders.gd")
 const Achievements = preload("res://scripts/core/achievements.gd")
 const Mods = preload("res://scripts/mods/mods.gd")
+const ServerDef = preload("res://scripts/core/server_def.gd")
 
 enum Phase { DAY, NIGHT, MORNING }
 
@@ -426,8 +428,49 @@ func _briefing(d: int) -> void:
 		game.hud.log_event(GS.t(note), Color(1.0, 0.85, 0.55))
 
 
+## A duel: the day and the night are those of the clock both games share (Pvp.dclock).
+func _duel_tick() -> void:
+	var c: Dictionary = game.pvp.dclock
+	var i := int(c.get("i", -1))
+	var want := Phase.DAY
+	if i < 0:
+		# the other player is awaited: a long bright day
+		phase_time = 0.0
+		phase_len = 1.0e9
+	elif i >= ServerDef.duel_phases().size():
+		want = Phase.MORNING
+		phase_time = 0.0
+		phase_len = 0.0
+	else:
+		want = Phase.NIGHT if int(c.night) > 0 else Phase.DAY
+		phase_len = float(c.len)
+		phase_time = phase_len - float(c.left)
+		if int(c.day) != GS.day:
+			GS.day = int(c.day)
+			GS.state_changed.emit()
+	if want == phase:
+		return
+	phase = want
+	match phase:
+		Phase.NIGHT:
+			SFX.play_music("night")
+			SFX.play_siren()
+			game.set_alarm(true, false)
+			game.hud.alert(GS.t("НОЧЬ %d из %d — ВОЗДУШНАЯ ТРЕВОГА!") % [int(c.night), ServerDef.DUEL_NIGHTS], Color(1.0, 0.3, 0.3))
+			game.hud.log_event(GS.t("Ночь %d из %d: удары, подготовленные днём, взлетают.") % [int(c.night), ServerDef.DUEL_NIGHTS], Color(1.0, 0.3, 0.3))
+		_:
+			SFX.stop_siren()
+			SFX.play_music("day")
+			game.set_alarm(false, false)
+			if i == 0:
+				game.hud.alert(GS.t("ДУЭЛЬ НАЧАЛАСЬ · ДЕНЬ 1 из %d") % ServerDef.DUEL_NIGHTS, Color(0.5, 0.9, 1.0))
+				game.hud.log_event(GS.t("Соперник на месте. Готовьте оборону и удары: они взлетят с наступлением ночи."), Color(0.5, 0.9, 1.0))
+
+
 func _process(delta: float) -> void:
 	phase_time += delta
+	if pvp and game.pvp != null and game.pvp.duel:
+		_duel_tick()
 	var want := 0.0
 	match phase:
 		Phase.DAY:
@@ -464,10 +507,12 @@ func _process(delta: float) -> void:
 
 	match phase:
 		Phase.DAY:
-			if phase_time >= phase_len:
+			if phase_time >= phase_len and not (pvp and game.pvp != null and game.pvp.duel):
 				start_night()
 		Phase.NIGHT:
-			if pvp:
+			if pvp and game.pvp != null and game.pvp.duel:
+				pass # the duel's clock moves the phases (_duel_tick)
+			elif pvp:
 				if phase_time >= phase_len:
 					GS.day += 1
 					GS.state_changed.emit()

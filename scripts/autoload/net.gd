@@ -203,6 +203,11 @@ var _cap_claim_t := -99.0
 var _srv_missing_t := -1.0
 ## Leaving for good (the test quits): no more heartbeats that would bring our entry back.
 var quiet := false
+## Our challenge to a duel while the friend is awaited: {to: code, sid, c: [names], b: [city ids]}.
+## It goes out with our presence (users/<code>/duel); the friend's game sees it among its friends.
+var duel_invite := {}
+## Self-tests and pictures: the friends to show instead of the player's own (never saved).
+var test_friends: Array = []
 
 
 func _ready() -> void:
@@ -409,6 +414,8 @@ func _enable() -> void:
 # --- Friends ------------------------------------------------------------------------------------
 ## Friends as [{code, name}]: the account's list while signed in, otherwise this device's.
 func friends() -> Array:
+	if not test_friends.is_empty():
+		return test_friends.duplicate()
 	if account != null and account.active():
 		return account.friends.duplicate()
 	return device_friends()
@@ -468,8 +475,8 @@ func _added(c: String, n: String, cb: Callable) -> void:
 
 
 func _remember_friend(c: String, n: String) -> void:
-	if c == "" or c == code():
-		return
+	if c == "" or c == code() or not test_friends.is_empty():
+		return # (a self-test's friends never reach the player's own list)
 	if account != null and account.active():
 		account.add_friend(c, n)
 		return
@@ -549,10 +556,31 @@ func _poll_friends() -> void:
 				info.s = String(d.get("s", ""))
 				if info.online and info.s == "host" and d.get("w") is Dictionary:
 					info.w = d.w
+				var du = d.get("duel")
+				if info.online and du is Dictionary and String(du.get("to", "")) == code() and ServerDef.valid_id(String(du.get("sid", ""))):
+					info["duel"] = _clean_invite(du)
 				if info.nick != String(f.name):
 					_remember_friend(c, info.nick)
 			friend_info[c] = info
 			friends_changed.emit())
+
+
+## A friend's challenge as this game may show it.
+func _clean_invite(du: Dictionary) -> Dictionary:
+	var names := []
+	for i in 2:
+		var cs = du.get("c")
+		var bs = du.get("b")
+		var b := String(bs[i]) if bs is Array and (bs as Array).size() == 2 and bs[i] is String else ""
+		var n := ServerDef.CustomCity.clean_name(cs[i]) if cs is Array and (cs as Array).size() == 2 else "?"
+		names.append(GS.t(String(Cities.get_def(b).name)) if Cities.IDS.has(b) else n)
+	return {"sid": String(du.sid), "c": names}
+
+
+## Challenges a friend to a duel (or takes the challenge back with {}).
+func set_duel_invite(inv: Dictionary) -> void:
+	duel_invite = inv
+	_user_t = 999.0
 
 
 func _heartbeat() -> void:
@@ -566,6 +594,8 @@ func _heartbeat() -> void:
 	var d := {"n": nick(), "t": FbDb.now_placeholder(), "s": s}
 	if role == "host" and srv.is_empty():
 		d["w"] = _world_info()
+	if not duel_invite.is_empty():
+		d["duel"] = duel_invite
 	_presence_code = code()
 	db.put("users/" + _presence_code, d)
 
@@ -927,6 +957,8 @@ func _push_state() -> void:
 # --- Leaving ------------------------------------------------------------------------------------------
 ## Leaves the session; a host closes the world for everyone.
 func close() -> void:
+	if not duel_invite.is_empty():
+		set_duel_invite({})
 	if role == "":
 		return
 	var paths := []
@@ -1082,6 +1114,10 @@ func srv_publish(def: Dictionary, cb: Callable) -> void:
 	# the entry of the list goes first: the rules let only its owner write the rest
 	var entry := {"n": String(d.name), "o": String(d.owner), "on": nick(), "t": FbDb.now_placeholder(), "m": int(d.rules.team),
 		"c": [String(d.cities[0].name), String(d.cities[1].name)], "p": PROTO}
+	if bool(d.get("duel", false)):
+		# a duel of two friends: kept out of everybody's list (older builds skip a list entry by its p)
+		entry["d"] = 1
+		entry["p"] = 0
 	db.patch("servers/list/" + sid, entry, func(ok: bool, _r) -> void:
 		if not ok:
 			fail.call()
@@ -1120,7 +1156,7 @@ func srv_list(cb: Callable) -> void:
 		if d is Dictionary:
 			for sid in d:
 				var e = d[sid]
-				if not (e is Dictionary) or not ServerDef.valid_id(String(sid)) or int(float(e.get("p", 0))) != PROTO:
+				if not (e is Dictionary) or not ServerDef.valid_id(String(sid)) or int(float(e.get("p", 0))) != PROTO or e.has("d"):
 					continue
 				var cs = e.get("c")
 				var pl = e.get("pl")
@@ -1264,6 +1300,34 @@ func srv_enemy_count() -> int:
 	return clampi(int(float(b.get("n", 0))), 0, ServerDef.TEAM_MAX)
 
 
+## The other side is in the match itself (not still picking its position).
+func srv_enemy_ready() -> bool:
+	if srv_enemy_count() == 0:
+		return false
+	var b = (srv_x().get("pl") as Dictionary).get("s%d" % (1 - int(srv.side)))
+	return int(float((b as Dictionary).get("g", 0))) == 1
+
+
+## A duel: its clock starts now, for both sides.
+func srv_send_start() -> void:
+	if not srv.is_empty():
+		db.put("servers/live/%s/x/go" % String(srv.id), FbDb.now_placeholder())
+
+
+## A duel: how our city stands after the last night.
+func srv_send_fin(side: int, v: float) -> void:
+	if not srv.is_empty():
+		db.put("servers/live/%s/x/fin/s%d" % [String(srv.id), side], {"v": v, "t": FbDb.now_placeholder()})
+
+
+## A duel is over: its challenger takes it out of the database after a while (the other side
+## reads the outcome first). Nothing goes if a new duel is played under the same id by then.
+func srv_retire(sid: String, after: float) -> void:
+	get_tree().create_timer(after, true).timeout.connect(func() -> void:
+		if String(srv.get("id", "")) != sid:
+			srv_unpublish(sid, func(_ok: bool, _why: String) -> void: pass))
+
+
 ## A strike of ours at the other side's city.
 func srv_send_strike(to_side: int, s: Dictionary) -> void:
 	if not srv.is_empty():
@@ -1298,7 +1362,8 @@ func _srv_tick(delta: float) -> void:
 	if _srv_t >= SRV_BEAT or (absf(hp - _srv_hp_sent) >= 0.1 and _srv_t >= 1.0):
 		_srv_t = 0.0
 		_srv_hp_sent = hp
-		db.patch_latest("srvbeat", live, {"pl/" + key: {"n": players.size(), "t": FbDb.now_placeholder()}, "hp/" + key: {"v": hp, "t": FbDb.now_placeholder()}})
+		var in_game: bool = main != null and main.game != null and is_instance_valid(main.game)
+		db.patch_latest("srvbeat", live, {"pl/" + key: {"n": players.size(), "t": FbDb.now_placeholder(), "g": 1 if in_game else 0}, "hp/" + key: {"v": hp, "t": FbDb.now_placeholder()}})
 	_srv_list_t += delta
 	if _srv_list_t >= SRV_LIST_BEAT:
 		_srv_list_t = 0.0

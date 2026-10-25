@@ -78,6 +78,15 @@ extends Node
 ##   --srvunit                  servers self-test, offline (in-memory database): hostile city and
 ##                              server data, publishing, the list, joining a side, the captain and
 ##                              the handover, strikes and outcomes, leaving
+##   --dueltest                 a duel against the bot (with --autotest): --duel-city=A,B (the game's
+##                              cities, ours first), --srv-side=0|1, --duel-speed=N (its clock N times
+##                              faster); prints UAD DUEL lines at dusk and dawn and UAD PVP END
+##   --duelunit                 duels, offline (in-memory database): the duel's data, its clock, the
+##                              plans of the game's cities, the challenge hidden from the list and
+##                              sent with the presence, a friend accepting it on the multiplayer tab,
+##                              the match started by the other side, the outcome after the last night
+##   --screen=duel [--duelbot]  the window of a duel (pictures; --screen=mp --dueldemo: a challenge
+##                              in the list of friends)
 ##   --open=attack              the attack screen of a match
 ##   --screen=server|cityedit|servers   the server's screen, the city editor, the servers tab
 ##   --offline                  nothing reaches the network and no setting is written (pictures of
@@ -162,6 +171,12 @@ func _ready() -> void:
 		# test hook: the ready-made drawn city of a new server (=flip for its mirrored twin)
 		start_city = "srv_test_0"
 		Cities.register(start_city, Cities.CustomCity.sample("Северск", String(_args.customcity) == "flip"))
+	if _args.has("dueltest"):
+		# test hook: a duel against the bot in two of the game's cities
+		var dc := String(_args.get("duel-city", "kharkiv,odesa")).split(",")
+		var ddef := ServerDef.duel("TESTDUEL", "test", [ServerDef.builtin_city(dc[0]), ServerDef.builtin_city(dc[1] if dc.size() > 1 else "kyiv")])
+		server = {"def": ddef, "side": clampi(int(_args.get("srv-side", "0")), 0, 1), "bot": true}
+		start_city = ServerDef.city_id(ddef, int(server.side))
 	if _args.has("srvtest"):
 		# test hook: a new server's draft, the city of one side on screen from the start
 		server = {"def": _test_server(), "side": clampi(int(_args.get("srv-side", "0")), 0, 1), "bot": true}
@@ -206,6 +221,8 @@ func _ready() -> void:
 		_export_models(String(_args.exportmodels))
 	if _args.has("srvunit"):
 		_srv_unit_selftest()
+	if _args.has("duelunit"):
+		_duel_unit_selftest.call_deferred()
 	if _args.has("edittest"):
 		_editor_selftest.call_deferred()
 	if _args.has("citytest"):
@@ -269,7 +286,7 @@ func _ready() -> void:
 				CityStore.create(Cities.CustomCity.sample("Приречье", true))
 			show_cities()
 		"game":
-			if _args.has("srvtest"):
+			if _args.has("srvtest") or _args.has("dueltest"):
 				_start_server_test()
 			else:
 				_start_autotest()
@@ -295,6 +312,19 @@ func _ready() -> void:
 				screen._srv_state = "ok"
 				screen._srv_entries.clear()
 				screen._rebuild_servers.call_deferred()
+		"mp", "duel":
+			if _args.has("dueldemo") or scr == "duel":
+				# friends as the database would give them, one of them with a challenge (pictures)
+				Net.test_friends = [{"code": "FRENDBBB", "name": "Оксана"}, {"code": "MYKLAAAA", "name": "Мыкола"}, {"code": "TABLTCCC", "name": "Tablet_Mike"}]
+				Net.friend_info = {
+					"FRENDBBB": {"online": true, "nick": "Оксана", "s": "srv", "w": {}, "ping": 60, "duel": {"sid": "FRENDBBB", "c": [GS.t("Харьков"), GS.t("Одесса")]}},
+					"MYKLAAAA": {"online": true, "nick": "Мыкола", "s": "menu", "w": {}, "ping": 90},
+					"TABLTCCC": {"online": false, "nick": "Tablet_Mike", "s": "", "w": {}, "ping": 0}}
+			WorldsMenu.last_tab = "mp"
+			show_worlds()
+			if scr == "duel":
+				screen._mp_sel = "MYKLAAAA"
+				screen._open_duel.call_deferred("" if _args.has("duelbot") else "MYKLAAAA", "Мыкола", _args.has("duelbot"))
 		"training":
 			# the MaxRealism range (--train-bot walks through its lessons by itself)
 			start_training()
@@ -390,7 +420,9 @@ func _parse_args() -> void:
 		Engine.time_scale = float(_args.speed)
 	if _args.has("nomarkers"):
 		GS.settings.markers = false
-	if _args.has("offline") or _args.has("srvtest") or _args.has("srvunit") or _args.has("srvflow") or _args.has("edittest") or _args.has("citytest"):
+	if _args.has("duel-speed"):
+		ServerDef.duel_speed = maxf(float(_args["duel-speed"]), 0.1)
+	if _args.has("offline") or _args.has("srvtest") or _args.has("dueltest") or _args.has("duelunit") or _args.has("srvunit") or _args.has("srvflow") or _args.has("edittest") or _args.has("citytest"):
 		ServerDef.dry = true # a test's server never lands among the player's drafts
 		CityStore.dry = true # …nor a test's city among the player's cities
 	if _args.has("offline"):
@@ -696,7 +728,7 @@ func start_server(def: Dictionary, side: int, bot: bool) -> void:
 	server = {"def": def, "side": side, "bot": bot}
 	var cid := ServerDef.city_id(def, side)
 	# the same drawing keeps its map; a redrawn city is registered anew and built again
-	if not Cities.is_custom(cid) or JSON.stringify(Cities.get_def(cid).data) != JSON.stringify(Cities.CustomCity.clean(def.cities[side])):
+	if ServerDef.builtin(def.cities[side]) == "" and (not Cities.is_custom(cid) or JSON.stringify(Cities.get_def(cid).data) != JSON.stringify(Cities.CustomCity.clean(def.cities[side]))):
 		Cities.register(cid, def.cities[side])
 	pending_world = {"name": "%s · %s" % [String(def.name), ServerDef.city_name(def, side)], "difficulty": 1, "city": cid, "pvp": true}
 	show_map_select()
@@ -720,9 +752,16 @@ func _enter_server(pos: Vector3, loc: int) -> void:
 ## Out of a match: back to the server's screen after a draft's test, to the list of servers otherwise.
 func leave_server() -> void:
 	var was := server
+	var def: Dictionary = was.get("def", {})
+	if bool(def.get("duel", false)) and not bool(was.get("bot", false)) and String(def.get("owner", "")) == Net.code() and Net.srv_enemy_count() == 0:
+		# a challenge nobody took (or a duel the friend has left): it goes from the database
+		Net.srv_retire(String(def.id), 0.5)
 	Net.close()
 	server = {}
-	if bool(was.get("bot", false)):
+	if bool(def.get("duel", false)):
+		WorldsMenu.last_tab = "mp"
+		show_worlds()
+	elif bool(was.get("bot", false)):
 		show_server(was.def)
 	else:
 		WorldsMenu.last_tab = "servers"
@@ -2464,6 +2503,156 @@ func _srv_unit_selftest() -> void:
 	r = await _acct_call(func(cb: Callable) -> void: Net.srv_unpublish(sid, cb))
 	check.call(r[0] and not m.servers.get("list", {}).has(sid) and not m.servers.get("defs", {}).has(sid), "unpublished")
 	print("UAD SRVUNIT: %s" % ("OK" if fails.is_empty() else "FAIL " + " | ".join(fails)))
+
+
+## --duelunit: duels, offline (in-memory database). The challenger's way through the duel's window,
+## then the friend's: the challenge in the list of friends, accepted, the position, the match the
+## other side starts, the outcome after the last night.
+func _duel_unit_selftest() -> void:
+	Net.dry = true
+	Net.set_offline()
+	Net.db.mock = {}
+	Net._code_override = "TESTAAAA"
+	var m: Dictionary = Net.db.mock
+	var fails := []
+	var check := func(ok: bool, what: String) -> void:
+		if not ok:
+			fails.append(what)
+			print("UAD DUELUNIT fail: ", what)
+	# --- the duel's data
+	var def := ServerDef.duel("TESTAAAA", "Я", [ServerDef.builtin_city("kharkiv"), ServerDef.builtin_city("odesa")])
+	check.call(bool(def.get("duel", false)) and int(def.rules.team) == 1 and int(def.rules.nights) == ServerDef.DUEL_NIGHTS and ServerDef.builtin(def.cities[1]) == "odesa"
+		and is_equal_approx(float(def.cities[1].size), float(Cities.get_def("odesa").half)), "a duel in two of the game's cities")
+	check.call(ServerDef.city_id(def, 0) == "kharkiv" and ServerDef.city_name(def, 1) == GS.t("Одесса") and String(def.name).contains(GS.t("Харьков")), "its cities go by the game's ids and names")
+	var evil := ServerDef.clean({"id": "TESTAAAA", "duel": true, "cities": [{"b": "moscow"}, {"b": 5}], "rules": {"team": 8, "nights": 99}})
+	check.call(not evil.is_empty() and ServerDef.builtin(evil.cities[0]) == "" and (evil.cities[0] as Dictionary).has("districts") and int(evil.rules.team) == 1 and int(evil.rules.nights) == ServerDef.DUEL_NIGHTS,
+		"an unknown city is an empty drawn one, a duel is one a side")
+	var plain := ServerDef.clean({"id": "TESTSRV2", "cities": [{"b": "kyiv"}, {}]})
+	check.call(not bool(plain.duel) and ServerDef.builtin(plain.cities[0]) == "" and int(plain.rules.nights) == 0, "a server is no duel: only drawn cities")
+	var own := ServerDef.duel("TESTAAAA", "Я", [Cities.CustomCity.sample("Новоград"), ServerDef.builtin_city("kyiv")])
+	check.call(String(own.cities[0].name) == "Новоград" and (own.cities[0].districts as Array).size() == 8 and ServerDef.city_id(own, 0) == "srv_TESTAAAA_0", "a drawn city in a duel")
+	# --- its clock
+	var ph := ServerDef.duel_phases()
+	var total := 0.0
+	for p in ph:
+		total += float(p[0])
+	check.call(ph.size() == ServerDef.DUEL_NIGHTS * 2 and int(ph[1][1]) == 1 and int(ph[ph.size() - 1][1]) == ServerDef.DUEL_NIGHTS, "the days and the nights")
+	check.call(int(ServerDef.duel_at(-1.0).i) == -1 and int(ServerDef.duel_at(10.0).night) == 0 and int(ServerDef.duel_at(ServerDef.DUEL_FIRST_DAY + 1.0).night) == 1
+		and int(ServerDef.duel_at(ServerDef.DUEL_FIRST_DAY + ServerDef.DUEL_NIGHT + 1.0).day) == 2, "where the clock stands")
+	check.call(int(ServerDef.duel_at(total + 5.0).i) == ph.size() and absf(float(ServerDef.duel_at(total + 5.0).after) - 5.0) < 0.01, "after the last night")
+	check.call(is_equal_approx(ServerDef.duel_dusk(2), ServerDef.DUEL_FIRST_DAY + ServerDef.DUEL_NIGHT + ServerDef.DUEL_DAY), "the dusk of the second night")
+	# --- the plans of the game's cities (the attack screen)
+	var pk := ServerDef.plan(def.cities[0])
+	var po := ServerDef.plan(def.cities[1])
+	check.call((pk.districts as Array).size() == Cities.get_def("kharkiv").districts.size() and not (pk.rivers as Array).is_empty() and (pk.rivers[0].p as Array).size() <= 45 and not pk.has("sea"), "the plan of Kharkiv")
+	check.call(po.has("sea") and (po.sea as Array).size() > 10 and not (po.roads as Array).is_empty(), "Odesa's plan has its sea")
+	# --- the challenger: the duel's window, the challenge published, the match entered
+	Net.test_friends = [{"code": "FRENDBBB", "name": "Оксана"}]
+	WorldsMenu.last_tab = "mp"
+	show_worlds()
+	screen._open_duel("FRENDBBB", "Оксана", false)
+	var win = screen._confirm
+	for i in 2:
+		var want := "kharkiv" if i == 0 else "odesa"
+		for k in win._options.size():
+			if String(win._options[k][0]) == want:
+				(win._picks[i] as OptionButton).select(k)
+	win._check()
+	check.call(not win._go.disabled, "two cities picked")
+	(win._picks[1] as OptionButton).select((win._picks[0] as OptionButton).selected)
+	win._check()
+	check.call(win._go.disabled, "the same city twice cannot be picked")
+	for k in win._options.size():
+		if String(win._options[k][0]) == "odesa":
+			(win._picks[1] as OptionButton).select(k)
+	win._check()
+	win._start()
+	var frames := 0
+	while (not bool(pending_world.get("pvp", false)) or Net.role != "host") and frames < 900:
+		frames += 1
+		await get_tree().process_frame
+		Net.mock_sync()
+	var servers: Dictionary = m.get("servers", {})
+	check.call(int(float(servers.get("list", {}).get("TESTAAAA", {}).get("d", 0))) == 1 and bool(servers.get("defs", {}).get("TESTAAAA", {}).get("duel", false)), "the challenge published")
+	check.call(Net.role == "host" and int(Net.srv.get("side", -1)) == 0 and String(Net.duel_invite.get("to", "")) == "FRENDBBB" and int(server.side) == 0, "the challenger is in the match (role=%s)" % Net.role)
+	var box := []
+	Net.srv_list(func(_ok: bool, list: Array) -> void: box.append(list))
+	await _settle()
+	check.call(box.size() == 1 and (box[0] as Array).is_empty(), "a duel is kept out of the list of servers")
+	Net._heartbeat()
+	await _settle()
+	var pres: Dictionary = (m.get("users", {}) as Dictionary).get("TESTAAAA", {}).duplicate(true)
+	check.call(String(pres.get("duel", {}).get("to", "")) == "FRENDBBB" and String(pres.duel.sid) == "TESTAAAA", "the challenge goes out with the presence")
+	# the challenger waits in the match; this game now plays the friend
+	Net.close()
+	await _settle()
+	check.call(Net.duel_invite.is_empty(), "leaving takes the challenge back")
+	var now := float(Net.server_now())
+	m["users"] = {"TESTAAAA": pres}
+	m.servers["live"] = {"TESTAAAA": {"s0": {"TESTAAAA": {"n": "Я", "s": 0, "t": now, "j": now}, "cap": "TESTAAAA"}, "x": {"pl": {"s0": {"n": 1, "t": now, "g": 1}}}}}
+	Net._code_override = "FRENDBBB"
+	Net.test_friends = [{"code": "TESTAAAA", "name": String(pres.n)}]
+	Net.friend_info.clear()
+	Net._poll_friends()
+	await _settle()
+	var info: Dictionary = Net.friend_info.get("TESTAAAA", {})
+	check.call(info.has("duel") and String(info.duel.c[1]) == GS.t("Одесса"), "the friend sees the challenge: %s" % str(info.get("duel", {})))
+	show_worlds()
+	screen._mp_sig = "-"
+	screen._rebuild_mp()
+	screen._mp_sel = "TESTAAAA"
+	screen._update_mp_buttons()
+	check.call(screen._duel_btn.text == GS.t("⚔ Принять дуэль") and not screen._duel_btn.disabled, "…with a button to accept it")
+	screen._duel()
+	frames = 0
+	while (map.city_id != "odesa" or _loading != null or screen == null or screen.get_script() != MapSelect) and frames < 1800:
+		frames += 1
+		await get_tree().process_frame
+		Net.mock_sync()
+	check.call(map.city_id == "odesa" and screen != null and screen.get_script() == MapSelect and int(server.get("side", -1)) == 1, "accepted: the friend picks a position in Odesa")
+	await _settle()
+	check.call(Net.role == "host" and int(Net.srv.side) == 1, "the friend holds the raid on Odesa (role=%s)" % Net.role)
+	create_world(_find_spot(GS.Loc.FIELD), GS.Loc.FIELD)
+	await _settle()
+	var pv = game.pvp if game != null and is_instance_valid(game) else null
+	check.call(pv != null and pv.duel and pv.start_ms < 0 and pv.blocker("shahed", 1) != "", "in the match: the clock waits for the challenger")
+	if pv == null:
+		print("UAD DUELUNIT: FAIL " + " | ".join(fails))
+		return
+	# the challenger's game starts the clock
+	now = float(Net.server_now())
+	m.servers.live.TESTAAAA.x["go"] = now
+	await _settle()
+	pv._process(0.0)
+	check.call(pv.start_ms == int(now) and int(pv.dclock.get("i", -1)) == 0 and pv.clock_text().contains("1"), "the duel started: day 1 (%s)" % pv.clock_text())
+	check.call(pv.blocker("shahed", 1) == "" and pv.launch_ms() >= int(now + ServerDef.DUEL_FIRST_DAY * 1000.0), "a strike in the daytime waits for the dusk")
+	var sent: bool = pv.launch_strike("shahed", 2, Vector2(0, 0))
+	await _settle()
+	var flying: Dictionary = m.servers.live.TESTAAAA.x.get("in0", {})
+	check.call(sent and flying.size() == 1 and float(flying.values()[0].t) >= now + ServerDef.DUEL_FIRST_DAY * 1000.0, "…and goes to the other city with its take-off at dusk")
+	# a strike of theirs launched in their daytime is not seen here before it takes off
+	m.servers.live.TESTAAAA.x["in1"] = {"TESTAAAA_1_1": {"id": "TESTAAAA_1_1", "w": "cruise", "c": 2, "x": 0, "z": 0, "by": "TESTAAAA", "n": "Я", "t": now + 60000.0, "d": 20.0}}
+	await _settle()
+	check.call(pv.incoming.has("TESTAAAA_1_1") and String(pv.incoming.TESTAAAA_1_1.st) == "wait" and int(pv.inbound()[0]) == 0, "their daytime strike waits unseen")
+	# the night is over: whatever is still out there, the outcome
+	m.servers.live.TESTAAAA.x.erase("in1")
+	pv.incoming.clear()
+	m.servers.live.TESTAAAA.x["go"] = now - (total + 3.0) * 1000.0
+	m.servers.live.TESTAAAA.x.pl.s0.t = float(Net.server_now())
+	await _settle()
+	pv._process(0.0)
+	await _settle()
+	var fin: Dictionary = m.servers.live.TESTAAAA.x.get("fin", {})
+	check.call(fin.has("s1") and float(fin.s1.v) > 0.0 and pv.over == "", "after the last night our city's state goes out (%s)" % str(fin))
+	m.servers.live.TESTAAAA.x["fin"]["s0"] = {"v": maxf(float(GS.city) - 30.0, 0.0), "t": float(Net.server_now())}
+	await _settle()
+	pv._process(0.0)
+	check.call(pv.over == "won" and Net.role == "", "the city that stood better won (over=%s role=%s)" % [pv.over, Net.role])
+	Net._drop()
+	Net.test_friends = []
+	Net._code_override = ""
+	Net.friend_info.clear()
+	print("UAD DUELUNIT: %s" % ("OK" if fails.is_empty() else "FAIL " + " | ".join(fails)))
 
 
 ## Depth precision: the near plane moves out as the camera climbs — 0.5 m at street level, up to

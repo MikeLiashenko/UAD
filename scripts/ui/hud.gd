@@ -24,6 +24,7 @@ const VideoExport = preload("res://scripts/game/video_export.gd")
 const Shaders = preload("res://scripts/world/shaders.gd")
 const PlayerList = preload("res://scripts/ui/player_list.gd")
 const RemotePlayers = preload("res://scripts/game/remote_players.gd")
+const ServerDef = preload("res://scripts/core/server_def.gd")
 
 var game
 var reticle
@@ -470,7 +471,7 @@ func _build_pvp() -> void:
 	var side := int(GS.pvp.get("side", 0))
 	for i in 2:
 		var col := UiKit.NEON if i == 0 else UiKit.RED
-		var cname := String(def.cities[side if i == 0 else 1 - side].name)
+		var cname := ServerDef.city_name(def, side if i == 0 else 1 - side)
 		var nl := UiKit.label(cname, 15, col, HORIZONTAL_ALIGNMENT_RIGHT if i == 0 else HORIZONTAL_ALIGNMENT_LEFT)
 		nl.custom_minimum_size = Vector2(112, 0)
 		nl.clip_text = true
@@ -506,10 +507,20 @@ func _update_pvp() -> void:
 		(_pvp_bars[i][1] as Label).text = "%d%%" % int(ceil(float(pv.hp[s])))
 	var inb: Array = pv.inbound()
 	var flying := 0
+	var ready := 0
 	for id in pv.outgoing:
-		if String(pv.outgoing[id].st) != "done":
+		if pv.waits(pv.outgoing[id]):
+			ready += 1
+		elif String(pv.outgoing[id].st) != "done":
 			flying += 1
 	var parts := PackedStringArray()
+	if pv.duel and pv.start_ms < 0:
+		_pvp_line.text = GS.t("⚔ Ждём, когда соперник войдёт в дуэль — пока купите и расставьте оборону")
+		_pvp_line.add_theme_color_override("font_color", Color(0.6, 0.9, 0.78))
+		detect_lbl.visible = false
+		return
+	if ready > 0:
+		parts.append(GS.t("ударов ждут ночи: %d") % ready)
 	if int(inb[0]) > 0:
 		parts.append(GS.t("⚠ к нам летит ударов: %d · первый через %s") % [int(inb[0]), pv.fmt_time(float(inb[1]))])
 	if flying > 0:
@@ -924,7 +935,7 @@ func refresh() -> void:
 	base_bar.value = GS.base_hp
 	loc_lbl.text = GS.t("Позиция: ") + GS.loc_name(GS.base_loc)
 	if not GS.pvp.is_empty():
-		loc_lbl.text += GS.t("  ·  сервер «%s»") % String(GS.pvp.def.name)
+		loc_lbl.text += (GS.t("  ·  дуэль «%s»") if bool(GS.pvp.def.get("duel", false)) else GS.t("  ·  сервер «%s»")) % String(GS.pvp.def.name)
 	elif GS.won:
 		loc_lbl.text += GS.t("  ·  кампания пройдена ★")
 	else:
@@ -1042,6 +1053,8 @@ func _process(delta: float) -> void:
 		phase_lbl.text = GS.t("ДЕНЬ %d · %s · %d:%02d") % [GS.day, d.phase_name(), secs / 60, secs % 60]
 		if d.is_night() and d.time_left() <= 0.0:
 			phase_lbl.text = GS.t("ДЕНЬ %d · НОЧЬ · добейте цели: %d") % [GS.day, game.enemies.size()]
+		if game.pvp != null and game.pvp.duel:
+			phase_lbl.text = game.pvp.clock_text()
 		# the time warp stays on the clock for as long as it runs
 		if int(game.warp) > 1:
 			phase_lbl.text += "  ▶▶ ×%d" % int(game.warp)
@@ -1151,12 +1164,20 @@ func _show_pause() -> void:
 	if game.pvp != null:
 		var pv = game.pvp
 		v.add_child(UiKit.button(_keyless(GS.t("Удар по противнику [%s]") % GS.key_label("strikes")), open_strikes))
-		v.add_child(UiKit.button(GS.t("Закончить тест") if pv.bot else GS.t("Покинуть сервер"), func() -> void: game.main.leave_server()))
-		note = GS.t("Сервер «%s» · вы защищаете город %s. Здесь ничего не сохраняется.") % [String(pv.def.name), pv.my_name()]
-		if pv.bot:
-			note += GS.t("\nЧерновик: за город %s играет бот.") % pv.enemy_name()
+		if pv.duel:
+			v.add_child(UiKit.button(GS.t("Закончить дуэль") if pv.bot else GS.t("Покинуть дуэль"), func() -> void: game.main.leave_server()))
+			note = GS.t("Дуэль: вы защищаете город %s, соперник — %s. Здесь ничего не сохраняется.") % [pv.my_name(), pv.enemy_name()]
+			if pv.bot:
+				note += GS.t("\nЗа город %s играет бот.") % pv.enemy_name()
+			else:
+				note += GS.t("\nДуэль не останавливается: пока вы в паузе, бой продолжается. Ушедший из дуэли проигрывает.")
 		else:
-			note += GS.t("\nИгра на сервере не останавливается: пока вы в паузе, бой продолжается.")
+			v.add_child(UiKit.button(GS.t("Закончить тест") if pv.bot else GS.t("Покинуть сервер"), func() -> void: game.main.leave_server()))
+			note = GS.t("Сервер «%s» · вы защищаете город %s. Здесь ничего не сохраняется.") % [String(pv.def.name), pv.my_name()]
+			if pv.bot:
+				note += GS.t("\nЧерновик: за город %s играет бот.") % pv.enemy_name()
+			else:
+				note += GS.t("\nИгра на сервере не останавливается: пока вы в паузе, бой продолжается.")
 	elif Net.role == "guest":
 		v.add_child(UiKit.button(GS.t("Отключиться"), func() -> void: game.main.leave_session()))
 		var hn := String(Net.world.get("n", "?"))
@@ -1819,37 +1840,54 @@ func show_victory(r: Dictionary) -> void:
 		get_tree().create_timer(0.5, true).timeout.connect(to_report)
 
 
-## A match on a server is over: one of the cities has fallen.
-func show_pvp_end(won: bool) -> void:
+## A match on a server is over ("won", "lost", a duel's "draw"): one of the cities has fallen, or a
+## duel's nights are over.
+func show_pvp_end(how: String) -> void:
 	_close_overlay()
 	_set_paused(true)
 	var pv = game.pvp
+	var won := how == "won"
 	if won:
-		var aid := "server_bot" if pv.bot else "server_win"
+		var aid := "server_bot" if pv.bot else ("duel_win" if pv.duel else "server_win")
 		if Achievements.earn(aid):
 			on_achievement(aid)
 	var m := UiKit.modal(root, Vector2(600, 0))
 	_overlay = m[0]
 	var v: VBoxContainer = m[1]
-	v.add_child(UiKit.glow_label(GS.t("ПОБЕДА") if won else GS.t("ГОРОД ПАЛ"), 46, UiKit.NEON if won else UiKit.RED))
+	var fallen: bool = float(pv.hp[0]) <= 0.0 or float(pv.hp[1]) <= 0.0
+	var head := GS.t("ПОБЕДА") if won else GS.t("ГОРОД ПАЛ")
 	var line := GS.t("Город %s разрушен. %s выстоял!") % [pv.enemy_name(), pv.my_name()] if won else GS.t("%s разрушен ударами города %s.") % [pv.my_name(), pv.enemy_name()]
+	if pv.duel and String(pv.end_note) == "left":
+		line = GS.t("Соперник покинул дуэль — победа за городом %s.") % pv.my_name()
+	elif pv.duel and how == "draw":
+		head = GS.t("НИЧЬЯ")
+		line = GS.t("Три ночи позади, и оба города выстояли одинаково.")
+	elif pv.duel and not fallen:
+		head = GS.t("ПОБЕДА В ДУЭЛИ") if won else GS.t("ДУЭЛЬ ПРОИГРАНА")
+		line = GS.t("Три ночи позади: %s выстоял лучше, чем %s.") % ([pv.my_name(), pv.enemy_name()] if won else [pv.enemy_name(), pv.my_name()])
+	v.add_child(UiKit.glow_label(head, 46, UiKit.NEON if won else (UiKit.AMBER if how == "draw" else UiKit.RED)))
 	var ll := UiKit.label(line, 22, UiKit.AMBER, HORIZONTAL_ALIGNMENT_CENTER)
 	ll.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	ll.custom_minimum_size = Vector2(560, 0)
 	v.add_child(ll)
 	var s := GS.stats
 	var st: Dictionary = pv.stats
+	var their := float(pv.their_fin) if pv.duel and float(pv.their_fin) >= 0.0 else float(pv.hp[1 - pv.side])
 	var txt := GS.t("Наш город цел на: %d%% · город противника: %d%%\nСбито целей: %d · прилётов по городу: %d\nВаших ударов: %d (%d ракет и дронов) · в цель: %d\nПотрачено на удары: %s · премии за попадания: %s") % [
-		int(ceil(float(pv.hp[pv.side]))), int(ceil(float(pv.hp[1 - pv.side]))), int(s.kills), int(s.impacts), int(st.strikes), int(st.units), int(st.hits),
+		int(ceil(float(pv.hp[pv.side]))), int(ceil(their)), int(s.kills), int(s.impacts), int(st.strikes), int(st.units), int(st.hits),
 		GS.fmt_money(int(st.spent)), GS.fmt_money(int(st.bonus))]
 	v.add_child(UiKit.label(txt, 18, Color(0.8, 1.0, 0.9), HORIZONTAL_ALIGNMENT_CENTER))
-	if pv.bot:
+	if pv.duel:
+		if pv.bot:
+			v.add_child(UiKit.button(GS.t("Ещё одна дуэль с ботом"), func() -> void: game.main.restart_server()))
+		v.add_child(UiKit.button(GS.t("К друзьям"), func() -> void: game.main.leave_server()))
+	elif pv.bot:
 		v.add_child(UiKit.button(GS.t("Сыграть тест ещё раз"), func() -> void: game.main.restart_server()))
 		v.add_child(UiKit.button(GS.t("Вернуться к серверу"), func() -> void: game.main.leave_server()))
 	else:
 		v.add_child(UiKit.button(GS.t("К списку серверов"), func() -> void: game.main.leave_server()))
 	if game.autotest:
-		print("UAD PVP END: won=%s hp=%s stats=%s" % [won, str(pv.hp), str(st)])
+		print("UAD PVP END: %s won=%s hp=%s their_fin=%.1f note=%s stats=%s" % [how, won, str(pv.hp), float(pv.their_fin), String(pv.end_note), str(st)])
 
 
 func show_game_over(reason: String) -> void:

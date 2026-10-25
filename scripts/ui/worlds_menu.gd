@@ -3,6 +3,8 @@ extends Control
 ##   Главная     — your own worlds: every defence is a save slot in local storage;
 ##   Мультиплеер — friends added by code or nick (Net): who is online and which world they opened.
 ##                 A join request goes to the host, who accepts or declines it in their game.
+##                 A friend may be challenged to a duel (DuelSetup) — and a friend's challenge
+##                 to us shows in their row and is accepted from here.
 ##                 Playing by code needs nothing; an optional account (AccountUi) keeps the
 ##                 code, nick and friends in the cloud, on every device.
 ##   Серверы     — two cities drawn by a player fire at each other (ServerDef, scripts/game/pvp.gd):
@@ -14,6 +16,7 @@ const Cities = preload("res://scripts/world/cities.gd")
 const PingBars = preload("res://scripts/ui/ping_bars.gd")
 const AccountUi = preload("res://scripts/ui/account_ui.gd")
 const ServerDef = preload("res://scripts/core/server_def.gd")
+const DuelSetup = preload("res://scripts/ui/duel_setup.gd")
 
 ## The tab shown when the screen opens again (back from creating a world, a declined request…).
 static var last_tab := "home"
@@ -46,6 +49,7 @@ var _id_box: VBoxContainer
 var _nick: LineEdit
 var _join_btn: Button
 var _unfriend_btn: Button
+var _duel_btn: Button
 var _t := 0.0
 ## Join request dialog: [root, status label, spinner, button].
 var _req: Array = []
@@ -462,6 +466,9 @@ func _build_mp() -> Control:
 	_join_btn = UiKit.button(GS.t("Запросить подключение"), _request, 370, 20)
 	grid.add_child(_join_btn)
 	grid.add_child(UiKit.button(GS.t("Добавить друга"), _ask_add_friend, 370, 20))
+	_duel_btn = UiKit.button(GS.t("⚔ Вызвать на дуэль"), _duel, 370, 20)
+	grid.add_child(_duel_btn)
+	grid.add_child(UiKit.button(GS.t("⚔ Дуэль с ботом"), func() -> void: _open_duel("", "", true), 370, 18))
 	_unfriend_btn = UiKit.button(GS.t("Удалить из друзей"), _remove_friend, 370, 18)
 	grid.add_child(_unfriend_btn)
 	grid.add_child(UiKit.button(GS.t("Отмена"), func() -> void: main.show_menu(), 370, 18))
@@ -583,6 +590,8 @@ func _entries() -> Array:
 		var rank := 3
 		if not info.is_empty():
 			rank = 0 if not (info.w as Dictionary).is_empty() else (1 if bool(info.online) else 2)
+			if info.has("duel"):
+				rank = -1 # a challenge to us: on top
 		out.append({"key": c, "friend": f, "info": info, "rank": rank})
 	out.sort_custom(func(a, b) -> bool:
 		if int(a.rank) != int(b.rank):
@@ -603,7 +612,8 @@ func _rebuild_mp() -> void:
 	for e in entries:
 		var info: Dictionary = e.info
 		var w: Dictionary = info.get("w", {})
-		sig += "%s|%s|%s|%s|%s|%s|%s|%s|%s;" % [e.key, e.friend.name, info.get("online", "?"), info.get("s", ""), w.get("world", ""), w.get("players", ""), w.get("day", ""), w.get("night", ""), _bars(int(info.get("ping", 0)))]
+		sig += "%s|%s|%s|%s|%s|%s|%s|%s|%s|%s;" % [e.key, e.friend.name, info.get("online", "?"), info.get("s", ""), w.get("world", ""), w.get("players", ""), w.get("day", ""), w.get("night", ""), _bars(int(info.get("ping", 0))),
+			JSON.stringify(info.get("duel", {}))]
 	if sig == _mp_sig:
 		return
 	_mp_sig = sig
@@ -633,12 +643,19 @@ func _mp_row(e: Dictionary) -> Control:
 		icon_col = Cities.get_def(cid).accent if Cities.has(cid) else UiKit.NEON
 	elif online:
 		icon_col = Color(0.2, 0.55, 0.4)
+	if info.has("duel"):
+		icon_col = UiKit.AMBER
 	var shell := _row_shell(icon_col, fnick.substr(0, 1).to_upper())
 	var b: Button = shell[0]
 	var hb: HBoxContainer = shell[1]
 	var col: VBoxContainer = shell[2]
 	var code_line := GS.t("Друг · код %s") % Net.fmt_code(String(f.code))
-	if not w.is_empty():
+	var du: Dictionary = info.get("duel", {})
+	if not du.is_empty():
+		col.add_child(UiKit.label(fnick, 21, Color(1, 1, 1)))
+		col.add_child(UiKit.label(GS.t("⚔ Вызывает вас на дуэль: %s — за %s, вы — за %s") % [fnick, String(du.c[0]), String(du.c[1])], 14, UiKit.AMBER))
+		col.add_child(UiKit.label(code_line, 12, Color(0.5, 0.75, 0.65)))
+	elif not w.is_empty():
 		col.add_child(UiKit.label(String(w.get("world", GS.t("Мир"))), 21, Color(1, 1, 1)))
 		var phase := GS.t("ночь, идёт налёт") if bool(w.get("night", false)) else GS.t("день")
 		if not Cities.has(cid):
@@ -704,6 +721,69 @@ func _update_mp_buttons() -> void:
 	var w := _selected_world()
 	_join_btn.disabled = w.is_empty() or int(w.get("players", 1)) >= int(w.get("max", Net.MAX_PLAYERS))
 	_unfriend_btn.disabled = not _mp_entries.has(_mp_sel)
+	var info: Dictionary = (_mp_entries.get(_mp_sel, {}) as Dictionary).get("info", {})
+	_duel_btn.text = GS.t("⚔ Принять дуэль") if info.has("duel") else GS.t("⚔ Вызвать на дуэль")
+	_duel_btn.disabled = not bool(info.get("online", false))
+
+
+# --- Duels ----------------------------------------------------------------------------------------
+## The selected friend's challenge is accepted; without one, the friend is challenged.
+func _duel() -> void:
+	var e: Dictionary = _mp_entries.get(_mp_sel, {})
+	var info: Dictionary = e.get("info", {})
+	if e.is_empty() or (_confirm != null and is_instance_valid(_confirm)):
+		return
+	_save_nick()
+	if not info.has("duel"):
+		_open_duel(String(e.key), String(info.get("nick", e.friend.name)), false)
+		return
+	var host_code := String(e.key)
+	var du: Dictionary = info.duel
+	var m := UiKit.modal(self, Vector2(520, 0))
+	_confirm = m[0]
+	var box := _confirm
+	var v: VBoxContainer = m[1]
+	v.add_child(UiKit.glow_label(GS.t("ДУЭЛЬ"), 30, UiKit.NEON))
+	v.add_child(UiKit.label(GS.t("Вы защищаете город %s") % String(du.c[1]), 18, Color(1, 1, 1), HORIZONTAL_ALIGNMENT_CENTER))
+	var st := UiKit.label(GS.t("Принимаем вызов…"), 16, Color(0.7, 1.0, 0.85), HORIZONTAL_ALIGNMENT_CENTER)
+	st.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	st.custom_minimum_size = Vector2(480, 44)
+	v.add_child(st)
+	v.add_child(UiKit.button(GS.t("Отмена"), func() -> void:
+		Net.close()
+		box.queue_free()))
+	var fail := func(text: String) -> void:
+		SFX.play("alert", -10.0)
+		st.text = text
+		st.add_theme_color_override("font_color", UiKit.RED)
+	Net.srv_fetch(String(du.sid), func(def: Dictionary) -> void:
+		if not is_instance_valid(box):
+			return
+		if def.is_empty() or not bool(def.get("duel", false)) or String(def.owner) != host_code:
+			fail.call(GS.t("Вызов уже не действует: соперник его отменил или нет связи."))
+			return
+		Net.srv_join(def, 1, func(ok: bool, why: String) -> void:
+			if not is_instance_valid(box):
+				if ok:
+					Net.close()
+				return
+			if ok:
+				main.start_server(def, 1, false)
+			else:
+				fail.call(why)))
+
+
+func _open_duel(code: String, fnick: String, bot: bool) -> void:
+	if _confirm != null and is_instance_valid(_confirm):
+		return
+	_save_nick()
+	var d := DuelSetup.new()
+	d.main = main
+	d.friend = code
+	d.friend_nick = fnick
+	d.bot = bot
+	_confirm = d
+	add_child(d)
 
 
 # --- Серверы: two cities against each other ---------------------------------------------------------

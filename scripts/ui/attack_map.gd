@@ -64,7 +64,7 @@ func _ready() -> void:
 	_plan.overlay = _draw_overlay
 	_plan.tapped.connect(_on_tap)
 	h.add_child(_plan)
-	_plan.set_data(pvp.def.cities[1 - pvp.side])
+	_plan.set_data(ServerDef.plan(pvp.def.cities[1 - pvp.side]))
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(440, 570)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -170,6 +170,8 @@ func _build_side() -> void:
 	_side.add_child(_list)
 	_side.add_child(HSeparator.new())
 	_note(GS.t("Удар летит между городами (час полёта проходит за минуту), потом входит в небо противника — там его встречает ПВО. За каждое попадание возвращается половина цены. Сбитое над вашим городом оплачивается как обычно."), Color(0.55, 0.8, 0.7), 12)
+	if pvp.duel:
+		_note(GS.t("Дуэль — три ночи. Удар, запущенный днём, ждёт на земле и взлетает с наступлением ночи; ночной летит сразу. После третьей ночи побеждает тот, чей город цел больше."), Color(0.55, 0.8, 0.7), 12)
 
 
 func _pick_weapon(w: String) -> void:
@@ -273,7 +275,10 @@ func _refresh_list() -> void:
 		var col := UiKit.CYAN
 		match String(o.st):
 			"fly":
-				head += GS.t(" — в пути, %s") % pvp.fmt_time(pvp.eta(o))
+				if pvp.waits(o):
+					head += GS.t(" — взлёт с наступлением ночи")
+				else:
+					head += GS.t(" — в пути, %s") % pvp.fmt_time(pvp.eta(o))
 			"fight":
 				head += GS.t(" — над городом, идёт бой")
 				col = UiKit.AMBER

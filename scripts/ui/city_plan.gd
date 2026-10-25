@@ -210,6 +210,12 @@ func _draw() -> void:
 			var col := Color(0.4, 1.0, 0.7, 0.13 if i % 5 == 0 else 0.05)
 			draw_line(at(Vector2(i * km, -h)), at(Vector2(i * km, h)), col, 1.0)
 			draw_line(at(Vector2(-h, i * km)), at(Vector2(h, i * km)), col, 1.0)
+	if data.get("sea") is Array and (data.sea as Array).size() >= 3:
+		# one of the game's own cities on the coast (ServerDef.plan)
+		var sea := PackedVector2Array()
+		for q in data.sea:
+			sea.append(at(Vector2(float(q[0]), float(q[1]))))
+		draw_colored_polygon(sea, WATER)
 	for f in data.get("forests", []):
 		draw_colored_polygon(_ellipse(f), FOREST)
 	for d in data.get("districts", []):

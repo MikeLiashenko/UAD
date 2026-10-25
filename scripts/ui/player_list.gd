@@ -6,6 +6,7 @@ extends PanelContainer
 const UiKit = preload("res://scripts/ui/ui_kit.gd")
 const PingBars = preload("res://scripts/ui/ping_bars.gd")
 const RemotePlayers = preload("res://scripts/game/remote_players.gd")
+const ServerDef = preload("res://scripts/core/server_def.gd")
 
 var game
 var _title: Label
@@ -52,7 +53,7 @@ func _rebuild() -> void:
 	_sig = sig
 	var host_nick := String(Net.players[Net.host].nick) if Net.players.has(Net.host) else "?"
 	if not Net.srv.is_empty():
-		_title.text = GS.t("ОБОРОНА ГОРОДА %s · ИГРОКОВ %d/%d") % [String(Net.srv.def.cities[int(Net.srv.side)].name).to_upper(), codes.size(), int(Net.srv.def.rules.team)]
+		_title.text = GS.t("ОБОРОНА ГОРОДА %s · ИГРОКОВ %d/%d") % [ServerDef.city_name(Net.srv.def, int(Net.srv.side)).to_upper(), codes.size(), int(Net.srv.def.rules.team)]
 	elif Net.role == "host":
 		_title.text = GS.t("ВАШ МИР «%s» · ИГРОКОВ %d/%d") % [GS.world_name, codes.size(), Net.MAX_PLAYERS]
 	else:
